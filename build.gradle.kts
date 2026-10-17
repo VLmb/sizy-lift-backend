@@ -1,0 +1,44 @@
+import org.springframework.boot.gradle.plugin.SpringBootPlugin
+
+plugins {
+    java
+    id("org.springframework.boot") version "4.1.1"
+}
+
+group = "com.sizylift"
+version = "0.1.0-SNAPSHOT"
+description = "SizyLift backend"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation(platform(SpringBootPlugin.BOM_COORDINATES))
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-liquibase")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    runtimeOnly("org.postgresql:postgresql")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+dependencyLocking {
+    lockAllConfigurations()
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+    maxParallelForks = 1
+}
