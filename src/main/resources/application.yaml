@@ -1,10 +1,8 @@
+# Settings shared by every environment. Environment-specific values live in
+# application-dev.yaml and application-prod.yaml; activate one with SPRING_PROFILES_ACTIVE.
 spring:
   application:
     name: sizy-lift-backend
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/sizylift}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
   jpa:
     open-in-view: false
     hibernate:
@@ -20,17 +18,32 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Tokens must be issued by this Keycloak realm ("iss") for the API ("aud").
-          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/sizylift}
-          # Signing keys are fetched lazily on the first request, so startup does not depend on Keycloak.
-          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/sizylift/protocol/openid-connect/certs}
+          # Tokens must be issued by the Keycloak realm ("iss", set per profile) for this API ("aud").
+          # With jwk-set-uri set, signing keys are fetched lazily, so startup does not depend on Keycloak.
           audiences: sizylift-api
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: 8080
   shutdown: graceful
 
 management:
+  # Telemetry goes to an OpenTelemetry collector over OTLP/HTTP (addresses per profile):
+  # metrics via Micrometer, traces via Micrometer Tracing, logs via the Logback appender.
+  opentelemetry:
+    resource-attributes:
+      service.namespace: sizylift
+  otlp:
+    metrics:
+      export:
+        step: 30s
+  metrics:
+    distribution:
+      # Lets Grafana compute latency percentiles across instances.
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      probability: 1.0
   endpoints:
     web:
       exposure:

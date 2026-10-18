@@ -1,0 +1,16 @@
+{
+  "displayName": "Влад",
+  "birthDate": "1995-03-01",
+  "sex": "male",
+  "heightMm": 1800,
+  "weightGrams": 85000,
+  "trainingStartedOn": "2019-09-01",
+  "sportDirections": ["powerlifting"],
+  "goals": "Сумма 600",
+  "goalDeadline": "2027-05-01",
+  "equipmentNotes": null,
+  "exercisePreferences": null,
+  "schedule": "Пн, Ср, Пт",
+  "competitionNotes": null,
+  "updatedAt": "2026-10-01T10:00:00.000Z"
+}

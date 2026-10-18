@@ -1,0 +1,13 @@
+{
+  "name": "Жим гантелей на наклонной",
+  "shortName": null,
+  "movementCategoryId": "11000000-0000-4000-8000-000000000011",
+  "resultType": "weight_reps",
+  "isSbd": false,
+  "note": "Скамья 30°",
+  "updatedAt": "2026-10-01T10:00:00.000Z",
+  "muscles": [
+    { "muscleGroupId": "13000000-0000-4000-8000-000000000007", "role": "secondary" }
+  ],
+  "equipmentIds": ["12000000-0000-4000-8000-000000000003"]
+}

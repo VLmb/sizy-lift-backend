@@ -4,6 +4,8 @@ import java.time.Instant;
 
 import com.sizylift.backend.identity.entity.UserAccount;
 import com.sizylift.backend.identity.repository.UserAccountRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,9 +13,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserAccountService {
 
     private final UserAccountRepository accounts;
+    private final Counter accountsCreated;
 
-    public UserAccountService(UserAccountRepository accounts) {
+    public UserAccountService(UserAccountRepository accounts, MeterRegistry meters) {
         this.accounts = accounts;
+        this.accountsCreated = Counter.builder("sizylift.accounts.created")
+                .description("SizyLift accounts created on the first authenticated request")
+                .register(meters);
     }
 
     /**
@@ -29,7 +35,10 @@ public class UserAccountService {
     }
 
     private UserAccount provision(ExternalIdentity identity) {
-        accounts.insertIfAbsent(identity.issuer(), identity.subject(), identity.email(), identity.emailVerified());
+        if (accounts.insertIfAbsent(identity.issuer(), identity.subject(), identity.email(),
+                identity.emailVerified()) == 1) {
+            accountsCreated.increment();
+        }
         return accounts.findByIssuerAndSubject(identity.issuer(), identity.subject())
                 .orElseThrow(() -> new IllegalStateException("User account was not provisioned"));
     }

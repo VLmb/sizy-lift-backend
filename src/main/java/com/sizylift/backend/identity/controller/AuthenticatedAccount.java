@@ -1,0 +1,27 @@
+package com.sizylift.backend.identity.controller;
+
+import com.sizylift.backend.identity.entity.UserAccount;
+import com.sizylift.backend.identity.service.ExternalIdentity;
+import com.sizylift.backend.identity.service.UserAccountService;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.stereotype.Component;
+
+/** Resolves the SizyLift account of a validated access token; other features use it from their controllers. */
+@Component
+public class AuthenticatedAccount {
+
+    private final UserAccountService userAccounts;
+
+    public AuthenticatedAccount(UserAccountService userAccounts) {
+        this.userAccounts = userAccounts;
+    }
+
+    public UserAccount resolve(Jwt jwt) {
+        return userAccounts.resolve(new ExternalIdentity(
+                jwt.getClaimAsString(JwtClaimNames.ISS),
+                jwt.getSubject(),
+                jwt.getClaimAsString("email"),
+                Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified"))));
+    }
+}

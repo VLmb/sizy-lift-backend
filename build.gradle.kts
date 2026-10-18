@@ -26,6 +26,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-liquibase")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
+    // Sends Logback events through the OpenTelemetry SDK; built against the same OTel version as the Boot BOM.
+    implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.28.1-alpha")
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
     runtimeOnly("org.postgresql:postgresql")
 
@@ -41,7 +44,21 @@ dependencyLocking {
     lockAllConfigurations()
 }
 
+// Only the executable jar is needed; the Dockerfile copies the single file in build/libs.
+tasks.named<Jar>("jar") {
+    enabled = false
+}
+
+// `./gradlew bootRun` uses the dev profile unless SPRING_PROFILES_ACTIVE says otherwise.
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    if (System.getenv("SPRING_PROFILES_ACTIVE").isNullOrBlank()) {
+        systemProperty("spring.profiles.active", "dev")
+    }
+}
+
 tasks.withType<Test> {
     useJUnitPlatform()
+    // KeycloakAuthenticationIntegrationTest imports the realm file into a real Keycloak.
+    inputs.file("keycloak/realm-sizylift.json")
     maxParallelForks = 1
 }

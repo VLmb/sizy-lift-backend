@@ -13,6 +13,7 @@ import com.sizylift.backend.identity.service.ExternalIdentity;
 import com.sizylift.backend.identity.service.UserAccountService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -45,6 +46,9 @@ class CurrentUserApiTest extends PostgresIntegrationTest {
 
     @Autowired
     UserAccountService userAccounts;
+
+    @Autowired
+    MeterRegistry meters;
 
     @Test
     void rejectsRequestWithoutToken() throws Exception {
@@ -105,6 +109,7 @@ class CurrentUserApiTest extends PostgresIntegrationTest {
     @Test
     void concurrentFirstRequestsCreateSingleAccount() throws Exception {
         var identity = new ExternalIdentity(ISSUER, UUID.randomUUID().toString(), "race@example.com", true);
+        var created = meters.get("sizylift.accounts.created").counter().count();
         var threads = 8;
         var start = new CountDownLatch(1);
         var calls = new ArrayList<Callable<UserAccount>>();
@@ -125,6 +130,7 @@ class CurrentUserApiTest extends PostgresIntegrationTest {
             assertThat(ids).hasSize(threads).containsOnly(ids.getFirst());
         }
         assertThat(accountsWithSubject(identity.subject())).isEqualTo(1);
+        assertThat(meters.get("sizylift.accounts.created").counter().count()).isEqualTo(created + 1);
     }
 
     private static JwtRequestPostProcessor token(String issuer, String subject, String email) {

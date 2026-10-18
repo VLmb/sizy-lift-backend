@@ -1,0 +1,67 @@
+{
+  "name": "Силовой блок",
+  "description": "SBD, 4 недели",
+  "startDate": "2026-10-12",
+  "status": "active",
+  "updatedAt": "2026-10-10T09:00:00.000Z",
+  "cycles": [
+    {
+      "id": "30000000-0000-4000-8000-000000000002",
+      "name": "Цикл 1",
+      "position": 0,
+      "weeks": [
+        {
+          "id": "30000000-0000-4000-8000-000000000003",
+          "number": 1,
+          "name": null,
+          "startDate": "2026-10-12",
+          "endDate": "2026-10-18",
+          "position": 0,
+          "workouts": [
+            {
+              "id": "30000000-0000-4000-8000-000000000004",
+              "title": "День A",
+              "workoutDate": "2026-10-14",
+              "position": 0,
+              "blocks": [
+                {
+                  "id": "30000000-0000-4000-8000-000000000006",
+                  "position": 0,
+                  "blockType": "single",
+                  "groupLabel": null,
+                  "freeKind": null,
+                  "title": null,
+                  "description": null,
+                  "exercises": [
+                    {
+                      "id": "30000000-0000-4000-8000-000000000007",
+                      "position": 0,
+                      "exerciseId": "14000000-0000-4000-8000-000000000001",
+                      "exerciseName": "Присед со штангой",
+                      "resultType": "weight_reps",
+                      "planComment": "Техника, без отказа",
+                      "sets": [
+                        {
+                          "id": "30000000-0000-4000-8000-000000000008",
+                          "position": 0,
+                          "setType": "working",
+                          "targetWeightGrams": 120000,
+                          "repetitions": 5,
+                          "durationMs": null,
+                          "targetDistanceM": null,
+                          "targetRpeTenths": 80,
+                          "restMs": 180000,
+                          "note": null
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

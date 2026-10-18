@@ -1,0 +1,155 @@
+{
+  "workoutDate": "2026-10-14",
+  "title": "Присед и жим",
+  "description": null,
+  "startedAt": "2026-10-14T16:00:00.000Z",
+  "completedAt": "2026-10-14T17:10:00.000Z",
+  "quality": "great",
+  "plannedWorkoutId": "30000000-0000-4000-8000-000000000004",
+  "updatedAt": "2026-10-14T17:10:00.000Z",
+  "blocks": [
+    {
+      "id": "20000000-0000-4000-8000-000000000101",
+      "position": 0,
+      "blockType": "single",
+      "groupLabel": null,
+      "plannedRounds": null,
+      "currentRound": null,
+      "completedRounds": null,
+      "intervalWorkMs": null,
+      "intervalRestMs": null,
+      "freeKind": null,
+      "title": null,
+      "description": null,
+      "exercises": [
+        {
+          "id": "20000000-0000-4000-8000-000000000201",
+          "position": 0,
+          "exerciseId": "14000000-0000-4000-8000-000000000001",
+          "exerciseName": "Присед со штангой",
+          "exerciseShortName": "Присед",
+          "resultType": "weight_reps",
+          "originalExerciseId": "14000000-0000-4000-8000-000000000001",
+          "originalExerciseName": "Присед со штангой",
+          "actualComment": "Колено в порядке",
+          "planComment": "Техника, без отказа",
+          "sets": [
+            {
+              "id": "20000000-0000-4000-8000-000000000301",
+              "position": 0,
+              "setType": "warmup",
+              "completionStatus": "completed",
+              "weightGrams": 60000,
+              "repetitions": 5,
+              "durationMs": null,
+              "distanceM": null,
+              "rpeTenths": null,
+              "averageHeartRateBpm": null,
+              "maximumHeartRateBpm": null,
+              "powerWatts": null,
+              "elevationGainM": null,
+              "note": null,
+              "completedAt": "2026-10-14T16:10:00.000Z",
+              "sourcePlannedSetId": null
+            },
+            {
+              "id": "20000000-0000-4000-8000-000000000302",
+              "position": 1,
+              "setType": "working",
+              "completionStatus": "completed",
+              "weightGrams": 120000,
+              "repetitions": 5,
+              "durationMs": null,
+              "distanceM": null,
+              "rpeTenths": 85,
+              "averageHeartRateBpm": null,
+              "maximumHeartRateBpm": null,
+              "powerWatts": null,
+              "elevationGainM": null,
+              "note": null,
+              "completedAt": "2026-10-14T16:20:00.000Z",
+              "sourcePlannedSetId": "30000000-0000-4000-8000-000000000008"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000102",
+      "position": 1,
+      "blockType": "group",
+      "groupLabel": "superset",
+      "plannedRounds": null,
+      "currentRound": null,
+      "completedRounds": null,
+      "intervalWorkMs": null,
+      "intervalRestMs": null,
+      "freeKind": null,
+      "title": null,
+      "description": null,
+      "exercises": [
+        {
+          "id": "20000000-0000-4000-8000-000000000202",
+          "position": 0,
+          "exerciseId": "21000000-0000-4000-8000-000000000001",
+          "exerciseName": "Жим гантелей на наклонной",
+          "exerciseShortName": null,
+          "resultType": "weight_reps",
+          "originalExerciseId": "21000000-0000-4000-8000-000000000001",
+          "originalExerciseName": "Жим гантелей на наклонной",
+          "actualComment": null,
+          "planComment": null,
+          "sets": [
+            {
+              "id": "20000000-0000-4000-8000-000000000303",
+              "position": 0,
+              "setType": "working",
+              "completionStatus": "skipped",
+              "weightGrams": null,
+              "repetitions": null,
+              "durationMs": null,
+              "distanceM": null,
+              "rpeTenths": null,
+              "averageHeartRateBpm": null,
+              "maximumHeartRateBpm": null,
+              "powerWatts": null,
+              "elevationGainM": null,
+              "note": null,
+              "completedAt": null,
+              "sourcePlannedSetId": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "planSetSnapshots": [
+    {
+      "id": "20000000-0000-4000-8000-000000000401",
+      "actualSetId": "20000000-0000-4000-8000-000000000302",
+      "sourcePlannedExerciseId": "30000000-0000-4000-8000-000000000007",
+      "sourcePlannedSetId": "30000000-0000-4000-8000-000000000008",
+      "position": 0,
+      "resultType": "weight_reps",
+      "setType": "working",
+      "targetWeightGrams": 120000,
+      "repetitions": 5,
+      "durationMs": null,
+      "targetDistanceM": null,
+      "targetRpeTenths": 80,
+      "restMs": 180000,
+      "note": null
+    }
+  ],
+  "recordEvents": [
+    {
+      "id": "20000000-0000-4000-8000-000000000501",
+      "workoutExerciseId": "20000000-0000-4000-8000-000000000201",
+      "actualSetId": "20000000-0000-4000-8000-000000000302",
+      "recordType": "maximum_weight",
+      "value": 120000,
+      "previousValue": 115000,
+      "createdAt": "2026-10-14T16:20:00.000Z"
+    }
+  ]
+}

@@ -3,7 +3,9 @@
 Основа сервера SizyLift: Java 25, Spring Boot, Gradle, PostgreSQL и Liquibase.
 Обычная слоистая архитектура: `controller → service → repository`, с группировкой по функциональности.
 Аутентификация — Keycloak (email/пароль, Google/Facebook), бэкенд проверяет JWT access token.
-[Архитектурные решения](docs/architecture.md), [аутентификация](docs/authentication.md).
+[Архитектурные решения](docs/architecture.md), [аутентификация](docs/authentication.md),
+[публикация данных](docs/publication.md), [наблюдаемость](docs/observability.md),
+[бэклог](docs/backlog.md).
 
 ## Требования
 
@@ -11,38 +13,52 @@
 - Docker Engine и Docker Compose v2; Docker нужен и интеграционным тестам.
 - Gradle устанавливать отдельно не нужно — используйте `./gradlew`.
 
+## Конфигурация
+
+Настройки лежат в YAML и разделены по профилям Spring:
+
+| Файл | Назначение |
+| --- | --- |
+| `application.yaml` | общее для всех сред: JPA, Liquibase, audience токена, actuator |
+| `application-dev.yaml` | локальная разработка: адреса и учётные данные контейнеров из `compose.yaml` |
+| `application-prod.yaml` | production: все адреса и секреты только из переменных окружения, без значений по умолчанию |
+
+Профиль выбирается через `SPRING_PROFILES_ACTIVE`; `./gradlew bootRun` без него
+запускается в `dev`. В production приложение не стартует, если не задана хотя бы
+одна обязательная переменная (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
+`KEYCLOAK_ISSUER_URI`, `KEYCLOAK_JWK_SET_URI`); пишет логи в JSON (ECS), учитывает
+`X-Forwarded-*` от прокси, а actuator слушает отдельный порт 8081.
+В `application-dev.yaml` и `compose.yaml` хранятся только одноразовые пароли
+локальных контейнеров, доступных на `127.0.0.1`; production-секреты в Git не попадают.
+
 ## Локальный запуск
 
 Из корня этого репозитория:
 
 ```bash
-cp .env.example .env
-# Задайте в .env DB_PASSWORD, KEYCLOAK_DB_PASSWORD и KEYCLOAK_ADMIN_PASSWORD, затем:
 docker compose up -d --wait
-set -a
-. ./.env
-set +a
 ./gradlew bootRun
 ```
 
-Приложение слушает порт 8080. Проверка готовности:
+`.env` не нужен. Он служит только для необязательных переопределений, например
+ключей Google/Facebook (шаблон — `.env.example`).
+
+Compose поднимает PostgreSQL приложения, Keycloak (http://localhost:8180, админка
+`admin`/`admin`, отдельная БД, realm `sizylift` импортируется при первом старте) и
+Mailpit для писем Keycloak (http://localhost:8025). Приложение слушает порт 8080:
 
 ```bash
-curl --fail http://localhost:8080/actuator/health
-# Ответ содержит "status":"UP".
+curl --fail http://localhost:8080/actuator/health   # "status":"UP"
+curl -i http://localhost:8080/api/v1/me             # 401 без токена
 ```
 
-Compose поднимает PostgreSQL приложения, Keycloak (http://localhost:8180, отдельная БД,
-realm `sizylift` импортируется при первом старте) и Mailpit для писем Keycloak
-(http://localhost:8025). Все API, кроме health, требуют Bearer-токен Keycloak:
-`curl http://localhost:8080/api/v1/me` без токена вернёт `401`.
+Для остановки: `docker compose down` (тома сохраняются; `--volumes` удаляет данные
+и заставляет Keycloak заново импортировать realm).
 
-При старте Liquibase создаёт схему `sizylift`. Учётные данные берутся из
-`DB_USERNAME` и `DB_PASSWORD`, адрес БД — из `DB_URL`. Файл `.env` читает Docker
-Compose; для Java его нужно экспортировать, как показано выше. Значения в `.env`
-должны быть совместимы с shell; специальные символы заключайте в одинарные кавычки.
-Не добавляйте реальные пароли в Git. Для остановки БД: `docker compose down`
-(именованный том сохраняется; не добавляйте `--volumes`, если данные нужны).
+## Production
+
+Сборка образов, развёртывание на сервере с HTTPS, обновление, резервные копии и
+откат описаны в [docs/deployment.md](docs/deployment.md).
 
 ## Проверка и сборка
 
@@ -56,7 +72,7 @@ JUnit/Testcontainers запускает отдельный PostgreSQL и Keycloa
 Liquibase закреплены в `public`, независимо от PostgreSQL `search_path`.
 Тесты не используют локальную рабочую БД и
 не пропускаются автоматически при отсутствии Docker. Отчёт: `build/reports/tests/test/index.html`.
-Исполняемый JAR: `build/libs/sizy-lift-backend-0.1.0-SNAPSHOT.jar`.
+Исполняемый JAR: `build/libs/sizy-lift-backend-<версия>.jar` (единственный файл в каталоге).
 GitHub Actions запускает ту же сборку на Java 25.
 
 Миграции добавляйте новыми SQL changeset-файлами в `src/main/resources/db/changelog`.

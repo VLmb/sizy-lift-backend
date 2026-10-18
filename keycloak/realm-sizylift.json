@@ -24,6 +24,8 @@
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 36000,
   "offlineSessionIdleTimeout": 2592000,
+  "actionTokenGeneratedByUserLifespan": 1800,
+  "accessCodeLifespanLogin": 1800,
   "revokeRefreshToken": true,
   "refreshTokenMaxReuse": 0,
   "smtpServer": {
