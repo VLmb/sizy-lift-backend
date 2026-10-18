@@ -10,6 +10,7 @@ import com.sizylift.backend.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.core.io.ClassPathResource;
@@ -45,6 +46,9 @@ class PublicationApiTest extends PostgresIntegrationTest {
 
     @Autowired
     ObjectMapper json;
+
+    @Autowired
+    MeterRegistry meters;
 
     String subject;
 
@@ -125,6 +129,28 @@ class PublicationApiTest extends PostgresIntegrationTest {
         assertThat(count("workout")).isZero();
         assertThat(count("workout_set")).isZero();
         assertThat(count("planned_set")).isEqualTo(1);
+    }
+
+    @Test
+    void recordsPublicationMetrics() throws Exception {
+        var accepted = itemCount("workout", "accepted", "none");
+        var stale = itemCount("workout", "stale", "none");
+        var batches = meters.find("sizylift.publication.batch").timer();
+        var batchesBefore = batches == null ? 0 : batches.count();
+
+        publish(item("workout", WORKOUT, 1, fixture("workout")));
+        publish(item("workout", WORKOUT, 1, fixture("workout")));
+
+        assertThat(itemCount("workout", "accepted", "none")).isEqualTo(accepted + 1);
+        assertThat(itemCount("workout", "stale", "none")).isEqualTo(stale + 1);
+        assertThat(meters.get("sizylift.publication.batch").timer().count()).isEqualTo(batchesBefore + 2);
+        assertThat(meters.get("sizylift.publication.batch.size").summary().max()).isGreaterThanOrEqualTo(1);
+    }
+
+    private double itemCount(String type, String status, String error) {
+        var counter = meters.find("sizylift.publication.items")
+                .tags("type", type, "status", status, "error", error).counter();
+        return counter == null ? 0 : counter.count();
     }
 
     @Test

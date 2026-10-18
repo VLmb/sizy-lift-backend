@@ -20,17 +20,37 @@ class ProductionProfileTest {
             "spring.security.oauth2.resourceserver.jwt.issuer-uri",
             "spring.security.oauth2.resourceserver.jwt.jwk-set-uri");
 
+    static final List<String> TELEMETRY_ENDPOINTS = List.of(
+            "management.otlp.metrics.export.url",
+            "management.opentelemetry.tracing.export.otlp.endpoint",
+            "management.opentelemetry.logging.export.otlp.endpoint");
+
     static final Pattern PLACEHOLDER_WITHOUT_DEFAULT = Pattern.compile("\\$\\{[A-Z0-9_]+}");
 
     @Test
     void connectionSettingsComeOnlyFromEnvironment() throws Exception {
-        var source = (EnumerablePropertySource<?>) new YamlPropertySourceLoader()
-                .load("prod", new ClassPathResource("application-prod.yaml")).getFirst();
+        var source = prodProfile();
 
         for (var key : REQUIRED_FROM_ENVIRONMENT) {
             assertThat(String.valueOf(source.getProperty(key)))
                     .as(key)
                     .matches(PLACEHOLDER_WITHOUT_DEFAULT);
         }
+    }
+
+    @Test
+    void telemetryGoesOnlyToTheCollectorFromEnvironment() throws Exception {
+        var source = prodProfile();
+
+        for (var key : TELEMETRY_ENDPOINTS) {
+            assertThat(String.valueOf(source.getProperty(key)))
+                    .as(key)
+                    .matches("\\$\\{OTLP_ENDPOINT}/v1/(metrics|traces|logs)");
+        }
+    }
+
+    private static EnumerablePropertySource<?> prodProfile() throws Exception {
+        return (EnumerablePropertySource<?>) new YamlPropertySourceLoader()
+                .load("prod", new ClassPathResource("application-prod.yaml")).getFirst();
     }
 }

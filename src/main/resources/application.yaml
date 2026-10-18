@@ -27,6 +27,23 @@ server:
   shutdown: graceful
 
 management:
+  # Telemetry goes to an OpenTelemetry collector over OTLP/HTTP (addresses per profile):
+  # metrics via Micrometer, traces via Micrometer Tracing, logs via the Logback appender.
+  opentelemetry:
+    resource-attributes:
+      service.namespace: sizylift
+  otlp:
+    metrics:
+      export:
+        step: 30s
+  metrics:
+    distribution:
+      # Lets Grafana compute latency percentiles across instances.
+      percentiles-histogram:
+        http.server.requests: true
+  tracing:
+    sampling:
+      probability: 1.0
   endpoints:
     web:
       exposure:

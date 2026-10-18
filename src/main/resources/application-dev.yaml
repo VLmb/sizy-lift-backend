@@ -13,6 +13,22 @@ spring:
           jwk-set-uri: http://localhost:8180/realms/sizylift/protocol/openid-connect/certs
 
 management:
+  # grafana/otel-lgtm from compose.yaml; Grafana at http://localhost:3000
+  opentelemetry:
+    resource-attributes:
+      deployment.environment.name: dev
+    tracing:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces
+    logging:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/logs
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:4318/v1/metrics
   endpoint:
     health:
       show-details: always

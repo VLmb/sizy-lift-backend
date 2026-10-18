@@ -10,3 +10,4 @@
 - The realm lives in `keycloak/realm-sizylift.json`; keep secrets out of it (use `${ENV_VAR}` placeholders).
 - Cloud tasks already have isolated checkouts. Do not create a Git worktree unless the user requests one.
 - Data publication contract: docs/publication.md. Payload fixtures in `src/test/resources/publication` and the catalog fixture are shared with the app; change them on both sides together.
+- Telemetry: OpenTelemetry over OTLP (docs/observability.md). Name custom meters `sizylift.*` with low-cardinality tags; never put user ids, e-mails or payload data into tags or log messages.

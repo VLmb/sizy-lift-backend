@@ -18,7 +18,12 @@ keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
   старте с `sslRequired: all` и настоящим SMTP. Админка снаружи отдаёт 404.
 - Наружу открыты только 80 и 443. Базы данных в интернет не смотрят.
 
-Минимальный сервер: 2 vCPU, 2 ГБ RAM (стек занимает ~1,3 ГБ), Docker Engine и Compose v2.
+Минимальный сервер: 2 vCPU, 4 ГБ RAM (приложение ~1,3 ГБ, телеметрия `otel-lgtm` ещё ~1–1,5 ГБ),
+Docker Engine и Compose v2.
+
+Телеметрия (метрики, трейсы, логи) уходит в контейнер `otel-lgtm`; Grafana открывается через
+SSH-туннель `ssh -L 3000:127.0.0.1:3000 <сервер>`, вход `admin` / `GRAFANA_ADMIN_PASSWORD`.
+Подробности — [observability.md](observability.md).
 
 ## Первое развёртывание
 

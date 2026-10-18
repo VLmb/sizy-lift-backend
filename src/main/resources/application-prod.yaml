@@ -21,6 +21,25 @@ server:
   forward-headers-strategy: framework
 
 management:
+  # OpenTelemetry collector inside the Docker network, e.g. http://otel-lgtm:4318
+  opentelemetry:
+    resource-attributes:
+      deployment.environment.name: prod
+    tracing:
+      export:
+        otlp:
+          endpoint: ${OTLP_ENDPOINT}/v1/traces
+    logging:
+      export:
+        otlp:
+          endpoint: ${OTLP_ENDPOINT}/v1/logs
+  otlp:
+    metrics:
+      export:
+        url: ${OTLP_ENDPOINT}/v1/metrics
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
   # Actuator listens on a separate port that the reverse proxy does not expose.
   server:
     port: 8081

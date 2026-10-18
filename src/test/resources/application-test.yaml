@@ -7,3 +7,16 @@ spring:
         jwt:
           issuer-uri: http://keycloak.test/realms/sizylift
           jwk-set-uri: http://keycloak.test/realms/sizylift/protocol/openid-connect/certs
+management:
+  # No collector in tests; meters are still recorded in the in-memory registry.
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  tracing:
+    export:
+      enabled: false
+  logging:
+    export:
+      otlp:
+        enabled: false
