@@ -4,7 +4,8 @@
 Обычная слоистая архитектура: `controller → service → repository`, с группировкой по функциональности.
 Аутентификация — Keycloak (email/пароль, Google/Facebook), бэкенд проверяет JWT access token.
 [Архитектурные решения](docs/architecture.md), [аутентификация](docs/authentication.md),
-[публикация данных](docs/publication.md).
+[публикация данных](docs/publication.md), [наблюдаемость](docs/observability.md),
+[бэклог](docs/backlog.md).
 
 ## Требования
 
