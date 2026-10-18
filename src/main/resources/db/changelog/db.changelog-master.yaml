@@ -5,3 +5,12 @@ databaseChangeLog:
   - include:
       file: changes/002-create-user-account.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/003-create-exercise-catalog.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/004-seed-exercise-catalog.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/005-create-publication-tables.sql
+      relativeToChangelogFile: true
