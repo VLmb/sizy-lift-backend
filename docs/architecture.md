@@ -7,9 +7,13 @@
 
 - Java 25, Spring Boot, Gradle Wrapper с Kotlin DSL.
 - Модульный монолит, Spring MVC, PostgreSQL, Liquibase с SQL changeset-файлами.
-- Организация package by feature: будущие `identity`, `publication`, `workouts`.
-  Внутри feature — `api`, `application`, `domain`, `infrastructure`. Пустые слои
-  заранее не создаются. Hibernate проверяет схему; изменяет её только Liquibase.
+- Обычная слоистая архитектура: `controller → service → repository`.
+  Контроллеры принимают HTTP-запросы и работают с DTO, сервисы реализуют бизнес-логику
+  и определяют границы транзакций, репозитории отвечают за доступ к данным.
+  Классы группируются по функциональности (package by feature): будущие `identity`,
+  `publication`, `workouts`. Внутри feature используются пакеты `controller`, `service`,
+  `repository`, а также `dto` и `entity` по мере необходимости. Пустые слои заранее
+  не создаются. Hibernate проверяет схему; изменяет её только Liquibase.
 - Версионируемый REST API (`/api/v1`) для мобильного клиента.
 - Первый обмен данными — контролируемая односторонняя публикация из локальной
   SQLite: outbox, пакетная отправка, стабильные идентификаторы операций,

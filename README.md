@@ -1,6 +1,7 @@
 # SizyLift Backend
 
 Основа сервера SizyLift: Java 25, Spring Boot, Gradle, PostgreSQL и Liquibase.
+Обычная слоистая архитектура: `controller → service → repository`, с группировкой по функциональности.
 Keycloak выбран для email/пароля и входа через Google/Facebook; аутентификация
 будет реализована следующим этапом. [Архитектурные решения](docs/architecture.md).
 
