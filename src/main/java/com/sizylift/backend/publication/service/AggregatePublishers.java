@@ -12,7 +12,6 @@ import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 import com.sizylift.backend.publication.repository.AthleteDataRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
-import com.sizylift.backend.publication.service.PublicationScope.Programs;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -29,11 +28,6 @@ class AggregatePublishers {
 
             public Class<WorkoutPayloadV1> payloadType() {
                 return WorkoutPayloadV1.class;
-            }
-
-            public boolean inScope(PublicationScope scope, WorkoutPayloadV1 workout) {
-                return scope.workouts()
-                        && (scope.workoutsSince() == null || !workout.workoutDate().isBefore(scope.workoutsSince()));
             }
 
             public void insert(UUID userId, UUID id, WorkoutPayloadV1 workout) {
@@ -57,11 +51,6 @@ class AggregatePublishers {
                 return ProgramPayloadV1.class;
             }
 
-            public boolean inScope(PublicationScope scope, ProgramPayloadV1 program) {
-                return scope.programs() == Programs.ALL
-                        || (scope.programs() == Programs.ACTIVE && program.status().equals("active"));
-            }
-
             public void insert(UUID userId, UUID id, ProgramPayloadV1 program) {
                 programs.insert(userId, id, program);
             }
@@ -81,10 +70,6 @@ class AggregatePublishers {
 
             public Class<ExercisePayloadV1> payloadType() {
                 return ExercisePayloadV1.class;
-            }
-
-            public boolean inScope(PublicationScope scope, ExercisePayloadV1 exercise) {
-                return scope.allowsExercises();
             }
 
             public void insert(UUID userId, UUID id, ExercisePayloadV1 exercise) {
@@ -112,10 +97,6 @@ class AggregatePublishers {
                 return AthleteProfilePayloadV1.class;
             }
 
-            public boolean inScope(PublicationScope scope, AthleteProfilePayloadV1 profile) {
-                return scope.profile();
-            }
-
             public void insert(UUID userId, UUID id, AthleteProfilePayloadV1 profile) {
                 athlete.replaceProfile(userId, id, profile);
             }
@@ -135,10 +116,6 @@ class AggregatePublishers {
 
             public Class<OneRepMaxPayloadV1> payloadType() {
                 return OneRepMaxPayloadV1.class;
-            }
-
-            public boolean inScope(PublicationScope scope, OneRepMaxPayloadV1 value) {
-                return scope.records();
             }
 
             public void insert(UUID userId, UUID exerciseId, OneRepMaxPayloadV1 value) {
@@ -162,10 +139,6 @@ class AggregatePublishers {
                 return InjuryPayloadV1.class;
             }
 
-            public boolean inScope(PublicationScope scope, InjuryPayloadV1 injury) {
-                return scope.health();
-            }
-
             public void insert(UUID userId, UUID id, InjuryPayloadV1 injury) {
                 athlete.replaceInjury(userId, id, injury);
             }
@@ -185,10 +158,6 @@ class AggregatePublishers {
 
             public Class<ContraindicationPayloadV1> payloadType() {
                 return ContraindicationPayloadV1.class;
-            }
-
-            public boolean inScope(PublicationScope scope, ContraindicationPayloadV1 contraindication) {
-                return scope.health();
             }
 
             public void insert(UUID userId, UUID id, ContraindicationPayloadV1 contraindication) {

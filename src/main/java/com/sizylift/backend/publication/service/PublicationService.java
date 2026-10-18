@@ -33,26 +33,22 @@ public class PublicationService {
 
     private final Map<String, AggregatePublisher<?>> publishers;
     private final PublishedAggregateRepository versions;
-    private final PublicationScopeService scopes;
     private final TransactionTemplate transactions;
     private final ObjectMapper json;
     private final Validator validator;
 
     public PublicationService(List<AggregatePublisher<?>> publishers, PublishedAggregateRepository versions,
-                              PublicationScopeService scopes, TransactionTemplate transactions, ObjectMapper json,
-                              Validator validator) {
+                              TransactionTemplate transactions, ObjectMapper json, Validator validator) {
         this.publishers = publishers.stream()
                 .collect(Collectors.toUnmodifiableMap(AggregatePublisher::type, Function.identity()));
         this.versions = versions;
-        this.scopes = scopes;
         this.transactions = transactions;
         this.json = json;
         this.validator = validator;
     }
 
     public PublicationBatchResponse publish(UUID userId, List<Item> items) {
-        var scope = scopes.get(userId);
-        var results = items.stream().map(item -> publish(userId, scope, item)).toList();
+        var results = items.stream().map(item -> publish(userId, item)).toList();
         if (log.isDebugEnabled()) {
             log.debug("Publication batch: {}", results.stream()
                     .collect(Collectors.groupingBy(ItemResult::status, Collectors.counting())));
@@ -60,7 +56,7 @@ public class PublicationService {
         return new PublicationBatchResponse(results);
     }
 
-    private ItemResult publish(UUID userId, PublicationScope scope, Item item) {
+    private ItemResult publish(UUID userId, Item item) {
         var publisher = publishers.get(item.type());
         if (publisher == null) {
             return ItemResult.rejected(item.type(), item.id(), item.version(), "unsupported_type");
@@ -69,7 +65,7 @@ public class PublicationService {
             return ItemResult.rejected(item.type(), item.id(), item.version(), "unsupported_schema");
         }
         try {
-            return item.deleted() ? delete(userId, publisher, item) : replace(userId, scope, publisher, item);
+            return item.deleted() ? delete(userId, publisher, item) : replace(userId, publisher, item);
         } catch (InvalidPayloadException | DataIntegrityViolationException e) {
             log.debug("Rejected {} {}: {}", item.type(), item.id(), e.getClass().getSimpleName());
             return ItemResult.rejected(item.type(), item.id(), item.version(), "invalid_payload");
@@ -78,16 +74,8 @@ public class PublicationService {
         }
     }
 
-    private <P> ItemResult replace(UUID userId, PublicationScope scope, AggregatePublisher<P> publisher, Item item) {
+    private <P> ItemResult replace(UUID userId, AggregatePublisher<P> publisher, Item item) {
         var payload = parse(item.payload(), publisher.payloadType());
-        if (!scope.enabled() || !publisher.inScope(scope, payload)) {
-            // Not allowed now: keep no copy and no version, so it is accepted again once allowed.
-            transactions.executeWithoutResult(status -> {
-                publisher.delete(userId, item.id());
-                versions.forget(userId, item.type(), item.id());
-            });
-            return ItemResult.of(item.type(), item.id(), item.version(), "out_of_scope");
-        }
         return transactions.execute(status -> {
             if (item.version() <= versions.lockVersion(userId, item.type(), item.id())) {
                 return ItemResult.of(item.type(), item.id(), item.version(), "stale");

@@ -95,21 +95,6 @@ public class ProgramDataRepository {
         jdbc.update("DELETE FROM sizylift.program WHERE user_id = ? AND id = ?", userId, programId);
     }
 
-    public void deleteAll(UUID userId) {
-        jdbc.update("DELETE FROM sizylift.program WHERE user_id = ?", userId);
-    }
-
-    /** Keeps only the active program, forgetting the versions of removed ones. */
-    public void deleteInactive(UUID userId) {
-        jdbc.update("""
-                WITH removed AS (
-                    DELETE FROM sizylift.program WHERE user_id = ? AND status <> 'active' RETURNING id
-                )
-                DELETE FROM sizylift.published_aggregate
-                WHERE user_id = ? AND type = 'program' AND aggregate_id IN (SELECT id FROM removed)
-                """, userId, userId);
-    }
-
     private void batch(String sql, List<Object[]> rows) {
         if (!rows.isEmpty()) {
             jdbc.batchUpdate(sql, rows);

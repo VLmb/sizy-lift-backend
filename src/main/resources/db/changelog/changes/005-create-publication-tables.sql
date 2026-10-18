@@ -4,18 +4,6 @@
 -- Copy of data published from the phone (docs/publication.md). Every row belongs to a user;
 -- ids come from the app, so keys include user_id. Units match the app: grams, ms, metres, RPE x10.
 
-CREATE TABLE sizylift.publication_scope (
-    user_id        uuid PRIMARY KEY REFERENCES sizylift.user_account (id) ON DELETE CASCADE,
-    enabled        boolean     NOT NULL DEFAULT true,
-    workouts       boolean     NOT NULL DEFAULT true,
-    workouts_since date,
-    programs       text        NOT NULL DEFAULT 'all' CHECK (programs IN ('none', 'active', 'all')),
-    profile        boolean     NOT NULL DEFAULT true,
-    records        boolean     NOT NULL DEFAULT true,
-    health         boolean     NOT NULL DEFAULT false,
-    updated_at     timestamptz NOT NULL DEFAULT now()
-);
-
 -- Last accepted version of every aggregate; makes repeated and reordered deliveries harmless.
 CREATE TABLE sizylift.published_aggregate (
     user_id      uuid        NOT NULL REFERENCES sizylift.user_account (id) ON DELETE CASCADE,
@@ -297,4 +285,4 @@ CREATE TABLE sizylift.contraindication (
     PRIMARY KEY (user_id, id)
 );
 
---rollback DROP TABLE sizylift.contraindication, sizylift.injury, sizylift.one_rep_max, sizylift.athlete_profile, sizylift.planned_set, sizylift.planned_exercise, sizylift.planned_block, sizylift.planned_workout, sizylift.training_week, sizylift.program_cycle, sizylift.program, sizylift.workout_record_event, sizylift.workout_plan_set_snapshot, sizylift.workout_set, sizylift.workout_exercise, sizylift.workout_block, sizylift.workout, sizylift.published_aggregate, sizylift.publication_scope;
+--rollback DROP TABLE sizylift.contraindication, sizylift.injury, sizylift.one_rep_max, sizylift.athlete_profile, sizylift.planned_set, sizylift.planned_exercise, sizylift.planned_block, sizylift.planned_workout, sizylift.training_week, sizylift.program_cycle, sizylift.program, sizylift.workout_record_event, sizylift.workout_plan_set_snapshot, sizylift.workout_set, sizylift.workout_exercise, sizylift.workout_block, sizylift.workout, sizylift.published_aggregate;

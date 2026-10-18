@@ -10,8 +10,6 @@ public interface AggregatePublisher<P> {
 
     Class<P> payloadType();
 
-    boolean inScope(PublicationScope scope, P payload);
-
     /** Inserts the aggregate; the previous copy has already been deleted. */
     void insert(UUID userId, UUID id, P payload);
 

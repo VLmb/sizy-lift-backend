@@ -39,14 +39,4 @@ public class PublishedAggregateRepository {
                 WHERE user_id = ? AND type = ? AND aggregate_id = ?
                 """, version, deleted, userId, type, aggregateId);
     }
-
-    /** Forgets the aggregate, so a later publication with any version is accepted again. */
-    public void forget(UUID userId, String type, UUID aggregateId) {
-        jdbc.update("DELETE FROM sizylift.published_aggregate WHERE user_id = ? AND type = ? AND aggregate_id = ?",
-                userId, type, aggregateId);
-    }
-
-    public void forgetType(UUID userId, String type) {
-        jdbc.update("DELETE FROM sizylift.published_aggregate WHERE user_id = ? AND type = ?", userId, type);
-    }
 }

@@ -23,11 +23,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Publication contract (docs/publication.md) against real PostgreSQL. Payloads are the shared v1 fixtures. */
@@ -172,6 +168,15 @@ class PublicationApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void storesHealthDataWithoutExtraSteps() throws Exception {
+        var results = publish(item("injury", UUID.randomUUID(), 1, fixture("injury")),
+                item("contraindication", UUID.randomUUID(), 1, fixture("contraindication")));
+
+        assertThat(statuses(results)).containsExactly("accepted", "accepted");
+        assertThat(count("injury") + count("contraindication")).isEqualTo(2);
+    }
+
+    @Test
     void storesProfileAndOneRepMax() throws Exception {
         var results = publish(
                 item("athlete_profile", UUID.randomUUID(), 1, fixture("athlete_profile")),
@@ -182,75 +187,6 @@ class PublicationApiTest extends PostgresIntegrationTest {
                 String.class, userId())).isEqualTo("powerlifting");
         assertThat(jdbc.queryForObject("SELECT weight_grams FROM sizylift.one_rep_max WHERE user_id = ?",
                 Integer.class, userId())).isEqualTo(160000);
-    }
-
-    @Test
-    void healthDataNeedsSeparateConsent() throws Exception {
-        var injury = UUID.randomUUID();
-        assertThat(statuses(publish(item("injury", injury, 1, fixture("injury")),
-                item("contraindication", UUID.randomUUID(), 1, fixture("contraindication")))))
-                .containsExactly("out_of_scope", "out_of_scope");
-        assertThat(count("injury")).isZero();
-
-        putScope(scope(true, true, null, "all", true, true, true));
-        assertThat(statuses(publish(item("injury", injury, 1, fixture("injury"))))).containsExactly("accepted");
-        assertThat(count("injury")).isEqualTo(1);
-
-        putScope(scope(true, true, null, "all", true, true, false));
-        assertThat(count("injury")).isZero();
-    }
-
-    @Test
-    void narrowingThePeriodDeletesOlderWorkoutsAndWideningAcceptsThemAgain() throws Exception {
-        publish(item("workout", WORKOUT, 7, fixture("workout")));
-
-        putScope(scope(true, true, "2026-10-15", "all", true, true, false));
-        assertThat(count("workout")).isZero();
-        assertThat(statuses(publish(item("workout", WORKOUT, 7, fixture("workout")))))
-                .containsExactly("out_of_scope");
-
-        putScope(scope(true, true, null, "all", true, true, false));
-        assertThat(statuses(publish(item("workout", WORKOUT, 7, fixture("workout"))))).containsExactly("accepted");
-    }
-
-    @Test
-    void activeProgramScopeKeepsOnlyTheActiveProgram() throws Exception {
-        var draft = withNewIds(fixture("program"));
-        draft.put("status", "draft");
-        publish(item("program", PROGRAM, 1, fixture("program")), item("program", UUID.randomUUID(), 1, draft));
-        assertThat(count("program")).isEqualTo(2);
-
-        putScope(scope(true, true, null, "active", true, true, false));
-        assertThat(count("program")).isEqualTo(1);
-
-        var deactivated = fixture("program");
-        deactivated.put("status", "draft");
-        assertThat(statuses(publish(item("program", PROGRAM, 2, deactivated)))).containsExactly("out_of_scope");
-        assertThat(count("program")).isZero();
-    }
-
-    @Test
-    void defaultScopeKeepsHealthDataOff() throws Exception {
-        mvc.perform(get("/api/v1/publication/scope").with(token()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.enabled").value(true))
-                .andExpect(jsonPath("$.programs").value("all"))
-                .andExpect(jsonPath("$.health").value(false));
-    }
-
-    @Test
-    void deletingDataRemovesEverythingAndStopsAccepting() throws Exception {
-        publish(item("workout", WORKOUT, 1, fixture("workout")), item("program", PROGRAM, 1, fixture("program")),
-                item("exercise", OWN_EXERCISE, 1, fixture("exercise")));
-
-        mvc.perform(delete("/api/v1/publication/data").with(token())).andExpect(status().isNoContent());
-
-        assertThat(count("workout") + count("program") + count("exercise")).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.published_aggregate WHERE user_id = ?",
-                Long.class, userId())).isZero();
-        assertThat(statuses(publish(item("workout", WORKOUT, 2, fixture("workout")))))
-                .containsExactly("out_of_scope");
-        mvc.perform(get("/api/v1/publication/scope").with(token())).andExpect(jsonPath("$.enabled").value(false));
     }
 
     @Test
@@ -274,24 +210,6 @@ class PublicationApiTest extends PostgresIntegrationTest {
         return json.readTree(body).get("results");
     }
 
-    private void putScope(Map<String, Object> scope) throws Exception {
-        mvc.perform(put("/api/v1/publication/scope").with(token()).contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(scope))).andExpect(status().isOk());
-    }
-
-    private static Map<String, Object> scope(boolean enabled, boolean workouts, String since, String programs,
-                                             boolean profile, boolean records, boolean health) {
-        var scope = new HashMap<String, Object>();
-        scope.put("enabled", enabled);
-        scope.put("workouts", workouts);
-        scope.put("workoutsSince", since);
-        scope.put("programs", programs);
-        scope.put("profile", profile);
-        scope.put("records", records);
-        scope.put("health", health);
-        return scope;
-    }
-
     private Map<String, Object> item(String type, UUID id, long version, JsonNode payload) {
         var item = tombstone(type, id, version);
         item.put("deleted", false);
@@ -313,20 +231,6 @@ class PublicationApiTest extends PostgresIntegrationTest {
         try (var input = new ClassPathResource("publication/" + name + ".v1.json").getInputStream()) {
             return (ObjectNode) json.readTree(input);
         }
-    }
-
-    /** Gives every nested row a fresh id, as a different aggregate from the app would have. */
-    private static ObjectNode withNewIds(ObjectNode node) {
-        if (node.has("id")) {
-            node.put("id", UUID.randomUUID().toString());
-        }
-        for (var field : node.properties()) {
-            if (field.getValue().isArray()) {
-                field.getValue().valueStream().filter(JsonNode::isObject)
-                        .forEach(child -> withNewIds((ObjectNode) child));
-            }
-        }
-        return node;
     }
 
     private static List<String> statuses(JsonNode results) {

@@ -54,10 +54,6 @@ public class AthleteDataRepository {
         jdbc.update("DELETE FROM sizylift.exercise WHERE user_id = ? AND id = ?", userId, exerciseId);
     }
 
-    public void deleteExercises(UUID userId) {
-        jdbc.update("DELETE FROM sizylift.exercise WHERE user_id = ?", userId);
-    }
-
     public void replaceProfile(UUID userId, UUID profileId, AthleteProfilePayloadV1 profile) {
         deleteProfile(userId);
         jdbc.update(connection -> {
@@ -103,10 +99,6 @@ public class AthleteDataRepository {
         jdbc.update("DELETE FROM sizylift.one_rep_max WHERE user_id = ? AND exercise_id = ?", userId, exerciseId);
     }
 
-    public void deleteOneRepMaxes(UUID userId) {
-        jdbc.update("DELETE FROM sizylift.one_rep_max WHERE user_id = ?", userId);
-    }
-
     public void replaceInjury(UUID userId, UUID injuryId, InjuryPayloadV1 injury) {
         deleteInjury(userId, injuryId);
         jdbc.update("""
@@ -131,10 +123,5 @@ public class AthleteDataRepository {
 
     public void deleteContraindication(UUID userId, UUID id) {
         jdbc.update("DELETE FROM sizylift.contraindication WHERE user_id = ? AND id = ?", userId, id);
-    }
-
-    public void deleteHealth(UUID userId) {
-        jdbc.update("DELETE FROM sizylift.injury WHERE user_id = ?", userId);
-        jdbc.update("DELETE FROM sizylift.contraindication WHERE user_id = ?", userId);
     }
 }

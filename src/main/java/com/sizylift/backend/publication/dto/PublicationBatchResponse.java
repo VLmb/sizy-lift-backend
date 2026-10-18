@@ -7,7 +7,6 @@ public record PublicationBatchResponse(List<ItemResult> results) {
 
     /**
      * {@code accepted} and {@code stale} mean the version is stored (or a newer one is);
-     * {@code out_of_scope} means the user did not allow it and the server keeps no copy;
      * {@code rejected} carries an error code and is worth retrying only after an app update.
      */
     public record ItemResult(String type, UUID id, long version, String status, String error) {

@@ -1,6 +1,5 @@
 package com.sizylift.backend.publication.repository;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -93,21 +92,6 @@ public class WorkoutDataRepository {
 
     public void delete(UUID userId, UUID workoutId) {
         jdbc.update("DELETE FROM sizylift.workout WHERE user_id = ? AND id = ?", userId, workoutId);
-    }
-
-    public void deleteAll(UUID userId) {
-        jdbc.update("DELETE FROM sizylift.workout WHERE user_id = ?", userId);
-    }
-
-    /** Removes workouts before {@code since} together with their accepted versions. */
-    public void deleteBefore(UUID userId, LocalDate since) {
-        jdbc.update("""
-                WITH removed AS (
-                    DELETE FROM sizylift.workout WHERE user_id = ? AND workout_date < ? RETURNING id
-                )
-                DELETE FROM sizylift.published_aggregate
-                WHERE user_id = ? AND type = 'workout' AND aggregate_id IN (SELECT id FROM removed)
-                """, userId, since, userId);
     }
 
     private void batch(String sql, List<Object[]> rows) {
