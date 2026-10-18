@@ -1,7 +1,10 @@
 # Публикация данных с телефона (E11-T06…T12)
 
 Телефон — источник истины. Сервер хранит копию разрешённых данных для MCP и аналитики.
-Схема сверена с SQLite приложения (миграции 1–13, каталог `2026.09.1`).
+Схема сверена с SQLite приложения (миграции 1–15, каталоги `2026.09.1` и `2026.10.1`).
+
+Статус: реализовано (сервер — feature `publication`, приложение — `src/application/publication.ts`,
+`src/data/sqlite/publication-*.ts`, `src/features/publication/`).
 
 ## Принципы
 
@@ -62,7 +65,7 @@
 - **План**: `program`, `program_cycle`, `training_week`, `planned_workout`,
   `planned_block`, `planned_exercise`, `planned_set`.
 - **Прочее**: `athlete_profile`, `one_rep_max`, `injury`, `contraindication`.
-- **Служебное**: `published_aggregate` (`user_id`, `type`, `id`, `version`,
+- **Служебное**: `published_aggregate` (`user_id`, `type`, `aggregate_id`, `version`,
   `deleted`, `received_at`) — версия каждого агрегата; `publication_scope` — что
   разрешено.
 
@@ -79,8 +82,15 @@
 ```
 
 Ответ — по каждому элементу: `accepted` (сохранена версия N), `stale` (на сервере уже
-новее — тоже считать доставленным), `rejected` + код (`invalid_payload`, `out_of_scope`,
-`unsupported_schema`). Ошибка одного элемента не влияет на остальные.
+такая или новее — тоже доставлено), `out_of_scope` (пользователь не разрешил; копии и версии
+на сервере нет, поэтому после расширения области агрегат примут снова), `rejected` + код
+(`invalid_payload`, `id_conflict`, `unsupported_type`, `unsupported_schema`). Ошибка одного
+элемента не влияет на остальные.
+
+Область доступа: `GET/PUT /api/v1/publication/scope` (`enabled`, `workouts`,
+`workoutsSince`, `programs` = `none|active|all`, `profile`, `records`, `health`; по умолчанию
+всё, кроме `health`). `PUT` сразу удаляет данные вне новой области.
+`DELETE /api/v1/publication/data` удаляет всё и выключает приём (`enabled = false`).
 
 Приём: Jackson → record `WorkoutPayloadV1` и т.п. → Bean Validation → проверка области
 → в одной транзакции на агрегат: `published_aggregate` (сравнение версии) → удалить
@@ -90,16 +100,31 @@
 
 - `publication_outbox(type, id, version, attempts, next_attempt_at, last_error)` —
   одна строка на агрегат; `publication_state(type, id, version)` — монотонный счётчик.
-- Любая транзакция, меняющая агрегат, в той же транзакции увеличивает `version` и
-  upsert'ит строку outbox. Подход → его тренировка, planned_set → его программа.
+- SQLite-триггеры на всех таблицах тренировок, планов, своих упражнений, профиля, 1ПМ и
+  здоровья в той же транзакции увеличивают `version` корня и upsert'ят строку outbox
+  (подход → его тренировка, planned_set → его программа). Триггеры вместо кода в
+  сервисах: новую запись нельзя «забыть» опубликовать.
 - Отправитель: при запуске, возврате на экран, через ~3 с после изменений, при
   появлении сети; одна отправка за раз. Payload собирается из текущего состояния в
   момент отправки.
 - Подтверждение `accepted`/`stale` с версией ≥ версии строки → удалить строку;
   `rejected` → пауза 1 мин…6 ч, остальные не блокируются.
-- Первая публикация и расширение области = поставить в outbox все подходящие агрегаты.
+- Первая публикация (новый аккаунт) и любое изменение области = поставить в outbox все
+  подходящие агрегаты; неизменённые сервер вернёт как `stale`.
+- Область кэшируется локально и проверяется до отправки: травмы без согласия не покидают
+  телефон.
 
-## Задачи
+## Контракт и проверки
+
+- Фикстуры payload v1: `src/test/resources/publication/*.v1.json` (копия — в приложении,
+  `tests/fixtures/publication`). Сервер принимает их в `PublicationApiTest`, приложение строит
+  из SQLite payload, равный им (`tests/publication.test.ts`).
+- Каталог: `src/test/resources/catalog/exercise-catalog.json` — выгрузка из приложения
+  (`tests/exercise-catalog-contract.test.ts`), `ExerciseCatalogContractTest` сверяет его с БД.
+  Новая версия каталога в приложении → обновить фикстуру (`UPDATE_CATALOG_FIXTURE=1`) и
+  добавить новый changeset; существующие не менять.
+
+## Задачи (выполнены)
 
 1. **Сервер: каталог, таблицы, приём.** Liquibase: каталог упражнений `2026.09.1`
    (UUID из seed приложения, тест на совпадение с JSON-выгрузкой каталога), таблицы
