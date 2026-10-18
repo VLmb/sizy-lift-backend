@@ -55,5 +55,7 @@ tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // KeycloakAuthenticationIntegrationTest imports the realm file into a real Keycloak.
+    inputs.file("keycloak/realm-sizylift.json")
     maxParallelForks = 1
 }
