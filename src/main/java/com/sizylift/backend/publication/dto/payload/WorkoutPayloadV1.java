@@ -13,27 +13,21 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.BLOCK_TYPE;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.FREE_KIND;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.GROUP_LABEL;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.LONG_TEXT;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.RESULT_TYPE;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.SET_TYPE;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.SHORT_TEXT;
+import static com.sizylift.backend.publication.dto.payload.PayloadValues.*;
 
-/** Completed workout with its blocks, exercises, sets, plan snapshots and record events. */
+/** Завершённая тренировка: блоки, упражнения, подходы, снимки плана и события рекордов. */
 public record WorkoutPayloadV1(
         @NotNull LocalDate workoutDate,
         @Size(max = SHORT_TEXT) String title,
         @Size(max = LONG_TEXT) String description,
         @NotNull Instant startedAt,
         @NotNull Instant completedAt,
-        @NotNull @Pattern(regexp = "bad|okay|great") String quality,
+        @NotNull @Pattern(regexp = WORKOUT_QUALITY) String quality,
         UUID plannedWorkoutId,
         @NotNull Instant updatedAt,
-        @NotNull @Size(max = 100) List<@NotNull @Valid Block> blocks,
-        @NotNull @Size(max = 2000) List<@NotNull @Valid PlanSetSnapshot> planSetSnapshots,
-        @NotNull @Size(max = 2000) List<@NotNull @Valid RecordEvent> recordEvents) {
+        @NotNull @Size(max = MAX_BLOCKS) List<@NotNull @Valid Block> blocks,
+        @NotNull @Size(max = MAX_PLAN_SNAPSHOTS) List<@NotNull @Valid PlanSetSnapshot> planSetSnapshots,
+        @NotNull @Size(max = MAX_RECORD_EVENTS) List<@NotNull @Valid RecordEvent> recordEvents) {
 
     public record Block(
             @NotNull UUID id,
@@ -48,7 +42,7 @@ public record WorkoutPayloadV1(
             @Pattern(regexp = FREE_KIND) String freeKind,
             @Size(max = SHORT_TEXT) String title,
             @Size(max = LONG_TEXT) String description,
-            @NotNull @Size(max = 50) List<@NotNull @Valid Exercise> exercises) {
+            @NotNull @Size(max = MAX_EXERCISES_PER_BLOCK) List<@NotNull @Valid Exercise> exercises) {
     }
 
     public record Exercise(
@@ -62,19 +56,19 @@ public record WorkoutPayloadV1(
             @NotBlank @Size(max = SHORT_TEXT) String originalExerciseName,
             @Size(max = LONG_TEXT) String actualComment,
             @Size(max = LONG_TEXT) String planComment,
-            @NotNull @Size(max = 200) List<@NotNull @Valid Set> sets) {
+            @NotNull @Size(max = MAX_SETS_PER_EXERCISE) List<@NotNull @Valid Set> sets) {
     }
 
     public record Set(
             @NotNull UUID id,
             @Min(0) int position,
             @NotNull @Pattern(regexp = SET_TYPE) String setType,
-            @NotNull @Pattern(regexp = "pending|completed|skipped") String completionStatus,
+            @NotNull @Pattern(regexp = SET_COMPLETION) String completionStatus,
             @Min(0) Integer weightGrams,
             @Min(0) Integer repetitions,
             @Min(0) Integer durationMs,
             @Min(0) Integer distanceM,
-            @Min(50) @Max(100) Integer rpeTenths,
+            @Min(RPE_TENTHS_MIN) @Max(RPE_TENTHS_MAX) Integer rpeTenths,
             @Min(1) Integer averageHeartRateBpm,
             @Min(1) Integer maximumHeartRateBpm,
             @Min(0) Integer powerWatts,
@@ -96,7 +90,7 @@ public record WorkoutPayloadV1(
             @Min(0) Integer repetitions,
             @Min(0) Integer durationMs,
             @Min(0) Integer targetDistanceM,
-            @Min(50) @Max(100) Integer targetRpeTenths,
+            @Min(RPE_TENTHS_MIN) @Max(RPE_TENTHS_MAX) Integer targetRpeTenths,
             @Min(0) Integer restMs,
             @Size(max = LONG_TEXT) String note) {
     }
@@ -105,7 +99,7 @@ public record WorkoutPayloadV1(
             @NotNull UUID id,
             @NotNull UUID workoutExerciseId,
             @NotNull UUID actualSetId,
-            @NotNull @Pattern(regexp = "maximum_weight|estimated_one_rep_max") String recordType,
+            @NotNull @Pattern(regexp = RECORD_TYPE) String recordType,
             @Min(0) int value,
             @Min(0) Integer previousValue,
             @NotNull Instant createdAt) {

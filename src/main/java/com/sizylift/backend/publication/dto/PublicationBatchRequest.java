@@ -10,11 +10,15 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import tools.jackson.databind.JsonNode;
 
-public record PublicationBatchRequest(@NotNull @Size(min = 1, max = 100) List<@NotNull @Valid Item> items) {
+public record PublicationBatchRequest(
+        @NotNull @Size(min = 1, max = MAX_ITEMS) List<@NotNull @Valid Item> items) {
+
+    /** Приложение шлёт пачки до 50 агрегатов; запас на будущие версии клиента. */
+    public static final int MAX_ITEMS = 100;
 
     /**
-     * One aggregate in its current state. {@code version} grows with every local change;
-     * {@code payload} is absent for a deleted aggregate.
+     * Агрегат в текущем состоянии. {@code version} растёт при каждом локальном изменении;
+     * у удалённого агрегата нет {@code payload}.
      */
     public record Item(
             @NotBlank String type,

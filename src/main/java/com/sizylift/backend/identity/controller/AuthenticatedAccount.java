@@ -3,11 +3,12 @@ package com.sizylift.backend.identity.controller;
 import com.sizylift.backend.identity.entity.UserAccount;
 import com.sizylift.backend.identity.service.ExternalIdentity;
 import com.sizylift.backend.identity.service.UserAccountService;
+import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimNames;
 import org.springframework.stereotype.Component;
 
-/** Resolves the SizyLift account of a validated access token; other features use it from their controllers. */
+/** Находит аккаунт SizyLift по проверенному access token; используется контроллерами всех фич. */
 @Component
 public class AuthenticatedAccount {
 
@@ -21,7 +22,7 @@ public class AuthenticatedAccount {
         return userAccounts.resolve(new ExternalIdentity(
                 jwt.getClaimAsString(JwtClaimNames.ISS),
                 jwt.getSubject(),
-                jwt.getClaimAsString("email"),
-                Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified"))));
+                jwt.getClaimAsString(StandardClaimNames.EMAIL),
+                Boolean.TRUE.equals(jwt.getClaimAsBoolean(StandardClaimNames.EMAIL_VERIFIED))));
     }
 }

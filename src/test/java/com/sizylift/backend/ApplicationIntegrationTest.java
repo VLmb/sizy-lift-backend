@@ -58,7 +58,7 @@ class ApplicationIntegrationTest extends PostgresIntegrationTest {
     void migrationRemainsAppliedWhenUserSchemaAlreadyExists() throws Exception {
         var appliedChangesets = jdbc.queryForObject("SELECT count(*) FROM public.databasechangelog", Long.class);
 
-        // A matching username/schema changes PostgreSQL's default search_path on reconnect.
+        // Совпадение имени пользователя и схемы меняет search_path PostgreSQL при переподключении.
         liquibase.afterPropertiesSet();
 
         assertThat(jdbc.queryForObject(

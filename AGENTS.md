@@ -3,7 +3,9 @@
 - Use JDK 25 and the checked-in Gradle Wrapper. Read README.md and docs/architecture.md.
 - Run `./gradlew build` before completing code changes. Tests require Docker and real PostgreSQL; do not skip them or substitute H2.
 - Use a conventional layered architecture: controller → service → repository. Controllers handle HTTP and DTOs; services own business logic and transaction boundaries; repositories access data. Group classes by feature, with controller, service, repository, dto, and entity packages inside each feature as needed. Do not create empty future modules.
-- Add immutable Liquibase SQL changesets for schema changes. Hibernate must only validate the schema.
+- Add immutable Liquibase SQL changesets for schema changes.
+- Database access: `JdbcTemplate` with hand-written SQL in repositories; no JPA/Hibernate. Keep SQL in `private static final String` constants and split row mapping into small methods.
+- Code style: no magic numbers or strings — use named constants, enums or configuration properties. Keep methods short. Javadoc and comments in Russian, only where the code does not speak for itself; brief, no filler.
 - Never commit `.env`, production credentials, tokens, or production data. Throwaway passwords of local containers bound to 127.0.0.1 may live in `compose.yaml` and `application-dev.yaml`.
 - Configuration: shared settings in `application.yaml`, local ones in `application-dev.yaml`, production in `application-prod.yaml` where every address and secret is a `${ENV_VAR}` without a default. Read docs/deployment.md before changing deployment files.
 - Authentication: Keycloak issues tokens, the backend is a stateless OAuth 2.0 resource server. Read docs/authentication.md before touching security, the realm file or user accounts. Reference users by `user_account.id`, never by token `sub`.

@@ -10,7 +10,7 @@ import org.springframework.core.io.ClassPathResource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Guards the production profile against dev fallbacks sneaking in. */
+/** Не даёт dev-значениям по умолчанию попасть в production-профиль. */
 class ProductionProfileTest {
 
     static final List<String> REQUIRED_FROM_ENVIRONMENT = List.of(

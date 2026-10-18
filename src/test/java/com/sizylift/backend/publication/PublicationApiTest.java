@@ -27,7 +27,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Publication contract (docs/publication.md) against real PostgreSQL. Payloads are the shared v1 fixtures. */
+/** Контракт публикации (docs/publication.md) на настоящем PostgreSQL; payload — общие фикстуры v1. */
 @SpringBootTest
 @AutoConfigureMockMvc
 class PublicationApiTest extends PostgresIntegrationTest {

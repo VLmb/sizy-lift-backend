@@ -9,21 +9,23 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * The backend is an OAuth 2.0 resource server: Keycloak issues tokens, the API only validates them.
- * Signature, expiry, issuer and audience checks come from {@code spring.security.oauth2.resourceserver.jwt}.
+ * Бэкенд — OAuth 2.0 resource server: токены выдаёт Keycloak, API их только проверяет.
+ * Подпись, срок, issuer и audience проверяются по {@code spring.security.oauth2.resourceserver.jwt}.
  */
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
+
+    private static final String[] PUBLIC_PATHS = {"/actuator/health", "/actuator/health/**", "/error"};
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
                 .authorizeHttpRequests(requests -> requests
-                        .requestMatchers("/actuator/health", "/actuator/health/**", "/error").permitAll()
+                        .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Bearer tokens are not sent automatically by browsers, so CSRF protection is not needed.
+                // Браузер не подставляет Bearer token сам, поэтому защита от CSRF не нужна.
                 .csrf(AbstractHttpConfigurer::disable)
                 .build();
     }

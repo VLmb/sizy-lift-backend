@@ -6,8 +6,8 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Component;
 
 /**
- * Connects the {@code OTEL} appender from logback-spring.xml to the OpenTelemetry SDK configured by Spring Boot,
- * so log records are exported over OTLP together with metrics and traces and carry the trace id.
+ * Подключает appender {@code OTEL} из logback-spring.xml к OpenTelemetry SDK, настроенному Spring Boot:
+ * логи уходят по OTLP вместе с метриками и трейсами и несут trace id.
  */
 @Component
 class OpenTelemetryLogging implements InitializingBean {

@@ -10,11 +10,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.LONG_TEXT;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.RESULT_TYPE;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.SHORT_TEXT;
+import static com.sizylift.backend.publication.dto.payload.PayloadValues.*;
 
-/** User's own exercise; system exercises are not published, the server has the catalog. */
+/** Собственное упражнение пользователя; системные не публикуются — каталог есть на сервере. */
 public record ExercisePayloadV1(
         @NotBlank @Size(max = SHORT_TEXT) String name,
         @Size(max = SHORT_TEXT) String shortName,
@@ -23,9 +21,9 @@ public record ExercisePayloadV1(
         boolean isSbd,
         @Size(max = LONG_TEXT) String note,
         @NotNull Instant updatedAt,
-        @NotNull @Size(max = 30) List<@NotNull @Valid Muscle> muscles,
-        @NotNull @Size(max = 30) List<@NotNull UUID> equipmentIds) {
+        @NotNull @Size(max = MAX_MUSCLES) List<@NotNull @Valid Muscle> muscles,
+        @NotNull @Size(max = MAX_EQUIPMENT) List<@NotNull UUID> equipmentIds) {
 
-    public record Muscle(@NotNull UUID muscleGroupId, @NotNull @Pattern(regexp = "primary|secondary") String role) {
+    public record Muscle(@NotNull UUID muscleGroupId, @NotNull @Pattern(regexp = MUSCLE_ROLE) String role) {
     }
 }

@@ -28,8 +28,8 @@ import org.testcontainers.utility.MountableFile;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * End-to-end check against a real Keycloak running the committed realm file:
- * tokens issued for the mobile client are accepted, everything else is rejected.
+ * Сквозная проверка с настоящим Keycloak и realm-файлом из репозитория:
+ * токены мобильного клиента принимаются, всё остальное отклоняется.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
@@ -67,7 +67,7 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
     @BeforeAll
     static void createVerifiedUser() throws Exception {
         var admin = adminToken();
-        // Password grant is disabled in the committed realm; it is enabled here only to obtain tokens without a browser.
+        // В realm из репозитория password grant выключен; включаем его, чтобы получить токен без браузера.
         var clientUuid = JsonPath.<String>read(
                 send(adminRequest(admin, "/clients?clientId=" + CLIENT_ID).GET(), 200), "$[0].id");
         send(adminRequest(admin, "/clients/" + clientUuid)
@@ -113,7 +113,7 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void rejectsTokenFromAnotherIssuerEvenWithValidSignature() throws Exception {
-        // Same realm and keys, but requested via 127.0.0.1, so "iss" differs from the configured issuer.
+        // Тот же realm и ключи, но через 127.0.0.1, поэтому "iss" отличается от настроенного issuer.
         var tokens = login("127.0.0.1");
 
         assertThat(callMe(JsonPath.read(tokens, "$.access_token")).statusCode()).isEqualTo(401);

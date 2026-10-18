@@ -15,8 +15,8 @@ import tools.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The system exercise catalog must match the app's seed exactly: workouts and plans refer to it by UUID.
- * The fixture is produced by the app's tests/exercise-catalog-contract.test.ts (VLmb/sizy-lift-app).
+ * Системный каталог упражнений должен точно совпадать с seed приложения: тренировки и планы ссылаются на него
+ * по UUID. Фикстуру выгружает tests/exercise-catalog-contract.test.ts в VLmb/sizy-lift-app.
  */
 @SpringBootTest
 class ExerciseCatalogContractTest extends PostgresIntegrationTest {

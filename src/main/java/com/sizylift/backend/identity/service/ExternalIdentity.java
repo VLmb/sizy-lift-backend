@@ -2,7 +2,7 @@ package com.sizylift.backend.identity.service;
 
 import java.util.Objects;
 
-/** Identity confirmed by a validated access token. {@code issuer} + {@code subject} is the stable key. */
+/** Личность из проверенного access token; {@code issuer} + {@code subject} — её постоянный ключ. */
 public record ExternalIdentity(String issuer, String subject, String email, boolean emailVerified) {
 
     public ExternalIdentity {

@@ -2,16 +2,27 @@ package com.sizylift.backend.publication.service;
 
 import java.util.UUID;
 
-/** Stores one aggregate type. Called inside the transaction that holds the aggregate's version lock. */
-public interface AggregatePublisher<P> {
+/**
+ * Сохраняет агрегаты одного типа. Вызывается внутри транзакции, держащей блокировку версии агрегата;
+ * перед {@code insert} предыдущая копия уже удалена.
+ */
+public record AggregatePublisher<P>(String type, Class<P> payloadType, Inserter<P> inserter, Deleter deleter) {
 
-    /** Type code in the batch, e.g. {@code workout}. */
-    String type();
+    @FunctionalInterface
+    public interface Inserter<P> {
+        void insert(UUID userId, UUID id, P payload);
+    }
 
-    Class<P> payloadType();
+    @FunctionalInterface
+    public interface Deleter {
+        void delete(UUID userId, UUID id);
+    }
 
-    /** Inserts the aggregate; the previous copy has already been deleted. */
-    void insert(UUID userId, UUID id, P payload);
+    void insert(UUID userId, UUID id, P payload) {
+        inserter.insert(userId, id, payload);
+    }
 
-    void delete(UUID userId, UUID id);
+    void delete(UUID userId, UUID id) {
+        deleter.delete(userId, id);
+    }
 }
