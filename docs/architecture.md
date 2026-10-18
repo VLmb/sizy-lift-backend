@@ -31,4 +31,9 @@ Authorization Code + PKCE, секреты провайдеров не попад
 
 Все запросы, кроме `/actuator/health`, требуют токен. Подробности, параметры клиента
 и контракт для мобильного приложения — [authentication.md](authentication.md).
-Публичное production-развёртывание не настроено.
+
+## Конфигурация и развёртывание
+
+Настройки разделены на профили Spring `dev` и `prod` (YAML). Production работает на
+одном сервере в Docker Compose: Caddy с HTTPS, бэкенд, Keycloak в optimized-режиме и
+две отдельные PostgreSQL. См. [deployment.md](deployment.md).

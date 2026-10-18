@@ -1,0 +1,17 @@
+# Public entry point: HTTPS with automatic Let's Encrypt certificates for both domains.
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy backend:8080
+}
+
+{$AUTH_DOMAIN} {
+	encode zstd gzip
+	# The admin console is reachable only through an SSH tunnel (see docs/deployment.md).
+	@admin path /admin /admin/*
+	respond @admin 404
+	reverse_proxy keycloak:8080
+}

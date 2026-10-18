@@ -1,11 +1,13 @@
 package com.sizylift.backend;
 
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /** One real PostgreSQL container shared by all integration test classes; stopped when the JVM exits. */
+@ActiveProfiles("test")
 public abstract class PostgresIntegrationTest {
 
     protected static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse(

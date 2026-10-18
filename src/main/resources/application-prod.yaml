@@ -1,0 +1,35 @@
+# Production. Every environment-specific value comes from the environment and has no default:
+# a missing variable stops the application at startup instead of silently using a dev value.
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Public HTTPS address of the realm; must equal "iss" in tokens the app receives.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+          # Internal address is fine here, e.g. http://keycloak:8080/realms/sizylift/protocol/openid-connect/certs
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+
+server:
+  # TLS is terminated by the reverse proxy; trust its X-Forwarded-* headers.
+  forward-headers-strategy: framework
+
+management:
+  # Actuator listens on a separate port that the reverse proxy does not expose.
+  server:
+    port: 8081
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  structured:
+    format:
+      console: ecs

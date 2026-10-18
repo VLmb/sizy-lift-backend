@@ -1,0 +1,22 @@
+# Local development against `docker compose up -d --wait` (compose.yaml).
+# Values are throwaway credentials of containers bound to 127.0.0.1, never production secrets.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/sizylift
+    username: sizylift
+    password: sizylift-dev
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8180/realms/sizylift
+          jwk-set-uri: http://localhost:8180/realms/sizylift/protocol/openid-connect/certs
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.sizylift: debug

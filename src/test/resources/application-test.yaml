@@ -1,0 +1,9 @@
+# Integration tests: the database and, where needed, Keycloak come from Testcontainers
+# through @DynamicPropertySource. Token validation tests override these addresses.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak.test/realms/sizylift
+          jwk-set-uri: http://keycloak.test/realms/sizylift/protocol/openid-connect/certs

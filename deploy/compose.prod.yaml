@@ -1,0 +1,132 @@
+# Production stack on a single host. Run from the repository root:
+#   ./gradlew bootJar
+#   docker compose --env-file deploy/.env -f deploy/compose.prod.yaml up -d --build --wait
+# Every secret and address comes from deploy/.env (template: deploy/.env.example); nothing has a default.
+name: sizylift
+
+services:
+  caddy:
+    image: caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
+      AUTH_DOMAIN: ${AUTH_DOMAIN:?Set AUTH_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: sizylift-backend:${BACKEND_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/sizylift
+      DB_USERNAME: sizylift
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      KEYCLOAK_ISSUER_URI: https://${AUTH_DOMAIN}/realms/sizylift
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/sizylift/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sizylift
+      POSTGRES_USER: sizylift
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sizylift -d sizylift"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak-postgres:
+    image: postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - keycloak-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    build:
+      context: ..
+      dockerfile: deploy/keycloak/Dockerfile
+    image: sizylift-keycloak:${BACKEND_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Set KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: https://${AUTH_DOMAIN}
+      # Admin console via SSH tunnel: ssh -L 8180:127.0.0.1:8180 <host>, then http://localhost:8180/admin
+      KC_HOSTNAME_ADMIN: http://localhost:8180
+      # TLS ends at Caddy; Keycloak trusts its X-Forwarded-* headers.
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      # Temporary admin for the first start; create a personal admin and delete this one afterwards.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}
+      # Realm import placeholders (keycloak/realm-sizylift.json), applied on the first start only.
+      KC_REALM_SSL_REQUIRED: all
+      KC_SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST}
+      KC_SMTP_PORT: ${SMTP_PORT:?Set SMTP_PORT}
+      KC_SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM}
+      KC_SMTP_SSL: ${SMTP_SSL:?Set SMTP_SSL}
+      KC_SMTP_STARTTLS: ${SMTP_STARTTLS:?Set SMTP_STARTTLS}
+      KC_SMTP_AUTH: ${SMTP_AUTH:?Set SMTP_AUTH}
+      KC_SMTP_USER: ${SMTP_USER:-}
+      KC_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      GOOGLE_IDP_ENABLED: ${GOOGLE_IDP_ENABLED:-false}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      FACEBOOK_IDP_ENABLED: ${FACEBOOK_IDP_ENABLED:-false}
+      FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
+      FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
+    ports:
+      - "127.0.0.1:8180:8080"
+    depends_on:
+      keycloak-postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          head -n 1 <&3 | grep -q ' 200 '
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  caddy-data:
+  caddy-config:
+  postgres-data:
+  keycloak-postgres-data:

@@ -41,6 +41,18 @@ dependencyLocking {
     lockAllConfigurations()
 }
 
+// Only the executable jar is needed; the Dockerfile copies the single file in build/libs.
+tasks.named<Jar>("jar") {
+    enabled = false
+}
+
+// `./gradlew bootRun` uses the dev profile unless SPRING_PROFILES_ACTIVE says otherwise.
+tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
+    if (System.getenv("SPRING_PROFILES_ACTIVE").isNullOrBlank()) {
+        systemProperty("spring.profiles.active", "dev")
+    }
+}
+
 tasks.withType<Test> {
     useJUnitPlatform()
     maxParallelForks = 1

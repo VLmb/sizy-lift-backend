@@ -17,9 +17,9 @@ Keycloak — сервер авторизации (OpenID Provider): регист
 
 Конфигурация хранится в [`keycloak/realm-sizylift.json`](../keycloak/realm-sizylift.json)
 и импортируется при первом старте Keycloak (`--import-realm`). Существующий realm при
-повторном старте **не перезаписывается**: после изменения файла локально нужно удалить
-том Keycloak (`docker compose down` и `docker volume rm sizy-lift-backend_keycloak-postgres-data`)
-или внести то же изменение через админку.
+повторном старте **не перезаписывается**: после изменения файла локально выполните
+`docker compose down --volumes` (данные локальных БД будут удалены), в production —
+внесите то же изменение через админку.
 
 - Регистрация по email (email = username), повторяющиеся email запрещены.
 - Регистрация в Keycloak 26.8: email и имя → письмо → переход по ссылке → установка
@@ -122,22 +122,25 @@ Spring Security (`spring-boot-starter-security-oauth2-resource-server`) пров
 ## Локальная разработка
 
 `docker compose up -d --wait` поднимает PostgreSQL приложения, Keycloak с отдельным
-PostgreSQL и Mailpit:
+PostgreSQL и Mailpit; `./gradlew bootRun` запускает бэкенд в профиле `dev`:
 
-- админка Keycloak: http://localhost:8180/admin (учётные данные из `.env`);
+- админка Keycloak: http://localhost:8180/admin (`admin`/`admin`);
 - письма (подтверждение, сброс пароля): http://localhost:8025.
 
 Keycloak выставляет cookie с флагом `Secure`. Браузеры считают `http://localhost`
-безопасным контекстом, поэтому в симуляторе и на компьютере вход работает по HTTP.
+безопасным контекстом, поэтому в iOS Simulator и на компьютере вход работает по HTTP.
 С физического телефона по адресу вида `http://192.168.x.x` браузер такие cookie не
-отправит и вход сломается: для проверки на устройстве Keycloak нужно открыть по HTTPS
-(HTTPS-туннель или локальный сертификат) и указать этот адрес в `KEYCLOAK_PUBLIC_URL`
-и `KEYCLOAK_ISSUER_URI`.
+отправит и вход сломается. Для проверки на устройстве откройте Keycloak и бэкенд через
+HTTPS-туннель, задайте адрес туннеля в `KEYCLOAK_PUBLIC_URL` (`.env`) и передайте
+бэкенду тот же issuer:
+`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=https://<туннель>/realms/sizylift`.
 
-## Production — не настроено
+## Production
 
-Перед публичным развёртыванием: `start --optimized` вместо `start-dev`, только HTTPS
-(`sslRequired: all` через `KC_REALM_SSL_REQUIRED`), `KC_PROXY_HEADERS` за прокси,
-настоящий SMTP (`KC_SMTP_*`), секреты Google/Facebook из хранилища секретов,
-управление конфигурацией realm без ручных правок (например, keycloak-config-cli),
-резервное копирование базы Keycloak.
+`deploy/compose.prod.yaml`: Keycloak собран с `start --optimized`, работает за Caddy
+только по HTTPS (`sslRequired: all`), доверяет `X-Forwarded-*`, отправляет письма
+через настоящий SMTP, админка закрыта снаружи и доступна через SSH-туннель.
+Подробности — [deployment.md](deployment.md).
+
+Ещё не сделано: управление конфигурацией realm без ручных правок после первого
+импорта (например, keycloak-config-cli) и хранилище секретов вместо файла `.env`.

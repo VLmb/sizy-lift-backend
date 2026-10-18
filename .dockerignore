@@ -1,0 +1,3 @@
+*
+!build/libs/*.jar
+!keycloak/realm-sizylift.json
