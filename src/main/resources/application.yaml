@@ -16,6 +16,15 @@ spring:
     change-log: classpath:db/changelog/db.changelog-master.yaml
     default-schema: public
     liquibase-schema: public
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Tokens must be issued by this Keycloak realm ("iss") for the API ("aud").
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/sizylift}
+          # Signing keys are fetched lazily on the first request, so startup does not depend on Keycloak.
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/sizylift/protocol/openid-connect/certs}
+          audiences: sizylift-api
 
 server:
   port: ${SERVER_PORT:8080}
