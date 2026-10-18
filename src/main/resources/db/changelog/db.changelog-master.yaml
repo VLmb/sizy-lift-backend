@@ -2,3 +2,6 @@ databaseChangeLog:
   - include:
       file: changes/001-create-application-schema.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/002-create-user-account.sql
+      relativeToChangelogFile: true
