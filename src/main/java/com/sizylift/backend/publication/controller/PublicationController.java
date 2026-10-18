@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Publication of data from the phone (docs/publication.md). */
+/** Публикация данных с телефона (docs/publication.md). */
 @RestController
 @RequestMapping("/api/v1/publication")
 public class PublicationController {
@@ -28,6 +28,6 @@ public class PublicationController {
     @PostMapping("/batch")
     public PublicationBatchResponse publish(@AuthenticationPrincipal Jwt jwt,
                                             @Valid @RequestBody PublicationBatchRequest request) {
-        return publication.publish(authenticatedAccount.resolve(jwt).getId(), request.items());
+        return publication.publish(authenticatedAccount.resolve(jwt).id(), request.items());
     }
 }

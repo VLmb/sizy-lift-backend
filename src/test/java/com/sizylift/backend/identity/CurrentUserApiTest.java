@@ -29,8 +29,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Account provisioning behind {@code /api/v1/me}. Token validation itself is covered by
- * {@link KeycloakAuthenticationIntegrationTest}; here the authenticated JWT is injected directly.
+ * Создание аккаунта за {@code /api/v1/me}. Проверку самого токена покрывает
+ * {@link KeycloakAuthenticationIntegrationTest}; здесь JWT подставляется напрямую.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -125,7 +125,7 @@ class CurrentUserApiTest extends PostgresIntegrationTest {
             start.countDown();
             var ids = new ArrayList<UUID>();
             for (var result : results) {
-                ids.add(result.get().getId());
+                ids.add(result.get().id());
             }
             assertThat(ids).hasSize(threads).containsOnly(ids.getFirst());
         }

@@ -1,6 +1,6 @@
 package com.sizylift.backend.publication.service;
 
-/** The aggregate id is already used by a system record or another user. */
+/** Id агрегата уже занят системной записью или другим пользователем. */
 public class IdConflictException extends RuntimeException {
 
     public IdConflictException(String message) {

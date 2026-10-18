@@ -19,7 +19,7 @@
 
 | Файл | Назначение |
 | --- | --- |
-| `application.yaml` | общее для всех сред: JPA, Liquibase, audience токена, actuator |
+| `application.yaml` | общее для всех сред: Liquibase, audience токена, телеметрия, actuator |
 | `application-dev.yaml` | локальная разработка: адреса и учётные данные контейнеров из `compose.yaml` |
 | `application-prod.yaml` | production: все адреса и секреты только из переменных окружения, без значений по умолчанию |
 
@@ -76,5 +76,4 @@ Liquibase закреплены в `public`, независимо от PostgreSQL
 GitHub Actions запускает ту же сборку на Java 25.
 
 Миграции добавляйте новыми SQL changeset-файлами в `src/main/resources/db/changelog`.
-Не редактируйте уже применённые changeset-файлы и не включайте автоматическое
-создание схемы Hibernate. Версии зависимостей управляются Spring Boot BOM и Gradle lock-файлом.
+Не редактируйте уже применённые changeset-файлы. Версии зависимостей управляются Spring Boot BOM и Gradle lock-файлом.

@@ -6,7 +6,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
-/** One real PostgreSQL container shared by all integration test classes; stopped when the JVM exits. */
+/** Один контейнер PostgreSQL на все интеграционные тесты; останавливается вместе с JVM. */
 @ActiveProfiles("test")
 public abstract class PostgresIntegrationTest {
 

@@ -5,7 +5,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** Accepted versions of published aggregates. */
+/** Принятые версии опубликованных агрегатов. */
 @Repository
 public class PublishedAggregateRepository {
 
@@ -16,8 +16,8 @@ public class PublishedAggregateRepository {
     }
 
     /**
-     * Locks the aggregate's version row for the current transaction and returns the stored version,
-     * {@code 0} for an aggregate seen for the first time. Concurrent batches of one user serialize here.
+     * Блокирует строку версии агрегата до конца транзакции и возвращает сохранённую версию
+     * ({@code 0} для нового агрегата). Параллельные пачки одного пользователя упорядочиваются здесь.
      */
     public long lockVersion(UUID userId, String type, UUID aggregateId) {
         jdbc.update("""

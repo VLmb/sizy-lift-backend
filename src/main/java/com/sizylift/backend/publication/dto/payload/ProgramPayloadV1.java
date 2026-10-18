@@ -13,28 +13,22 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.BLOCK_TYPE;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.FREE_KIND;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.GROUP_LABEL;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.LONG_TEXT;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.RESULT_TYPE;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.SET_TYPE;
-import static com.sizylift.backend.publication.dto.payload.PayloadValues.SHORT_TEXT;
+import static com.sizylift.backend.publication.dto.payload.PayloadValues.*;
 
-/** Training program: cycles → weeks → planned workouts → blocks → exercises → sets. */
+/** Программа: циклы → недели → тренировки → блоки → упражнения → подходы. */
 public record ProgramPayloadV1(
         @NotBlank @Size(max = SHORT_TEXT) String name,
         @Size(max = LONG_TEXT) String description,
         LocalDate startDate,
-        @NotNull @Pattern(regexp = "draft|active") String status,
+        @NotNull @Pattern(regexp = PROGRAM_STATUS) String status,
         @NotNull Instant updatedAt,
-        @NotNull @Size(max = 50) List<@NotNull @Valid Cycle> cycles) {
+        @NotNull @Size(max = MAX_CYCLES) List<@NotNull @Valid Cycle> cycles) {
 
     public record Cycle(
             @NotNull UUID id,
             @NotBlank @Size(max = SHORT_TEXT) String name,
             @Min(0) int position,
-            @NotNull @Size(max = 104) List<@NotNull @Valid Week> weeks) {
+            @NotNull @Size(max = MAX_WEEKS_PER_CYCLE) List<@NotNull @Valid Week> weeks) {
     }
 
     public record Week(
@@ -44,7 +38,7 @@ public record ProgramPayloadV1(
             @NotNull LocalDate startDate,
             @NotNull LocalDate endDate,
             @Min(0) int position,
-            @NotNull @Size(max = 14) List<@NotNull @Valid PlannedWorkout> workouts) {
+            @NotNull @Size(max = MAX_WORKOUTS_PER_WEEK) List<@NotNull @Valid PlannedWorkout> workouts) {
     }
 
     public record PlannedWorkout(
@@ -52,7 +46,7 @@ public record ProgramPayloadV1(
             @Size(max = SHORT_TEXT) String title,
             @NotNull LocalDate workoutDate,
             @Min(0) int position,
-            @NotNull @Size(max = 100) List<@NotNull @Valid Block> blocks) {
+            @NotNull @Size(max = MAX_BLOCKS) List<@NotNull @Valid Block> blocks) {
     }
 
     public record Block(
@@ -63,7 +57,7 @@ public record ProgramPayloadV1(
             @Pattern(regexp = FREE_KIND) String freeKind,
             @Size(max = SHORT_TEXT) String title,
             @Size(max = LONG_TEXT) String description,
-            @NotNull @Size(max = 50) List<@NotNull @Valid Exercise> exercises) {
+            @NotNull @Size(max = MAX_EXERCISES_PER_BLOCK) List<@NotNull @Valid Exercise> exercises) {
     }
 
     public record Exercise(
@@ -73,7 +67,7 @@ public record ProgramPayloadV1(
             @NotBlank @Size(max = SHORT_TEXT) String exerciseName,
             @NotNull @Pattern(regexp = RESULT_TYPE) String resultType,
             @Size(max = LONG_TEXT) String planComment,
-            @NotNull @Size(max = 200) List<@NotNull @Valid Set> sets) {
+            @NotNull @Size(max = MAX_SETS_PER_EXERCISE) List<@NotNull @Valid Set> sets) {
     }
 
     public record Set(
@@ -84,7 +78,7 @@ public record ProgramPayloadV1(
             @Min(0) Integer repetitions,
             @Min(0) Integer durationMs,
             @Min(0) Integer targetDistanceM,
-            @Min(50) @Max(100) Integer targetRpeTenths,
+            @Min(RPE_TENTHS_MIN) @Max(RPE_TENTHS_MAX) Integer targetRpeTenths,
             @Min(0) Integer restMs,
             @Size(max = LONG_TEXT) String note) {
     }

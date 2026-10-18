@@ -22,7 +22,7 @@ repositories {
 dependencies {
     implementation(platform(SpringBootPlugin.BOM_COORDINATES))
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-liquibase")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
