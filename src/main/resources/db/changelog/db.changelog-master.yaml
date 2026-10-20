@@ -15,5 +15,8 @@ databaseChangeLog:
       file: changes/005-create-publication-tables.sql
       relativeToChangelogFile: true
   - include:
-      file: changes/006-index-publication-parents.sql
+      file: changes/006-seed-exercise-catalog-2026-10-2.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/007-index-publication-parents.sql
       relativeToChangelogFile: true

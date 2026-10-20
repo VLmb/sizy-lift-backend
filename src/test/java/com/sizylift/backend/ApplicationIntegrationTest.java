@@ -72,7 +72,7 @@ class ApplicationIntegrationTest extends PostgresIntegrationTest {
     @Test
     void compositeCascadeForeignKeysHaveIndexesForTheirParents() {
         assertThat(jdbc.queryForObject(
-                "SELECT count(*) FROM public.databasechangelog WHERE id = '006-index-publication-parents'",
+                "SELECT count(*) FROM public.databasechangelog WHERE id = '007-index-publication-parents'",
                 Long.class)).isEqualTo(1L);
         assertThat(jdbc.queryForList("""
                 SELECT c.conrelid::regclass::text

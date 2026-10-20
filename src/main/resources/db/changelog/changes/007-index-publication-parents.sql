@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset sizylift:006-index-publication-parents
+--changeset sizylift:007-index-publication-parents
 -- Индексы поиска потомков при каскадной замене опубликованного агрегата.
 CREATE INDEX workout_block_parent_idx ON sizylift.workout_block (user_id, workout_id);
 CREATE INDEX workout_exercise_parent_idx ON sizylift.workout_exercise (user_id, block_id);
