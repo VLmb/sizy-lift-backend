@@ -68,4 +68,23 @@ class ApplicationIntegrationTest extends PostgresIntegrationTest {
                         + "WHERE table_schema = 'sizylift' AND table_name = 'databasechangelog'", Long.class))
                 .isZero();
     }
+
+    @Test
+    void compositeCascadeForeignKeysHaveIndexesForTheirParents() {
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM public.databasechangelog WHERE id = '007-index-publication-parents'",
+                Long.class)).isEqualTo(1L);
+        assertThat(jdbc.queryForList("""
+                SELECT c.conrelid::regclass::text
+                FROM pg_constraint c
+                WHERE c.connamespace = 'sizylift'::regnamespace
+                  AND c.contype = 'f' AND c.confdeltype = 'c' AND cardinality(c.conkey) = 2
+                  AND NOT EXISTS (
+                    SELECT 1 FROM pg_index i
+                    WHERE i.indrelid = c.conrelid AND i.indisvalid AND i.indisready
+                      AND i.indpred IS NULL AND i.indnkeyatts >= 2
+                      AND i.indkey[0] = c.conkey[1] AND i.indkey[1] = c.conkey[2]
+                  )
+                """, String.class)).isEmpty();
+    }
 }
