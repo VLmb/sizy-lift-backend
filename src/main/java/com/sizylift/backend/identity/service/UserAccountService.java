@@ -1,5 +1,7 @@
 package com.sizylift.backend.identity.service;
 
+import java.util.Objects;
+
 import com.sizylift.backend.identity.entity.UserAccount;
 import com.sizylift.backend.identity.repository.UserAccountRepository;
 import io.micrometer.core.instrument.Counter;
@@ -30,6 +32,10 @@ public class UserAccountService {
     public UserAccount resolve(ExternalIdentity identity) {
         var account = accounts.findByIssuerAndSubject(identity.issuer(), identity.subject())
                 .orElseGet(() -> provision(identity));
+        if (Objects.equals(account.email(), identity.email())
+                && account.emailVerified() == identity.emailVerified()) {
+            return account;
+        }
         return accounts.updateContact(account, identity.email(), identity.emailVerified()).orElse(account);
     }
 
