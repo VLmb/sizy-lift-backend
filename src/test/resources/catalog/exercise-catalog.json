@@ -49,6 +49,16 @@
       "id": "11000000-0000-4000-8000-000000000016",
       "code": "horizontal_pull",
       "name": "Горизонтальная тяга"
+    },
+    {
+      "id": "11000000-0000-4000-8000-000000000017",
+      "code": "horizontal_push",
+      "name": "Горизонтальный жим"
+    },
+    {
+      "id": "11000000-0000-4000-8000-000000000018",
+      "code": "vertical_push",
+      "name": "Вертикальный жим"
     }
   ],
   "equipment": [
@@ -86,6 +96,36 @@
       "id": "12000000-0000-4000-8000-000000000007",
       "code": "machine",
       "name": "Тренажёр"
+    },
+    {
+      "id": "12000000-0000-4000-8000-000000000008",
+      "code": "kettlebell",
+      "name": "Гиря"
+    },
+    {
+      "id": "12000000-0000-4000-8000-000000000009",
+      "code": "smith_machine",
+      "name": "Машина Смита"
+    },
+    {
+      "id": "12000000-0000-4000-8000-000000000010",
+      "code": "dip_bars",
+      "name": "Брусья"
+    },
+    {
+      "id": "12000000-0000-4000-8000-000000000011",
+      "code": "exercise_bike",
+      "name": "Велотренажёр"
+    },
+    {
+      "id": "12000000-0000-4000-8000-000000000012",
+      "code": "rowing_machine",
+      "name": "Гребной тренажёр"
+    },
+    {
+      "id": "12000000-0000-4000-8000-000000000013",
+      "code": "elliptical",
+      "name": "Эллипс"
     }
   ],
   "muscleGroups": [
@@ -494,6 +534,978 @@
       ],
       "equipmentIds": [
         "12000000-0000-4000-8000-000000000006"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000021",
+      "name": "Жим гантелей лёжа",
+      "shortName": "Жим гантелей лёжа",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000017",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000022",
+      "name": "Жим штанги на наклонной скамье",
+      "shortName": "Жим на наклонной",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000017",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000023",
+      "name": "Жим гантелей на наклонной скамье",
+      "shortName": "Гантели на наклонной",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000017",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000024",
+      "name": "Жим от груди в тренажёре",
+      "shortName": "Жим в тренажёре",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000017",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000025",
+      "name": "Жим лёжа в машине Смита",
+      "shortName": "Жим в Смите",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000017",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000009"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000026",
+      "name": "Разведение гантелей лёжа",
+      "shortName": "Разводка",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000027",
+      "name": "Сведение рук в тренажёре",
+      "shortName": "Бабочка",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000028",
+      "name": "Кроссовер",
+      "shortName": "Кроссовер",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000006"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000029",
+      "name": "Отжимания на брусьях",
+      "shortName": "Брусья",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000017",
+      "resultType": "added_weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000010"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000030",
+      "name": "Отжимания от пола",
+      "shortName": "Отжимания",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000017",
+      "resultType": "added_weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000002"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000031",
+      "name": "Тяга гантели в наклоне",
+      "shortName": "Тяга гантели",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000016",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000032",
+      "name": "Тяга горизонтального блока",
+      "shortName": "Горизонтальный блок",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000016",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000006"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000033",
+      "name": "Тяга в рычажном тренажёре",
+      "shortName": "Рычажная тяга",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000016",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000034",
+      "name": "Тяга верхнего блока узким хватом",
+      "shortName": "Верхний блок узко",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000013",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000006"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000035",
+      "name": "Подтягивания обратным хватом",
+      "shortName": "Обратные подтягивания",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000013",
+      "resultType": "added_weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000004"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000036",
+      "name": "Пуловер на блоке",
+      "shortName": "Пуловер",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000006"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000037",
+      "name": "Гиперэкстензия",
+      "shortName": "Гиперэкстензия",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "added_weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000002"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000038",
+      "name": "Шраги с гантелями",
+      "shortName": "Шраги",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000039",
+      "name": "Становая тяга сумо",
+      "shortName": "Сумо",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000012",
+      "resultType": "weight_reps",
+      "isSbd": true,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000040",
+      "name": "Фронтальный присед",
+      "shortName": "Фронтальный",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000010",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000004",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000041",
+      "name": "Присед в машине Смита",
+      "shortName": "Присед в Смите",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000010",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000004",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000009"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000042",
+      "name": "Гакк-присед",
+      "shortName": "Гакк",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000010",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000004",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000043",
+      "name": "Гоблет-присед",
+      "shortName": "Гоблет",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000010",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000004",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000044",
+      "name": "Выпады с гантелями",
+      "shortName": "Выпады",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000015",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000004",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000045",
+      "name": "Разгибание ног в тренажёре",
+      "shortName": "Разгибания ног",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000004",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000046",
+      "name": "Сгибание ног лёжа в тренажёре",
+      "shortName": "Сгибания ног",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000006",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000047",
+      "name": "Ягодичный мост со штангой",
+      "shortName": "Ягодичный мост",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000005",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000048",
+      "name": "Отведение ног в тренажёре",
+      "shortName": "Отведение ног",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000005",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000049",
+      "name": "Подъём на носки стоя",
+      "shortName": "Икры",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000003",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000050",
+      "name": "Махи гирей",
+      "shortName": "Махи гирей",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000012",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000005",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000008"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000051",
+      "name": "Армейский жим",
+      "shortName": "Армейский",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000018",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000007",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000052",
+      "name": "Жим гантелей сидя",
+      "shortName": "Жим гантелей сидя",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000018",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000007",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000053",
+      "name": "Жим вверх в тренажёре",
+      "shortName": "Жим вверх в тренажёре",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000018",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000007",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000007"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000054",
+      "name": "Махи гантелями в наклоне",
+      "shortName": "Махи в наклоне",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000007",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000055",
+      "name": "Тяга каната к лицу",
+      "shortName": "Тяга к лицу",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000007",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000006"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000056",
+      "name": "Тяга штанги к подбородку",
+      "shortName": "К подбородку",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000007",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000057",
+      "name": "Подъём штанги на бицепс",
+      "shortName": "Бицепс со штангой",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000008",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000058",
+      "name": "Подъём гантелей на бицепс",
+      "shortName": "Бицепс с гантелями",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000008",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000059",
+      "name": "Молотки с гантелями",
+      "shortName": "Молотки",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000008",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000003"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000060",
+      "name": "Сгибание рук на скамье Скотта",
+      "shortName": "Скотт",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000008",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000061",
+      "name": "Сгибание рук на нижнем блоке",
+      "shortName": "Бицепс на блоке",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000008",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000006"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000062",
+      "name": "Французский жим лёжа",
+      "shortName": "Французский жим",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000008",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000063",
+      "name": "Жим лёжа узким хватом",
+      "shortName": "Узкий жим",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000011",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000008",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000001"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000064",
+      "name": "Скручивания",
+      "shortName": "Скручивания",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "added_weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000009",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000002"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000065",
+      "name": "Скручивания на блоке",
+      "shortName": "Скручивания на блоке",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000009",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000006"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000066",
+      "name": "Подъём ног в висе",
+      "shortName": "Подъём ног",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "added_weight_reps",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000009",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000004"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000067",
+      "name": "Боковая планка",
+      "shortName": "Боковая планка",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000003",
+      "resultType": "duration",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000009",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000002"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000068",
+      "name": "Вис на турнике",
+      "shortName": "Вис",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000001",
+      "resultType": "duration",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000008",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000004"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000069",
+      "name": "Велотренажёр",
+      "shortName": "Велотренажёр",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000002",
+      "resultType": "distance_time",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000003",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000011"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000070",
+      "name": "Гребной тренажёр",
+      "shortName": "Гребля",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000002",
+      "resultType": "distance_time",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000002",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000012"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000071",
+      "name": "Эллипс",
+      "shortName": "Эллипс",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000002",
+      "resultType": "distance_time",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000003",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000013"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000072",
+      "name": "Скакалка",
+      "shortName": "Скакалка",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000002",
+      "resultType": "duration",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000003",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000002"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000073",
+      "name": "Суставная разминка",
+      "shortName": "Разминка",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000003",
+      "resultType": "free",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000003",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000002"
+      ]
+    },
+    {
+      "id": "14000000-0000-4000-8000-000000000074",
+      "name": "Растяжка",
+      "shortName": "Растяжка",
+      "movementCategoryId": "11000000-0000-4000-8000-000000000003",
+      "resultType": "free",
+      "isSbd": false,
+      "note": null,
+      "muscles": [
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000003",
+          "role": "primary"
+        }
+      ],
+      "equipmentIds": [
+        "12000000-0000-4000-8000-000000000002"
       ]
     }
   ]

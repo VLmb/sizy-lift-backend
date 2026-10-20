@@ -20,6 +20,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,6 +38,9 @@ class PublicationApiTest extends PostgresIntegrationTest {
     static final UUID PROGRAM = UUID.fromString("30000000-0000-4000-8000-000000000001");
     static final UUID OWN_EXERCISE = UUID.fromString("21000000-0000-4000-8000-000000000001");
     static final UUID SQUAT = UUID.fromString("14000000-0000-4000-8000-000000000001");
+    static final UUID DUMBBELL_BENCH_PRESS = UUID.fromString("14000000-0000-4000-8000-000000000021");
+    static final UUID DIPS = UUID.fromString("14000000-0000-4000-8000-000000000029");
+    static final String SET_WITHOUT_RPE = "20000000-0000-4000-8000-000000000301";
 
     @Autowired
     MockMvc mvc;
@@ -213,6 +217,35 @@ class PublicationApiTest extends PostgresIntegrationTest {
                 String.class, userId())).isEqualTo("powerlifting");
         assertThat(jdbc.queryForObject("SELECT weight_grams FROM sizylift.one_rep_max WHERE user_id = ?",
                 Integer.class, userId())).isEqualTo(160000);
+    }
+
+    @Test
+    void acceptsOneRepMaxForAnyExerciseWithWeight() throws Exception {
+        var results = publish(
+                item("one_rep_max", DUMBBELL_BENCH_PRESS, 1, fixture("one_rep_max")),
+                item("one_rep_max", DIPS, 1, fixture("one_rep_max")));
+
+        assertThat(statuses(results)).containsExactly("accepted", "accepted");
+        assertThat(count("one_rep_max")).isEqualTo(2);
+    }
+
+    @Test
+    void acceptsEstimatedOneRepMaxForSetWithoutRpe() throws Exception {
+        var workout = fixture("workout");
+        ((ArrayNode) workout.get("recordEvents")).addObject()
+                .put("id", UUID.randomUUID().toString())
+                .put("workoutExerciseId", "20000000-0000-4000-8000-000000000201")
+                .put("actualSetId", SET_WITHOUT_RPE)
+                .put("recordType", "estimated_one_rep_max")
+                .put("value", 70000)
+                .putNull("previousValue")
+                .put("createdAt", "2026-10-14T16:20:00.000Z");
+
+        assertThat(statuses(publish(item("workout", WORKOUT, 1, workout)))).containsExactly("accepted");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM sizylift.workout_record_event
+                WHERE user_id = ? AND record_type = 'estimated_one_rep_max' AND actual_set_id = ?::uuid
+                """, Long.class, userId(), SET_WITHOUT_RPE)).isEqualTo(1);
     }
 
     @Test
