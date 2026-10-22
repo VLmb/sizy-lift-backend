@@ -13,3 +13,11 @@
 - Cloud tasks already have isolated checkouts. Do not create a Git worktree unless the user requests one.
 - Data publication contract: docs/publication.md. Payload fixtures in `src/test/resources/publication` and the catalog fixture are shared with the app; change them on both sides together.
 - Telemetry: OpenTelemetry over OTLP (docs/observability.md). Name custom meters `sizylift.*` with low-cardinality tags; never put user ids, e-mails or payload data into tags or log messages.
+
+## Ветки и pull requests
+
+- Для каждой новой задачи создавай отдельную новую ветку от актуального `main`. Не переиспользуй ветку предыдущей задачи.
+- Публикуй результат задачи через PR в `main`.
+- Не сливай PR и не записывай изменения напрямую в `main` без отдельного явного запроса пользователя на слияние.
+- Просьба реализовать задачу, исправить код, проверить работу или создать PR сама по себе не разрешает слияние.
+- Продолжение работы и исправления по той же задаче выполняй в её ветке и PR.
