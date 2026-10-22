@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.sizylift.backend.PostgresIntegrationTest;
 import com.sizylift.backend.coaching.service.CoachingService;
+import com.sizylift.backend.publication.service.AggregateChange;
 import com.sizylift.backend.publication.service.AggregateChangeListener;
 import com.sizylift.backend.sync.dto.SyncChangesResponse.Change;
 import com.sizylift.backend.sync.dto.SyncPushRequest;
@@ -179,9 +180,9 @@ class FeedCommitOrderTest extends PostgresIntegrationTest {
         }
 
         @Override
-        public void changed(UUID ownerId, String type, UUID aggregateId, long revision, boolean deleted) {
-            delegate.changed(ownerId, type, aggregateId, revision, deleted);
-            if (aggregateId.equals(pauseAfter)) {
+        public void changed(AggregateChange change) {
+            delegate.changed(change);
+            if (change.aggregateId().equals(pauseAfter)) {
                 pause();
             }
         }

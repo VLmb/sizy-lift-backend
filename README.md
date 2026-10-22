@@ -4,7 +4,7 @@
 Обычная слоистая архитектура: `controller → service → repository`, с группировкой по функциональности.
 Аутентификация — Keycloak (email/пароль, Google/Facebook), бэкенд проверяет JWT access token.
 [Архитектурные решения](docs/architecture.md), [аутентификация](docs/authentication.md),
-[публикация данных](docs/publication.md), [синхронизация v2](docs/sync.md), [тренер и подопечный](docs/coaching.md), [наблюдаемость](docs/observability.md),
+[публикация данных](docs/publication.md), [синхронизация v2](docs/sync.md), [тренер и подопечный](docs/coaching.md), [push-уведомления](docs/notifications.md), [наблюдаемость](docs/observability.md),
 [бэклог](docs/backlog.md).
 
 ## Требования
@@ -26,7 +26,7 @@
 Профиль выбирается через `SPRING_PROFILES_ACTIVE`; `./gradlew bootRun` без него
 запускается в `dev`. В production приложение не стартует, если не задана хотя бы
 одна обязательная переменная (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
-`KEYCLOAK_ISSUER_URI`, `KEYCLOAK_JWK_SET_URI`); пишет логи в JSON (ECS), учитывает
+`KEYCLOAK_ISSUER_URI`, `KEYCLOAK_JWK_SET_URI`, `EXPO_ACCESS_TOKEN`); пишет логи в JSON (ECS), учитывает
 `X-Forwarded-*` от прокси, а actuator слушает отдельный порт 8081.
 В `application-dev.yaml` и `compose.yaml` хранятся только одноразовые пароли
 локальных контейнеров, доступных на `127.0.0.1`; production-секреты в Git не попадают.

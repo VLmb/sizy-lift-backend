@@ -14,6 +14,7 @@ import com.sizylift.backend.publication.dto.payload.PayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateArbiter;
+import com.sizylift.backend.publication.service.AggregateChange;
 import com.sizylift.backend.publication.service.AggregateChangeListener;
 import com.sizylift.backend.publication.service.AggregatePublisher;
 import com.sizylift.backend.publication.service.AggregateType;
@@ -169,12 +170,15 @@ public class SyncPushService {
                 arbiter.storedLost(lost, revision);
             }
             for (var copy : effects.copies()) {
-                feed.changed(ownerId, AggregateType.EXERCISE, copy.id(), copy.revision(), false);
+                feed.changed(AggregateChange.byServer(ownerId, AggregateType.EXERCISE, copy.id(), copy.revision(),
+                        false));
             }
             for (var removed : dependents.reconcile(ownerId, item.type(), item.id(), item.deleted(), before)) {
-                feed.changed(ownerId, removed.type(), removed.id(), removed.revision(), true);
+                feed.changed(AggregateChange.byServer(ownerId, removed.type(), removed.id(), removed.revision(),
+                        true));
             }
-            feed.changed(ownerId, item.type(), item.id(), revision, item.deleted());
+            feed.changed(new AggregateChange(ownerId, write.callerId(), item.type(), item.id(), revision,
+                    item.deleted(), !state.exists() || state.deleted()));
             return ItemResult.accepted(item, revision, effects.payloadRewritten());
         });
     }

@@ -7,6 +7,7 @@
                         └─▶ auth.<домен> → keycloak:8080     (start --optimized, /admin закрыт)
 backend ──▶ postgres (данные SizyLift)
 backend ──▶ keycloak:8080 (JWKS по внутренней сети)
+backend ──▶ exp.host (Expo Push, HTTPS)
 keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
 ```
 
@@ -17,6 +18,9 @@ keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
   (`kc.sh build`), поэтому стартует с `--optimized`. Realm импортируется при первом
   старте с `sslRequired: all` и настоящим SMTP. Админка снаружи отдаёт 404.
 - Наружу открыты только 80 и 443. Базы данных в интернет не смотрят.
+- **Push-уведомления** идут через Expo (`https://exp.host`) с токеном `EXPO_ACCESS_TOKEN` из
+  `deploy/.env` (Expo → Access tokens, включена «enhanced push security»). Без него приложение не
+  стартует. Подробности — [notifications.md](notifications.md).
 
 Минимальный сервер: 2 vCPU, 4 ГБ RAM (приложение ~1,3 ГБ, телеметрия `otel-lgtm` ещё ~1–1,5 ГБ),
 Docker Engine и Compose v2.

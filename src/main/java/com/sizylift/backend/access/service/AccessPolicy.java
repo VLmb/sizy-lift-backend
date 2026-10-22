@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -94,6 +95,11 @@ public class AccessPolicy {
                 .ifPresent(relation -> recipients.add(relation.coachId()));
         recipients.sort(LOCK_ORDER);
         return recipients;
+    }
+
+    /** Активный тренер владельца, если есть. */
+    public Optional<UUID> activeCoach(UUID owner) {
+        return relations.activeCoachOf(owner).map(CoachingRelation::coachId);
     }
 
     /** Типы, которые тренер видит при текущем разрешении на травмы. */

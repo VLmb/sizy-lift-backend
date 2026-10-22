@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,6 +14,8 @@ import com.sizylift.backend.coaching.entity.CoachingInvite;
 import com.sizylift.backend.coaching.entity.CoachingLink;
 import com.sizylift.backend.coaching.repository.CoachingRepository;
 import com.sizylift.backend.coaching.service.CoachingMetrics.Event;
+import com.sizylift.backend.notifications.entity.NotificationKind;
+import com.sizylift.backend.notifications.service.NotificationQueue;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.sync.service.FeedMaintenance;
@@ -37,16 +40,19 @@ public class CoachingService {
     private final InviteTokens tokens;
     private final TransactionTemplate transactions;
     private final CoachingMetrics metrics;
+    private final NotificationQueue notifications;
     private final Clock clock;
 
     CoachingService(CoachingRepository coaching, PublishedAggregateRepository aggregates, FeedMaintenance feeds,
-                    InviteTokens tokens, TransactionTemplate transactions, CoachingMetrics metrics, Clock clock) {
+                    InviteTokens tokens, TransactionTemplate transactions, CoachingMetrics metrics,
+                    NotificationQueue notifications, Clock clock) {
         this.coaching = coaching;
         this.aggregates = aggregates;
         this.feeds = feeds;
         this.tokens = tokens;
         this.transactions = transactions;
         this.metrics = metrics;
+        this.notifications = notifications;
         this.clock = clock;
     }
 
@@ -100,6 +106,9 @@ public class CoachingService {
                 coaching.acceptInvite(invite.id(), athleteId);
                 feeds.apply(List.of(new FeedMaintenance.Seed(link.coachId(), athleteId,
                         AccessPolicy.coachVisibleTypes(false))));
+                notifications.enqueue(link.coachId(), NotificationKind.INVITE_ACCEPTED, link.id(),
+                        Map.of(NotificationQueue.LINK_ID, link.id().toString(),
+                                NotificationQueue.ACTOR_ID, athleteId.toString()));
                 metrics.count(Event.LINK_CREATED);
                 return link;
             });

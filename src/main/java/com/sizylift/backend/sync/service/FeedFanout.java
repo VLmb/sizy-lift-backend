@@ -3,6 +3,7 @@ package com.sizylift.backend.sync.service;
 import java.util.UUID;
 
 import com.sizylift.backend.access.service.AccessPolicy;
+import com.sizylift.backend.publication.service.AggregateChange;
 import com.sizylift.backend.publication.service.AggregateChangeListener;
 import com.sizylift.backend.sync.entity.FeedKind;
 import com.sizylift.backend.sync.repository.SyncFeedRepository;
@@ -18,10 +19,12 @@ class FeedFanout implements AggregateChangeListener {
 
     private final SyncFeedRepository feed;
     private final AccessPolicy access;
+    private final ChangeNotifications notifications;
 
-    FeedFanout(SyncFeedRepository feed, AccessPolicy access) {
+    FeedFanout(SyncFeedRepository feed, AccessPolicy access, ChangeNotifications notifications) {
         this.feed = feed;
         this.access = access;
+        this.notifications = notifications;
     }
 
     @Override
@@ -29,11 +32,14 @@ class FeedFanout implements AggregateChangeListener {
         access.lockOwner(ownerId);
     }
 
+    /** Ленты получателей, затем уведомления — в той же транзакции. */
     @Override
-    public void changed(UUID ownerId, String type, UUID aggregateId, long revision, boolean deleted) {
-        var kind = deleted ? FeedKind.DELETE : FeedKind.UPSERT;
-        for (var recipient : access.recipients(ownerId, type)) {
-            feed.upsert(recipient, feed.nextSeq(recipient), ownerId, type, aggregateId, revision, kind);
+    public void changed(AggregateChange change) {
+        var kind = change.deleted() ? FeedKind.DELETE : FeedKind.UPSERT;
+        for (var recipient : access.recipients(change.ownerId(), change.type())) {
+            feed.upsert(recipient, feed.nextSeq(recipient), change.ownerId(), change.type(), change.aggregateId(),
+                    change.revision(), kind);
         }
+        notifications.onChange(change);
     }
 }
