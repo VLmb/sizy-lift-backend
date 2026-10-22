@@ -63,6 +63,14 @@ Feature `notifications`: устройства (`/api/v2/devices`), транза�
 фоновыми задачами с `SKIP LOCKED`. О тренировках не знает: уведомление ставят `sync` и `coaching`
 в транзакции изменения. Подробности — [notifications.md](notifications.md).
 
+## ИИ-импорт программ
+
+Feature `imports`: сессии импорта, разбор текста и таблиц (`.xlsx`, CSV, Google Таблицы по ссылке),
+вызов модели за интерфейсом `ProgramParserModel` (DeepSeek) вне транзакции и детерминированная сборка
+черновика программы. Длинные внешние вызовы идут на виртуальных потоках
+(`spring.threads.virtual.enabled`), одновременные вызовы модели ограничены общим `Semaphore`.
+Подробности — [imports.md](imports.md).
+
 ## Конфигурация и развёртывание
 
 Настройки разделены на профили Spring `dev` и `prod` (YAML). Production работает на

@@ -22,6 +22,9 @@ sizylift:
     expo:
       # Expo "enhanced push security" access token; requests without it are rejected.
       access-token: ${EXPO_ACCESS_TOKEN}
+  imports:
+    model:
+      api-key: ${DEEPSEEK_API_KEY}
 
 server:
   # TLS is terminated by the reverse proxy; trust its X-Forwarded-* headers.

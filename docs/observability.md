@@ -35,6 +35,8 @@ OTLP-экспорт идёт параллельно. В логах и трейс
 - `sizylift.notifications.enqueued{kind, coalesced}`, `sizylift.notifications.sent{kind, outcome}`,
   `sizylift.notifications.receipts{outcome}`, `sizylift.notifications.queue.size`,
   `sizylift.notifications.queue.oldest.age` — push-уведомления ([notifications.md](notifications.md)).
+- `sizylift.import.requests{source, outcome}`, `sizylift.import.tokens{direction}`,
+  `sizylift.import.duration`, `sizylift.import.rounds` — ИИ-импорт ([imports.md](imports.md)).
 - `sizylift.coaching.events{event}` — приглашения и связи: `invite_created`, `link_created`,
   `link_ended`, `health_granted`, `health_revoked`.
 

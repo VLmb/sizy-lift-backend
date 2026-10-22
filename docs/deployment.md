@@ -8,6 +8,7 @@
 backend ──▶ postgres (данные SizyLift)
 backend ──▶ keycloak:8080 (JWKS по внутренней сети)
 backend ──▶ exp.host (Expo Push, HTTPS)
+backend ──▶ api.deepseek.com, docs.google.com, *.googleusercontent.com (ИИ-импорт, HTTPS)
 keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
 ```
 
@@ -21,6 +22,10 @@ keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
 - **Push-уведомления** идут через Expo (`https://exp.host`) с токеном `EXPO_ACCESS_TOKEN` из
   `deploy/.env` (Expo → Access tokens, включена «enhanced push security»). Без него приложение не
   стартует. Подробности — [notifications.md](notifications.md).
+- **ИИ-импорт** вызывает DeepSeek с ключом `DEEPSEEK_API_KEY` из `deploy/.env`
+  (https://platform.deepseek.com/api_keys) и скачивает Google Таблицы по ссылке. Без ключа приложение
+  не стартует. Провайдер модели — сервис в Китае: это нужно указать в политике конфиденциальности.
+  Подробности — [imports.md](imports.md).
 
 Минимальный сервер: 2 vCPU, 4 ГБ RAM (приложение ~1,3 ГБ, телеметрия `otel-lgtm` ещё ~1–1,5 ГБ),
 Docker Engine и Compose v2.

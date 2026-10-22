@@ -3,6 +3,14 @@
 spring:
   application:
     name: sizy-lift-backend
+  threads:
+    # Long outbound calls (AI import, Expo Push) wait on virtual threads instead of platform threads.
+    virtual:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 1MB
+      max-request-size: 2MB
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
     default-schema: public
@@ -17,7 +25,7 @@ spring:
 
 sizylift:
   notifications:
-    # Push через Expo (ADR-0009). В dev и тестах выключено: уведомления копятся в outbox без отправки.
+    # Push via Expo (ADR-0009). Off in dev and tests: notifications pile up in the outbox unsent.
     enabled: false
     send-interval: 5s
     receipts-interval: 15m
@@ -26,6 +34,30 @@ sizylift:
       access-token: ""
       connect-timeout: 5s
       read-timeout: 15s
+  imports:
+    # AI program import (ADR-0008). DeepSeek key comes from DEEPSEEK_API_KEY in production.
+    max-input-chars: 20000
+    max-file-bytes: 1048576
+    max-sheets: 10
+    max-cells: 2000
+    max-rounds: 3
+    daily-limit: 20
+    concurrent-per-user: 2
+    model-concurrency: 8
+    model-wait: 20s
+    session-ttl: 24h
+    model:
+      url: https://api.deepseek.com
+      name: deepseek-flash
+      api-key: ""
+      max-tokens: 16000
+      connect-timeout: 5s
+      read-timeout: 60s
+      retry-pause: 2s
+    sheets:
+      connect-timeout: 5s
+      read-timeout: 15s
+      max-redirects: 3
 
 server:
   port: 8080
