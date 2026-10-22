@@ -27,7 +27,7 @@ public record WorkoutPayloadV1(
         @NotNull Instant updatedAt,
         @NotNull @Size(max = MAX_BLOCKS) List<@NotNull @Valid Block> blocks,
         @NotNull @Size(max = MAX_PLAN_SNAPSHOTS) List<@NotNull @Valid PlanSetSnapshot> planSetSnapshots,
-        @NotNull @Size(max = MAX_RECORD_EVENTS) List<@NotNull @Valid RecordEvent> recordEvents) {
+        @NotNull @Size(max = MAX_RECORD_EVENTS) List<@NotNull @Valid RecordEvent> recordEvents) implements PayloadV1 {
 
     public record Block(
             @NotNull UUID id,

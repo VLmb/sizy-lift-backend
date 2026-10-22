@@ -7,5 +7,6 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 /** Фактический 1ПМ, введённый пользователем; id агрегата — id упражнения. */
-public record OneRepMaxPayloadV1(@Min(1) int weightGrams, @NotNull LocalDate achievedOn, @NotNull Instant updatedAt) {
+public record OneRepMaxPayloadV1(@Min(1) int weightGrams, @NotNull LocalDate achievedOn,
+                                 @NotNull Instant updatedAt) implements PayloadV1 {
 }
