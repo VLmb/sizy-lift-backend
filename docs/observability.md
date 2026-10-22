@@ -32,6 +32,8 @@ OTLP-экспорт идёт параллельно. В логах и трейс
   (восстановление базы из бэкапа или ошибка клиента); такая правка решается как конфликт.
 - `sizylift.sync.push` — наблюдение (таймер + span `sync push`) на обработку пачки v2.
 - `sizylift.sync.changes.page.size` — записей ленты на странице `GET /api/v2/sync/changes`.
+- `sizylift.coaching.events{event}` — приглашения и связи: `invite_created`, `link_created`,
+  `link_ended`, `health_granted`, `health_revoked`.
 
 SQL-запросы отдельными span'ами пока не трассируются.
 

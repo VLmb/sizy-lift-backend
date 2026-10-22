@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.sizylift.backend.access.service.AccessPolicy;
 import com.sizylift.backend.publication.dto.ItemStatus;
 import com.sizylift.backend.publication.dto.RejectionReason;
 import com.sizylift.backend.publication.dto.payload.PayloadV1;
@@ -40,11 +41,12 @@ public class SyncPushService {
     private final PayloadParser parser;
     private final AggregateArbiter arbiter;
     private final AggregateChangeListener feed;
+    private final AccessPolicy access;
     private final SyncMetrics metrics;
 
     SyncPushService(List<AggregatePublisher<?>> publishers, PublishedAggregateRepository aggregates,
                     TransactionTemplate transactions, PayloadParser parser, AggregateArbiter arbiter,
-                    AggregateChangeListener feed, SyncMetrics metrics) {
+                    AggregateChangeListener feed, AccessPolicy access, SyncMetrics metrics) {
         this.publishers = publishers.stream()
                 .collect(Collectors.toUnmodifiableMap(AggregatePublisher::type, Function.identity()));
         this.aggregates = aggregates;
@@ -52,6 +54,7 @@ public class SyncPushService {
         this.parser = parser;
         this.arbiter = arbiter;
         this.feed = feed;
+        this.access = access;
         this.metrics = metrics;
     }
 
@@ -67,7 +70,7 @@ public class SyncPushService {
         });
     }
 
-    private ItemResult push(UUID userId, Item item) {
+    private ItemResult push(UUID callerId, Item item) {
         var publisher = publishers.get(item.type());
         if (publisher == null) {
             return ItemResult.rejected(item, RejectionReason.UNSUPPORTED_TYPE);
@@ -75,11 +78,9 @@ public class SyncPushService {
         if (item.schemaVersion() != SCHEMA_VERSION) {
             return ItemResult.rejected(item, RejectionReason.UNSUPPORTED_SCHEMA);
         }
-        if (item.ownerId() != null && !item.ownerId().equals(userId)) {
-            return ItemResult.rejected(item, RejectionReason.FORBIDDEN);
-        }
+        var write = new Write(callerId, item.ownerId() == null ? callerId : item.ownerId(), item);
         try {
-            return item.deleted() ? delete(userId, publisher, item) : replace(userId, publisher, item);
+            return item.deleted() ? delete(write, publisher) : replace(write, publisher);
         } catch (PayloadParser.InvalidPayloadException | DataIntegrityViolationException e) {
             log.debug("Rejected {} {}: {}", item.type(), item.id(), e.getClass().getSimpleName());
             return ItemResult.rejected(item, RejectionReason.INVALID_PAYLOAD);
@@ -88,43 +89,64 @@ public class SyncPushService {
         }
     }
 
-    private <P extends PayloadV1> ItemResult replace(UUID userId, AggregatePublisher<P> publisher, Item item) {
-        var payload = parser.parse(item.payload(), publisher.payloadType());
-        return store(userId, item, () -> publisher.replace(userId, item.id(), payload));
+    private <P extends PayloadV1> ItemResult replace(Write write, AggregatePublisher<P> publisher) {
+        var payload = parser.parse(write.item().payload(), publisher.payloadType());
+        return store(write, () -> publisher.replace(write.ownerId(), write.item().id(), payload));
     }
 
     /** Удаление — та же запись с tombstone: конкурирует с правкой по {@code changedAt}. */
-    private ItemResult delete(UUID userId, AggregatePublisher<?> publisher, Item item) {
-        return store(userId, item, () -> publisher.delete(userId, item.id()));
+    private ItemResult delete(Write write, AggregatePublisher<?> publisher) {
+        return store(write, () -> publisher.delete(write.ownerId(), write.item().id()));
     }
 
-    private ItemResult store(UUID userId, Item item, Runnable write) {
+    /**
+     * Порядок блокировок во всех записях: аккаунт владельца (разделяемая), строка агрегата, курсоры лент.
+     * Изменения связей берут аккаунт подопечного исключительно, поэтому права и фан-аут не меняются до коммита.
+     */
+    private ItemResult store(Write write, Runnable data) {
+        var item = write.item();
+        var ownerId = write.ownerId();
         return transactions.execute(status -> {
-            var state = aggregates.lock(userId, item.type(), item.id());
-            if (item.clientVersion() <= aggregates.clientVersion(userId, item.type(), item.id(), item.clientId())) {
+            feed.beforeWrite(ownerId);
+            if (!access.canWriteFor(write.callerId(), ownerId, item.type())) {
+                return ItemResult.rejected(item, RejectionReason.FORBIDDEN);
+            }
+            var state = aggregates.lock(ownerId, item.type(), item.id());
+            if (!access.canWrite(write.callerId(), ownerId, item.type(), state.authorUserId(), state.exists())) {
+                status.setRollbackOnly();
+                return ItemResult.rejected(item, RejectionReason.FORBIDDEN);
+            }
+            if (item.clientVersion() <= aggregates.clientVersion(ownerId, item.type(), item.id(), item.clientId())) {
                 return ItemResult.of(item, ItemStatus.STALE, state.revision());
             }
-            aggregates.rememberClientVersion(userId, item.type(), item.id(), item.clientId(), item.clientVersion());
+            aggregates.rememberClientVersion(ownerId, item.type(), item.id(), item.clientId(), item.clientVersion());
             if (item.baseRevision() > state.revision()) {
                 metrics.countBaseAhead(item.type());
             }
             var changedAt = arbiter.effectiveChangedAt(item.changedAt());
             var conflict = item.baseRevision() != state.revision();
             if (conflict && !arbiter.incomingWins(changedAt, state)) {
-                arbiter.incomingLost(userId, item.type(), item.id(), item.payload(), changedAt, item.clientId(),
+                arbiter.incomingLost(ownerId, item.type(), item.id(), item.payload(), changedAt, item.clientId(),
                         state.revision());
                 return ItemResult.of(item, ItemStatus.SUPERSEDED, state.revision());
             }
-            var lost = conflict && state.revision() > 0
-                    ? arbiter.captureStored(userId, item.type(), item.id(), state) : null;
-            write.run();
-            var revision = aggregates.storeSynced(userId, item.type(), item.id(), item.deleted(), changedAt,
+            var lost = conflict && state.exists() ? arbiter.captureStored(ownerId, item.type(), item.id(), state)
+                    : null;
+            data.run();
+            var revision = aggregates.storeSynced(ownerId, item.type(), item.id(), item.deleted(), changedAt,
                     item.clientId(), item.clientVersion());
+            if (!state.exists() && !write.callerId().equals(ownerId)) {
+                aggregates.assignAuthor(ownerId, item.type(), item.id(), write.callerId());
+            }
             if (lost != null) {
                 arbiter.storedLost(lost, revision);
             }
-            feed.changed(userId, item.type(), item.id(), revision, item.deleted());
+            feed.changed(ownerId, item.type(), item.id(), revision, item.deleted());
             return ItemResult.of(item, ItemStatus.ACCEPTED, revision);
         });
+    }
+
+    /** Кто пишет, чьи данные и что. */
+    private record Write(UUID callerId, UUID ownerId, Item item) {
     }
 }

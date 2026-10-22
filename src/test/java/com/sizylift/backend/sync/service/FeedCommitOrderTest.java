@@ -10,9 +10,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import com.sizylift.backend.PostgresIntegrationTest;
+import com.sizylift.backend.coaching.service.CoachingService;
 import com.sizylift.backend.publication.service.AggregateChangeListener;
 import com.sizylift.backend.sync.dto.SyncChangesResponse.Change;
 import com.sizylift.backend.sync.dto.SyncPushRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,8 +27,8 @@ import tools.jackson.databind.ObjectMapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Коммиты не по порядку (ADR-0007, раздел 4): запись A получила позицию и ещё не закоммичена, запись B
- * того же получателя идёт параллельно, читатель читает посередине. Читатель не должен перескочить A.
+ * Порядок записей в ленты при параллельных транзакциях (ADR-0007, разделы 4–5). Тестовый слушатель держит
+ * транзакцию записи открытой в нужной точке, чтобы воспроизвести гонку детерминированно.
  */
 @SpringBootTest
 class FeedCommitOrderTest extends PostgresIntegrationTest {
@@ -50,8 +52,20 @@ class FeedCommitOrderTest extends PostgresIntegrationTest {
     JdbcTemplate jdbc;
 
     @Autowired
+    CoachingService coaching;
+
+    @BeforeEach
+    void resetListener() {
+        listener.reset();
+    }
+
+    @Autowired
     ObjectMapper json;
 
+    /**
+     * Коммиты не по порядку: запись A получила позицию и ещё не закоммичена, запись B того же получателя идёт
+     * параллельно, читатель читает посередине. Читатель не должен перескочить A.
+     */
     @Test
     void readerDoesNotSkipAWriteThatCommitsAfterALaterOne() throws Exception {
         var owner = newUser();
@@ -75,6 +89,35 @@ class FeedCommitOrderTest extends PostgresIntegrationTest {
         middle.changes().stream().map(Change::id).forEach(seen::add);
         rest.changes().stream().map(Change::id).forEach(seen::add);
         assertThat(seen).containsExactlyInAnyOrder(first, second);
+    }
+
+    /**
+     * Запись данных подопечного держит разделяемую блокировку его аккаунта до коммита, поэтому разрыв связи
+     * ждёт её: фан-аут записи не может посчитать тренера получателем и дописать ему данные после {@code revoke}.
+     */
+    @Test
+    void linkCannotEndWhileAnAthleteWriteIsInFlight() throws Exception {
+        var athlete = newUser();
+        var coach = newUser();
+        var linkId = jdbc.queryForObject("INSERT INTO sizylift.coaching_link (coach_user_id, athlete_user_id, "
+                + "health_access) VALUES (?, ?, true) RETURNING id", UUID.class, coach, athlete);
+        listener.pauseBeforeWriteOf(athlete);
+        var pool = Executors.newFixedThreadPool(2);
+
+        var write = pool.submit(() -> push.push(athlete, List.of(item(UUID.randomUUID()))));
+        assertThat(listener.paused.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS)).isTrue();
+        var end = pool.submit(() -> coaching.end(athlete, linkId));
+        awaitBlockedOrDone(end);
+        var endedWhileWriting = end.isDone();
+        listener.release.countDown();
+        write.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+        end.get(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+        pool.shutdown();
+
+        assertThat(endedWhileWriting).isFalse();
+        var coachFeed = changes.changes(coach, 0, SyncChangesService.MAX_LIMIT).changes();
+        assertThat(coachFeed).hasSize(1);
+        assertThat(coachFeed.getFirst().kind().code()).isEqualTo("revoke");
     }
 
     /** B либо ждёт блокировку курсора (правильная лента), либо уже закоммичен (наивная). */
@@ -101,29 +144,54 @@ class FeedCommitOrderTest extends PostgresIntegrationTest {
     /** Держит транзакцию записи открытой после выдачи позиции в ленте. */
     static class PausingListener implements AggregateChangeListener {
 
-        final CountDownLatch paused = new CountDownLatch(1);
-        final CountDownLatch release = new CountDownLatch(1);
+        volatile CountDownLatch paused;
+        volatile CountDownLatch release;
         private final FeedFanout delegate;
         private volatile UUID pauseAfter;
+        private volatile UUID pauseBeforeWriteOf;
 
         PausingListener(FeedFanout delegate) {
             this.delegate = delegate;
+            reset();
+        }
+
+        void reset() {
+            paused = new CountDownLatch(1);
+            release = new CountDownLatch(1);
+            pauseAfter = null;
+            pauseBeforeWriteOf = null;
         }
 
         void pauseAfter(UUID aggregateId) {
             pauseAfter = aggregateId;
         }
 
+        void pauseBeforeWriteOf(UUID ownerId) {
+            pauseBeforeWriteOf = ownerId;
+        }
+
+        @Override
+        public void beforeWrite(UUID ownerId) {
+            delegate.beforeWrite(ownerId);
+            if (ownerId.equals(pauseBeforeWriteOf)) {
+                pause();
+            }
+        }
+
         @Override
         public void changed(UUID ownerId, String type, UUID aggregateId, long revision, boolean deleted) {
             delegate.changed(ownerId, type, aggregateId, revision, deleted);
             if (aggregateId.equals(pauseAfter)) {
-                paused.countDown();
-                try {
-                    release.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                pause();
+            }
+        }
+
+        private void pause() {
+            paused.countDown();
+            try {
+                release.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
     }

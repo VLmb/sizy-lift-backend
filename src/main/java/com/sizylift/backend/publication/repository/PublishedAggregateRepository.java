@@ -3,6 +3,7 @@ package com.sizylift.backend.publication.repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import com.sizylift.backend.publication.entity.AggregateState;
@@ -24,7 +25,7 @@ public class PublishedAggregateRepository {
             ON CONFLICT (user_id, type, aggregate_id) DO NOTHING
             """;
     private static final String SELECT_FOR_UPDATE = """
-            SELECT version, revision, changed_at, source_client_id, source_version, deleted
+            SELECT version, revision, changed_at, source_client_id, source_version, deleted, author_user_id
             FROM sizylift.published_aggregate
             WHERE user_id = ? AND type = ? AND aggregate_id = ?
             FOR UPDATE
@@ -42,6 +43,16 @@ public class PublishedAggregateRepository {
                 source_version = NULL, version = ?, deleted = ?, received_at = now()
             WHERE user_id = ? AND type = ? AND aggregate_id = ?
             RETURNING revision
+            """;
+    private static final String ASSIGN_AUTHOR = """
+            UPDATE sizylift.published_aggregate SET author_user_id = ?
+            WHERE user_id = ? AND type = ? AND aggregate_id = ?
+            """;
+    private static final String TRANSFER_TO_OWNER = """
+            UPDATE sizylift.published_aggregate
+            SET author_user_id = NULL, revision = nextval('sizylift.aggregate_revision_seq')
+            WHERE user_id = ? AND type = ? AND author_user_id = ?
+            RETURNING aggregate_id, revision, deleted
             """;
     private static final String SELECT_CLIENT_VERSION = """
             SELECT version FROM sizylift.aggregate_client_version
@@ -84,6 +95,24 @@ public class PublishedAggregateRepository {
                 aggregateId);
     }
 
+    /** Автор ставится только при создании агрегата не владельцем (программа тренера). */
+    public void assignAuthor(UUID userId, String type, UUID aggregateId, UUID authorId) {
+        jdbc.update(ASSIGN_AUTHOR, authorId, userId, type, aggregateId);
+    }
+
+    /**
+     * Передаёт владельцу все агрегаты типа, которые писал {@code authorId}: автор сбрасывается, ревизия
+     * растёт, чтобы владелец получил их как свои редактируемые.
+     */
+    public List<TransferredAggregate> transferToOwner(UUID userId, String type, UUID authorId) {
+        return jdbc.query(TRANSFER_TO_OWNER, (row, n) -> new TransferredAggregate(
+                row.getObject("aggregate_id", UUID.class), row.getLong("revision"), row.getBoolean("deleted")),
+                userId, type, authorId);
+    }
+
+    public record TransferredAggregate(UUID aggregateId, long revision, boolean deleted) {
+    }
+
     /** Последняя обработанная правка клиента по агрегату ({@code 0}, если клиент его не писал). */
     public long clientVersion(UUID userId, String type, UUID aggregateId, String clientId) {
         return jdbc.query(SELECT_CLIENT_VERSION, (row, rowNumber) -> row.getLong(1), userId, type, aggregateId,
@@ -100,6 +129,7 @@ public class PublishedAggregateRepository {
         var hasSourceVersion = !row.wasNull();
         return new AggregateState(row.getLong("version"), row.getLong("revision"),
                 changedAt == null ? null : changedAt.toInstant(), row.getString("source_client_id"),
-                hasSourceVersion ? sourceVersion : null, row.getBoolean("deleted"));
+                hasSourceVersion ? sourceVersion : null, row.getBoolean("deleted"),
+                row.getObject("author_user_id", UUID.class));
     }
 }
