@@ -73,7 +73,7 @@ CREATE SEQUENCE sizylift.aggregate_revision_seq;
   проверяется здесь, а не на клиенте.
 - **Ревизия** — значение из общей последовательности, назначается при каждой записи. Нужна
   только монотонность внутри агрегата; общая последовательность проще отдельного счётчика.
-- Новые типы агрегатов: `workout_reschedule` (перенос, пишет подопечный) и `comment`
+- Новые типы агрегатов: `workout_reschedule` (перенос, пишет подопечный) и `workout_comment`
   (комментарий, пишет его автор). Они получают ту же механику записи, ленты и прав.
 
 ## 3. Запись: базовая ревизия и «побеждает последнее»
@@ -273,7 +273,7 @@ scheduled_date, changed_at)`. Его пишет подопечный, а сам�
 
 ## 8. Комментарии
 
-Агрегат `comment(user_id = автор, id, workout_owner_id, workout_id, text, created_at,
+Агрегат `workout_comment(user_id = автор, id, workout_owner_id, workout_id, text, created_at,
 deleted)`. Правит и удаляет только автор. В ленту попадает автору и второй стороне связи,
 второй стороне ставится уведомление. Текст в логи не пишется.
 
@@ -287,7 +287,7 @@ deleted)`. Правит и удаляет только автор. В ленту
 3. `sync_cursor`, `sync_feed` и засев лент владельцев всеми их агрегатами, чтобы первое
    чтение с `after=0` вернуло всё;
 4. `coaching_invite`, `coaching_link`, `user_account.coach_enabled`;
-5. `workout_reschedule`, `comment`, `aggregate_conflict`, расширение CHECK по `type`.
+5. `workout_reschedule`, `workout_comment`, `aggregate_conflict`, расширение CHECK по `type`.
 
 Засев идёт одним `INSERT … SELECT` в changeset. При текущем объёме данных это секунды.
 
