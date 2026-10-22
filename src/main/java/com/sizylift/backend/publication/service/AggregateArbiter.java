@@ -10,6 +10,7 @@ import com.sizylift.backend.publication.repository.AggregateConflictRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Правило «побеждает последнее изменение» (ADR-0007, раздел 3) и журнал проигравших версий.
@@ -25,11 +26,16 @@ public class AggregateArbiter {
     static final String OUTCOME_SUPERSEDED = "superseded";
 
     private final AggregateConflictRepository conflicts;
+    private final PayloadReader payloads;
+    private final ObjectMapper json;
     private final Clock clock;
     private final MeterRegistry meters;
 
-    AggregateArbiter(AggregateConflictRepository conflicts, Clock clock, MeterRegistry meters) {
+    AggregateArbiter(AggregateConflictRepository conflicts, PayloadReader payloads, ObjectMapper json, Clock clock,
+                     MeterRegistry meters) {
         this.conflicts = conflicts;
+        this.payloads = payloads;
+        this.json = json;
         this.clock = clock;
         this.meters = meters;
     }
@@ -59,10 +65,25 @@ public class AggregateArbiter {
         count(type, OUTCOME_SUPERSEDED);
     }
 
-    /** Содержимого вытесненной версии нет, пока сервер не умеет собирать payload из таблиц (AggregateReader). */
-    public void storedLost(UUID userId, String type, UUID aggregateId, AggregateState lost, long winnerRevision) {
-        conflicts.record(userId, type, aggregateId, null, lost.changedAt(), lost.sourceClientId(), winnerRevision);
-        count(type, OUTCOME_ACCEPTED);
+    /**
+     * Снимок сохранённой версии до того, как её заменит выигравшая правка; у tombstone содержимого нет.
+     * Вызывается до записи, в той же транзакции.
+     */
+    public StoredVersion captureStored(UUID userId, String type, UUID aggregateId, AggregateState stored) {
+        var payload = stored.deleted() ? null
+                : payloads.read(userId, type, aggregateId).map(json::writeValueAsString).orElse(null);
+        return new StoredVersion(userId, type, aggregateId, payload, stored.changedAt(), stored.sourceClientId());
+    }
+
+    public void storedLost(StoredVersion lost, long winnerRevision) {
+        conflicts.record(lost.userId(), lost.type(), lost.aggregateId(), lost.payload(), lost.changedAt(),
+                lost.clientId(), winnerRevision);
+        count(lost.type(), OUTCOME_ACCEPTED);
+    }
+
+    /** Вытесняемая версия агрегата; {@code payload} — JSON v1 или {@code null} у tombstone. */
+    public record StoredVersion(UUID userId, String type, UUID aggregateId, String payload, Instant changedAt,
+                                String clientId) {
     }
 
     private void count(String type, String outcome) {

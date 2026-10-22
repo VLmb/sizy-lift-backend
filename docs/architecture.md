@@ -44,6 +44,13 @@ Feature `publication`: приём пачек агрегатов с телефо�
 профиля и здоровья с `user_id` в ключах; системный каталог упражнений — общий. Подробности —
 [publication.md](publication.md).
 
+## Синхронизация v2
+
+Feature `sync` вырастает из `publication` и использует её publisher'ы и readers: запись с базовой
+ревизией и last-writer-wins (`POST /api/v2/sync/push`), журнал конфликтов и персональная лента
+изменений с курсором (`GET /api/v2/sync/changes`). Публикация v1 продолжает работать и тоже попадает
+в ленту. Подробности — [sync.md](sync.md), решения — [ADR-0007](adr/0007-two-way-sync-and-coaching.md).
+
 ## Конфигурация и развёртывание
 
 Настройки разделены на профили Spring `dev` и `prod` (YAML). Production работает на

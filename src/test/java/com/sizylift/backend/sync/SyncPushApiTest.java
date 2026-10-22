@@ -114,6 +114,7 @@ class SyncPushApiTest extends PostgresIntegrationTest {
         assertThat(name()).isEqualTo("phone, later");
         var conflict = conflict();
         assertThat(conflict.get("lost_client_id")).isEqualTo(WEB);
+        assertThat(json.readTree((String) conflict.get("lost_payload")).get("name").asString()).isEqualTo("web");
         assertThat(conflict.get("lost_changed_at")).isEqualTo(java.sql.Timestamp.from(T10.plusSeconds(60)));
         assertThat(conflict.get("winner_revision")).isEqualTo(revision(result));
     }

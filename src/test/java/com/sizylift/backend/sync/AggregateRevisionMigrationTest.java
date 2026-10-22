@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Заполнение ревизий для данных, опубликованных до sync v2 (ADR-0007, раздел 9). */
+/** Заполнение ревизий и засев лент для данных, опубликованных до sync v2 (ADR-0007, раздел 9). */
 class AggregateRevisionMigrationTest extends PostgresIntegrationTest {
 
     static final String CHANGELOG = "db/changelog/db.changelog-master.yaml";
@@ -53,6 +53,25 @@ class AggregateRevisionMigrationTest extends PostgresIntegrationTest {
             assertThat(changedAt).containsEntry(injury, UPDATED).containsEntry(oneRepMax, UPDATED)
                     .containsEntry(tombstone, RECEIVED);
             assertThat(revisions).hasSize(3).doesNotContain(0L);
+
+            var feed = connection.createStatement().executeQuery("""
+                    SELECT seq, aggregate_id, revision, kind, owner_user_id FROM sizylift.sync_feed ORDER BY seq
+                    """);
+            var seqs = new java.util.ArrayList<Long>();
+            var kinds = new java.util.HashMap<UUID, String>();
+            while (feed.next()) {
+                seqs.add(feed.getLong("seq"));
+                kinds.put(feed.getObject("aggregate_id", UUID.class), feed.getString("kind"));
+                assertThat(feed.getObject("owner_user_id", UUID.class)).isEqualTo(user);
+                assertThat(revisions).contains(feed.getLong("revision"));
+            }
+            assertThat(seqs).containsExactly(1L, 2L, 3L);
+            assertThat(kinds).containsEntry(injury, "upsert").containsEntry(oneRepMax, "upsert")
+                    .containsEntry(tombstone, "delete");
+            var cursor = connection.createStatement()
+                    .executeQuery("SELECT last_seq FROM sizylift.sync_cursor");
+            cursor.next();
+            assertThat(cursor.getLong(1)).isEqualTo(3);
 
             var next = connection.createStatement()
                     .executeQuery("SELECT nextval('sizylift.aggregate_revision_seq')");
