@@ -29,6 +29,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -136,6 +137,32 @@ class ImportApiTest extends PostgresIntegrationTest {
         assertThat(firstExercise(draft.get("draft").get("program")).get("sets").get(0).get("targetWeightGrams")
                 .asInt()).isEqualTo(135_000);
         assertThat(codes(draft)).doesNotContain("no_one_rep_max");
+    }
+
+    @Test
+    void exerciseMissingFromTheLibraryComesAsANewOwnExerciseReadyToSave() throws Exception {
+        var program = json.readTree(squatProgram(Map.of("weightKg", 40)));
+        ((ObjectNode) program.get("program").get("weeks").get(0).get("workouts").get(0)
+                .get("exercises").get(0)).put("name", "Жим Ларсена");
+        model.expect(once(), requestTo(COMPLETIONS)).andRespond(reply(json.writeValueAsString(program), 10, 10));
+
+        var draft = body(start(Map.of("text", "Жим Ларсена 5x5 40 кг")).andExpect(status().isOk())).get("draft");
+
+        var created = draft.get("newExercises").get(0);
+        assertThat(created.get("exercise").get("name").asString()).isEqualTo("Жим Ларсена");
+        assertThat(created.get("exercise").get("resultType").asString()).isEqualTo("weight_reps");
+        var planned = firstExercise(draft.get("program"));
+        assertThat(planned.get("exerciseId").asString()).isEqualTo(created.get("id").asString());
+        assertThat(planned.get("sets").get(0).get("targetWeightGrams").asInt()).isEqualTo(40_000);
+
+        var push = Map.of("items", List.of(
+                pushItem("exercise", created.get("id").asString(), created.get("exercise")),
+                pushItem("program", draft.get("programId").asString(), draft.get("program"))));
+        var results = body(mvc.perform(post("/api/v2/sync/push").with(token())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(push)))
+                .andExpect(status().isOk())).get("results");
+        assertThat(results.valueStream().map(result -> result.get("status").asString()))
+                .as("черновик сохраняется обычной записью").containsExactly("accepted", "accepted");
     }
 
     @Test
@@ -288,6 +315,11 @@ class ImportApiTest extends PostgresIntegrationTest {
 
         assertThat(draft.get("status").asString()).isEqualTo("draft");
         model.verify();
+    }
+
+    private Map<String, Object> pushItem(String type, String id, JsonNode payload) {
+        return Map.of("type", type, "id", id, "baseRevision", 0, "changedAt", "2026-10-22T10:00:00Z",
+                "clientId", "phone", "clientVersion", 1, "schemaVersion", 1, "deleted", false, "payload", payload);
     }
 
     private ResultActions start(Map<String, String> body) throws Exception {

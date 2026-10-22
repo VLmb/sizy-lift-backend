@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.sizylift.backend.imports.entity.ImportStatus;
+import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -51,15 +52,29 @@ public final class ImportDtos {
     /**
      * Черновик программы в формате payload {@code program} v1 с id, сгенерированными сервером. Клиент показывает
      * предпросмотр и сохраняет его обычной записью с {@code programId}; сервер программу не сохраняет.
+     * {@code newExercises} — упражнения, которых нет в библиотеке: программа уже ссылается на их id, клиент
+     * сохраняет их как свои упражнения (payload {@code exercise} v1) до программы или заменяет на похожие.
      */
-    public record Draft(UUID programId, ProgramPayloadV1 program) {
+    public record Draft(UUID programId, ProgramPayloadV1 program, List<NewExercise> newExercises) {
     }
 
-    /** Предупреждение сборки; {@code suggestions} — похожие упражнения, если своё не найдено. */
-    public record Warning(String code, String message, String exercise, List<Suggestion> suggestions) {
+    /** Новое своё упражнение, готовое к записи с этим {@code id}. */
+    public record NewExercise(UUID id, ExercisePayloadV1 exercise) {
+    }
+
+    /**
+     * Предупреждение сборки. У {@code new_exercise}: {@code exercise} — название, {@code exerciseId} — id нового
+     * упражнения в черновике, {@code suggestions} — похожие из библиотеки для замены.
+     */
+    public record Warning(String code, String message, String exercise, UUID exerciseId,
+                          List<Suggestion> suggestions) {
 
         public static Warning of(String code, String message) {
-            return new Warning(code, message, null, List.of());
+            return new Warning(code, message, null, null, List.of());
+        }
+
+        public static Warning about(String code, String message, String exercise) {
+            return new Warning(code, message, exercise, null, List.of());
         }
     }
 

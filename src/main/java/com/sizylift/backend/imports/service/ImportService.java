@@ -166,7 +166,7 @@ public class ImportService {
             }
             var result = new DraftAssembler(matcher::match, catalog.oneRepMaxGrams(session.targetOwnerId()),
                     session.startDate(), clock.instant()).assemble(parsed);
-            if (!validator.validate(result.draft().program()).isEmpty()) {
+            if (!valid(result.draft())) {
                 throw failed("draft_invalid", "Черновик не прошёл проверку, уточните текст и попробуйте снова");
             }
             sessions.finish(session.id(), ImportStatus.DRAFT, rounds, result.draft(), tokens[0], tokens[1]);
@@ -182,6 +182,12 @@ public class ImportService {
         } finally {
             metrics.tokens(tokens[0], tokens[1]);
         }
+    }
+
+    /** Черновик проверяется теми же правилами, что и запись: программа и каждое новое упражнение. */
+    private boolean valid(Draft draft) {
+        return validator.validate(draft.program()).isEmpty() && draft.newExercises().stream()
+                .allMatch(exercise -> validator.validate(exercise.exercise()).isEmpty());
     }
 
     /** Невалидный ответ — один повтор с ошибками проверки в промпте, затем понятная ошибка. */

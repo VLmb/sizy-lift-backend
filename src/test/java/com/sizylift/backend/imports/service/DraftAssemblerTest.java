@@ -117,20 +117,56 @@ class DraftAssemblerTest {
     }
 
     @Test
-    void unknownExerciseIsLeftOutWithSuggestionsAndTheDraftIsValid() {
+    void unknownExerciseStaysInTheProgramAsANewOwnExerciseWithSuggestions() {
         var result = assemble(Map.of(), program(
-                exercise("Тяга в наклоне", line(3, 8, null, null)),
+                exercise("Тяга в наклоне", line(3, 8, null, new Load(null, null, 60.0, null))),
                 exercise("Присед", line(3, 5, null, null))));
 
-        assertThat(exercises(result)).extracting(ProgramPayloadV1.Exercise::exerciseId).containsExactly(SQUAT.id());
-        var warning = result.warnings().stream().filter(w -> w.code().equals("exercise_not_found")).findFirst()
+        var exercises = exercises(result);
+        var created = result.draft().newExercises();
+        assertThat(created).hasSize(1);
+        var newExercise = created.getFirst();
+        assertThat(newExercise.exercise().name()).isEqualTo("Тяга в наклоне");
+        assertThat(newExercise.exercise().resultType()).isEqualTo("weight_reps");
+        assertThat(exercises).extracting(ProgramPayloadV1.Exercise::exerciseId)
+                .containsExactly(newExercise.id(), SQUAT.id());
+        assertThat(exercises.getFirst().exerciseName()).isEqualTo("Тяга в наклоне");
+        assertThat(exercises.getFirst().sets()).hasSize(3)
+                .allMatch(set -> set.targetWeightGrams() == 60_000 && set.repetitions() == 8);
+        var warning = result.warnings().stream().filter(w -> w.code().equals("new_exercise")).findFirst()
                 .orElseThrow();
         assertThat(warning.exercise()).isEqualTo("Тяга в наклоне");
-        assertThat(warning.suggestions()).extracting(suggestion -> suggestion.exerciseId()).containsExactly(
-                SIMILAR.id());
+        assertThat(warning.exerciseId()).isEqualTo(newExercise.id());
+        assertThat(warning.suggestions()).extracting(suggestion -> suggestion.exerciseId())
+                .containsExactly(SIMILAR.id());
         try (var factory = Validation.buildDefaultValidatorFactory()) {
-            assertThat(factory.getValidator().validate(result.draft().program())).isEmpty();
+            var validator = factory.getValidator();
+            assertThat(validator.validate(result.draft().program())).isEmpty();
+            assertThat(validator.validate(newExercise.exercise())).isEmpty();
         }
+    }
+
+    @Test
+    void sameUnknownNameGivesOneNewExerciseAndOneWarning() {
+        var result = assemble(Map.of(), program(
+                exercise("Гуд морнинг", line(3, 8, null, null)),
+                exercise("гуд  морнинг", line(2, 10, null, null)),
+                exercise("Растяжка", line(1, null, null, null))));
+
+        assertThat(result.draft().newExercises()).extracting(created -> created.exercise().name())
+                .containsExactly("Гуд морнинг", "Растяжка");
+        assertThat(result.draft().newExercises().get(1).exercise().resultType()).as("без повторов и веса")
+                .isEqualTo("free");
+        var exercises = exercises(result);
+        assertThat(exercises.get(0).exerciseId()).isEqualTo(exercises.get(1).exerciseId());
+        assertThat(result.warnings()).filteredOn(w -> w.code().equals("new_exercise")).hasSize(2);
+    }
+
+    @Test
+    void percentOfANewExerciseStaysInTheNote() {
+        var result = assemble(Map.of(), program(exercise("Жим Ларсена", line(3, 5, null, percent(70)))));
+
+        assertThat(sets(result)).allMatch(set -> set.targetWeightGrams() == null && "70% от 1ПМ".equals(set.note()));
     }
 
     @Test

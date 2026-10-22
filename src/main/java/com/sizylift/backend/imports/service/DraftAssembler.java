@@ -3,12 +3,14 @@ package com.sizylift.backend.imports.service;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
+import com.sizylift.backend.imports.dto.ImportDtos;
 import com.sizylift.backend.imports.dto.ImportDtos.Draft;
 import com.sizylift.backend.imports.dto.ImportDtos.Suggestion;
 import com.sizylift.backend.imports.dto.ImportDtos.Warning;
@@ -16,13 +18,15 @@ import com.sizylift.backend.imports.entity.CatalogExercise;
 import com.sizylift.backend.imports.model.ParsedReply;
 import com.sizylift.backend.imports.model.ParsedReply.Load;
 import com.sizylift.backend.imports.model.ParsedReply.SetLine;
+import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 
 /**
  * Детерминированная сборка черновика из промежуточного описания (ADR-0008, раздел 2): модель не считает
  * веса и не придумывает id. Процент от 1ПМ — вес по 1ПМ владельца программы с округлением до 2,5 кг; без 1ПМ —
  * процент в заметке подхода. «−10% от топ-сета» — от уже посчитанного веса топ-сета. Даты недель — от даты
- * старта. Не найденное упражнение в черновик не попадает, о нём — предупреждение с похожими вариантами.
+ * старта. Упражнение, которого нет в библиотеке, остаётся в программе как новое своё (одно на название) —
+ * клиент сохранит его вместе с программой или заменит на одно из похожих.
  */
 class DraftAssembler {
 
@@ -41,7 +45,10 @@ class DraftAssembler {
     static final int DAYS_IN_WEEK = 7;
     static final int MAX_SETS_PER_EXERCISE = 200;
 
-    static final String EXERCISE_NOT_FOUND = "exercise_not_found";
+    static final String NEW_EXERCISE = "new_exercise";
+    /** Тип результата нового упражнения: с весом и повторами, если в тексте есть повторы или вес, иначе свободный. */
+    static final String WEIGHT_REPS = "weight_reps";
+    static final String FREE = "free";
     static final String NO_ONE_REP_MAX = "no_one_rep_max";
     static final String NO_TOP_SET = "no_top_set";
     static final String RPE_OUT_OF_RANGE = "rpe_out_of_range";
@@ -52,6 +59,8 @@ class DraftAssembler {
     private final LocalDate startDate;
     private final Instant now;
     private final List<Warning> warnings = new ArrayList<>();
+    /** Новые упражнения по нормализованному названию: одинаковые названия — одно упражнение. */
+    private final Map<String, NewExercise> newExercises = new LinkedHashMap<>();
 
     DraftAssembler(Function<String, ExerciseMatcher.Match> matcher, Map<UUID, Integer> oneRepMaxGrams,
                    LocalDate startDate, Instant now) {
@@ -72,7 +81,8 @@ class DraftAssembler {
         var cycle = new ProgramPayloadV1.Cycle(UUID.randomUUID(), CYCLE_NAME, 0, weeks);
         var program = new ProgramPayloadV1(parsed.name(), parsed.description(), startDate, DRAFT_STATUS, now,
                 List.of(cycle));
-        return new Result(new Draft(UUID.randomUUID(), program), List.copyOf(warnings));
+        return new Result(new Draft(UUID.randomUUID(), program,
+                newExercises.values().stream().map(NewExercise::dto).toList()), List.copyOf(warnings));
     }
 
     private ProgramPayloadV1.Week week(ParsedReply.Week week, int position) {
@@ -88,24 +98,41 @@ class DraftAssembler {
                 weekStart.plusDays(DAYS_IN_WEEK - 1), position, planned);
     }
 
-    /** Каждое упражнение — отдельный блок {@code single}; не найденные пропускаются. */
+    /** Каждое упражнение — отдельный блок {@code single}. */
     private List<ProgramPayloadV1.Block> blocks(ParsedReply.Workout workout) {
         var blocks = new ArrayList<ProgramPayloadV1.Block>();
         for (var parsed : workout.exercises()) {
             var match = matcher.apply(parsed.name());
-            if (match.exercise().isEmpty()) {
-                warnings.add(new Warning(EXERCISE_NOT_FOUND, "Упражнение не найдено: создайте своё или выберите "
-                        + "похожее", parsed.name(), match.suggestions().stream()
-                        .map(found -> new Suggestion(found.id(), found.name())).toList()));
-                continue;
-            }
-            var exercise = match.exercise().get();
+            var exercise = match.exercise().orElseGet(() -> newExercise(parsed, match));
             var planned = new ProgramPayloadV1.Exercise(UUID.randomUUID(), 0, exercise.id(), exercise.name(),
                     exercise.resultType(), parsed.comment(), sets(parsed, exercise));
             blocks.add(new ProgramPayloadV1.Block(UUID.randomUUID(), blocks.size(), SINGLE_BLOCK, null, null, null,
                     null, List.of(planned)));
         }
         return blocks;
+    }
+
+    /** Своё упражнение по названию из программы; предупреждение — один раз на название. */
+    private CatalogExercise newExercise(ParsedReply.Exercise parsed, ExerciseMatcher.Match match) {
+        var key = ExerciseMatcher.normalize(parsed.name());
+        var known = newExercises.get(key);
+        if (known != null) {
+            return known.catalog();
+        }
+        var name = parsed.name().strip();
+        var catalog = new CatalogExercise(UUID.randomUUID(), name, null, resultType(parsed));
+        newExercises.put(key, new NewExercise(catalog.id(), new ExercisePayloadV1(name, null, null,
+                catalog.resultType(), false, null, now, List.of(), List.of()), catalog));
+        warnings.add(new Warning(NEW_EXERCISE, "Упражнения нет в библиотеке: при сохранении будет создано своё, "
+                + "можно заменить на похожее", name, catalog.id(), match.suggestions().stream()
+                .map(found -> new Suggestion(found.id(), found.name())).toList()));
+        return catalog;
+    }
+
+    private static String resultType(ParsedReply.Exercise parsed) {
+        var weighted = parsed.sets().stream().anyMatch(line -> line.reps() != null || line.load() != null
+                && line.load().rpe() == null);
+        return weighted ? WEIGHT_REPS : FREE;
     }
 
     private List<ProgramPayloadV1.Set> sets(ParsedReply.Exercise parsed, CatalogExercise exercise) {
@@ -142,15 +169,15 @@ class DraftAssembler {
         if (load.percentOf1rm() != null) {
             var oneRepMax = oneRepMaxGrams.get(exercise.id());
             if (oneRepMax == null) {
-                warnings.add(new Warning(NO_ONE_REP_MAX, "Нет 1ПМ: вес не посчитан, процент — в заметке подхода",
-                        exercise.name(), List.of()));
+                warnings.add(Warning.about(NO_ONE_REP_MAX, "Нет 1ПМ: вес не посчитан, процент — в заметке подхода",
+                        exercise.name()));
                 return new Computed(null, null, describe(load));
             }
             return new Computed(roundToPlates(oneRepMax * load.percentOf1rm() / PERCENT), null, null);
         }
         if (topSetGrams == null) {
-            warnings.add(new Warning(NO_TOP_SET, "Вес топ-сета неизвестен: процент — в заметке подхода",
-                    exercise.name(), List.of()));
+            warnings.add(Warning.about(NO_TOP_SET, "Вес топ-сета неизвестен: процент — в заметке подхода",
+                    exercise.name()));
             return new Computed(null, null, describe(load));
         }
         return new Computed(roundToPlates(topSetGrams * (1 + load.relativeToTopSet() / PERCENT)), null, null);
@@ -160,8 +187,7 @@ class DraftAssembler {
     private Integer rpeTenths(Load load, CatalogExercise exercise) {
         var tenths = (int) Math.round(load.rpe() * TENTHS / RPE_STEP_TENTHS) * RPE_STEP_TENTHS;
         if (tenths < RPE_MIN_TENTHS || tenths > RPE_MAX_TENTHS) {
-            warnings.add(new Warning(RPE_OUT_OF_RANGE, "RPE вне диапазона 5–10, не задан", exercise.name(),
-                    List.of()));
+            warnings.add(Warning.about(RPE_OUT_OF_RANGE, "RPE вне диапазона 5–10, не задан", exercise.name()));
             return null;
         }
         return tenths;
@@ -188,6 +214,14 @@ class DraftAssembler {
 
     /** Черновик и предупреждения. */
     record Result(Draft draft, List<Warning> warnings) {
+    }
+
+    /** Новое упражнение черновика и его описание для сборки подходов. */
+    private record NewExercise(UUID id, ExercisePayloadV1 exercise, CatalogExercise catalog) {
+
+        ImportDtos.NewExercise dto() {
+            return new ImportDtos.NewExercise(id, exercise);
+        }
     }
 
     private record Computed(Integer weightGrams, Integer rpeTenths, String note) {
