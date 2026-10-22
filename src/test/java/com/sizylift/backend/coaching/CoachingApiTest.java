@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +41,7 @@ class CoachingApiTest extends PostgresIntegrationTest {
 
     static final String ISSUER = "http://keycloak.test/realms/sizylift";
     static final Instant T10 = Instant.parse("2026-10-20T10:00:00Z");
+    static final UUID CATALOG_SQUAT = UUID.fromString("14000000-0000-4000-8000-000000000001");
 
     @Autowired
     MockMvc mvc;
@@ -204,6 +206,100 @@ class CoachingApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void coachExercisesInTheProgramAreCopiedIntoTheAthleteLibrary() throws Exception {
+        accept(athlete, invite(coach));
+        var athleteId = userId(athlete);
+        var coachExercise = UUID.randomUUID();
+        publish(coach, "exercise", coachExercise, 1, fixture("exercise"));
+        var program = UUID.randomUUID();
+        var athleteCursor = cursor(athlete);
+
+        var result = push(coach, programWithExercise(program, athleteId, 0, 1, coachExercise)).get(0);
+
+        assertThat(result.get("status").asString()).isEqualTo("accepted");
+        assertThat(result.get("payloadRewritten").asBoolean()).isTrue();
+        var copy = addedExercise(athleteId, program);
+        assertThat(copy).isNotEqualTo(coachExercise);
+        assertThat(plannedExerciseIds(athleteId, program)).contains(CATALOG_SQUAT);
+        assertThat(jdbc.queryForObject("SELECT user_id FROM sizylift.exercise WHERE id = ?", UUID.class, copy))
+                .isEqualTo(athleteId);
+        assertThat(jdbc.queryForObject("SELECT name FROM sizylift.exercise WHERE id = ?", String.class, copy))
+                .isEqualTo(fixture("exercise").get("name").asString());
+        assertThat(jdbc.queryForObject("SELECT author_user_id FROM sizylift.published_aggregate "
+                + "WHERE user_id = ? AND aggregate_id = ?", UUID.class, athleteId, copy)).isNull();
+        var athleteFeed = changes(athlete, athleteCursor);
+        assertThat(types(athleteFeed)).containsExactly("exercise", "program");
+        assertThat(athleteFeed.get(0).get("id").asString()).isEqualTo(copy.toString());
+        assertThat(athleteFeed.get(1).get("payload").toString()).contains(copy.toString())
+                .doesNotContain(coachExercise.toString());
+        assertThat(push(coach, programItem(UUID.randomUUID(), athleteId, 0, 1, "Без своих упражнений")).get(0)
+                .get("payloadRewritten").asBoolean()).isFalse();
+    }
+
+    @Test
+    void exerciseCopyBelongsToTheAthleteAndSurvivesTheBreak() throws Exception {
+        var linkId = accept(athlete, invite(coach));
+        var athleteId = userId(athlete);
+        var coachExercise = UUID.randomUUID();
+        publish(coach, "exercise", coachExercise, 1, fixture("exercise"));
+        var program = UUID.randomUUID();
+        var revision = push(coach, programWithExercise(program, athleteId, 0, 1, coachExercise)).get(0)
+                .get("revision").asLong();
+        var copy = addedExercise(athleteId, program);
+        var copyRevision = jdbc.queryForObject("SELECT revision FROM sizylift.published_aggregate "
+                + "WHERE user_id = ? AND aggregate_id = ?", Long.class, athleteId, copy);
+        var renamed = fixture("exercise");
+        renamed.put("name", "Моё название");
+        assertThat(outcome(push(athlete, item("exercise", copy, null, copyRevision, 1, renamed))))
+                .isEqualTo("accepted");
+
+        push(coach, programWithExercise(program, athleteId, revision, 2, coachExercise));
+        assertThat(jdbc.queryForObject("SELECT name FROM sizylift.exercise WHERE id = ?", String.class, copy))
+                .as("копия уже упражнение подопечного, повторная запись программы её не перезаписывает")
+                .isEqualTo("Моё название");
+
+        call(athlete, delete("/api/v2/coaching/links/" + linkId)).andExpect(status().isNoContent());
+        var tombstone = new HashMap<String, Object>();
+        tombstone.put("type", "exercise");
+        tombstone.put("id", coachExercise);
+        tombstone.put("version", 2);
+        tombstone.put("schemaVersion", 1);
+        tombstone.put("deleted", true);
+        call(coach, post("/api/v1/publication/batch").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("items", List.of(tombstone))))).andExpect(status().isOk());
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE id = ?", Long.class,
+                coachExercise)).isZero();
+        assertThat(jdbc.queryForObject("SELECT user_id FROM sizylift.exercise WHERE id = ?", UUID.class, copy))
+                .isEqualTo(athleteId);
+        assertThat(jdbc.queryForObject("SELECT deleted FROM sizylift.published_aggregate "
+                + "WHERE user_id = ? AND aggregate_id = ?", Boolean.class, athleteId, copy)).isFalse();
+    }
+
+    @Test
+    void deletedCopyComesBackWhenTheCoachUsesTheExerciseAgain() throws Exception {
+        accept(athlete, invite(coach));
+        var athleteId = userId(athlete);
+        var coachExercise = UUID.randomUUID();
+        publish(coach, "exercise", coachExercise, 1, fixture("exercise"));
+        var program = UUID.randomUUID();
+        var revision = push(coach, programWithExercise(program, athleteId, 0, 1, coachExercise)).get(0)
+                .get("revision").asLong();
+        var copy = jdbc.queryForObject("SELECT id FROM sizylift.exercise WHERE user_id = ?", UUID.class, athleteId);
+        var copyRevision = jdbc.queryForObject("SELECT revision FROM sizylift.published_aggregate "
+                + "WHERE user_id = ? AND aggregate_id = ?", Long.class, athleteId, copy);
+        var deletion = item("exercise", copy, null, copyRevision, 1, null);
+        deletion.put("deleted", true);
+        assertThat(outcome(push(athlete, deletion))).isEqualTo("accepted");
+
+        assertThat(outcome(push(coach, programWithExercise(program, athleteId, revision, 2, coachExercise))))
+                .isEqualTo("accepted");
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE id = ? AND user_id = ?",
+                Long.class, copy, athleteId)).isEqualTo(1);
+    }
+
+    @Test
     void coachCannotWriteOtherDataAndStrangersCannotWriteAtAll() throws Exception {
         accept(athlete, invite(coach));
         var athleteId = userId(athlete);
@@ -336,6 +432,30 @@ class CoachingApiTest extends PostgresIntegrationTest {
         var payload = fixture("program");
         payload.put("name", name);
         return item("program", id, ownerId, baseRevision, clientVersion, payload);
+    }
+
+    private Map<String, Object> programWithExercise(UUID id, UUID ownerId, long baseRevision, long clientVersion,
+                                                    UUID exerciseId) throws Exception {
+        var payload = fixture("program");
+        var exercises = (ArrayNode) payload.get("cycles").get(0).get("weeks").get(0).get("workouts").get(0)
+                .get("blocks").get(0).get("exercises");
+        var added = exercises.get(0).deepCopy();
+        ((ObjectNode) added).put("id", UUID.randomUUID().toString()).put("position", 1)
+                .put("exerciseId", exerciseId.toString());
+        added.get("sets").forEach(set -> ((ObjectNode) set).put("id", UUID.randomUUID().toString()));
+        exercises.add(added);
+        return item("program", id, ownerId, baseRevision, clientVersion, payload);
+    }
+
+    /** Упражнение программы, кроме каталожного приседа из фикстуры. */
+    private UUID addedExercise(UUID ownerId, UUID programId) {
+        return plannedExerciseIds(ownerId, programId).stream().filter(id -> !id.equals(CATALOG_SQUAT))
+                .findFirst().orElseThrow();
+    }
+
+    private List<UUID> plannedExerciseIds(UUID ownerId, UUID programId) {
+        return jdbc.queryForList("SELECT exercise_id FROM sizylift.planned_exercise WHERE user_id = ? "
+                + "AND program_id = ? ORDER BY position, id", UUID.class, ownerId, programId);
     }
 
     private Map<String, Object> item(String type, UUID id, UUID ownerId, long baseRevision, long clientVersion,

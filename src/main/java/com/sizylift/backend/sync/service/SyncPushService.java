@@ -4,16 +4,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import com.sizylift.backend.access.service.AccessPolicy;
 import com.sizylift.backend.publication.dto.ItemStatus;
 import com.sizylift.backend.publication.dto.RejectionReason;
 import com.sizylift.backend.publication.dto.payload.PayloadV1;
+import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateArbiter;
 import com.sizylift.backend.publication.service.AggregateChangeListener;
 import com.sizylift.backend.publication.service.AggregatePublisher;
+import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.publication.service.IdConflictException;
 import com.sizylift.backend.publication.service.PayloadParser;
 import com.sizylift.backend.sync.dto.SyncPushRequest.Item;
@@ -42,11 +45,13 @@ public class SyncPushService {
     private final AggregateArbiter arbiter;
     private final AggregateChangeListener feed;
     private final AccessPolicy access;
+    private final CoachExerciseAdoption coachExercises;
     private final SyncMetrics metrics;
 
     SyncPushService(List<AggregatePublisher<?>> publishers, PublishedAggregateRepository aggregates,
                     TransactionTemplate transactions, PayloadParser parser, AggregateArbiter arbiter,
-                    AggregateChangeListener feed, AccessPolicy access, SyncMetrics metrics) {
+                    AggregateChangeListener feed, AccessPolicy access, CoachExerciseAdoption coachExercises,
+                    SyncMetrics metrics) {
         this.publishers = publishers.stream()
                 .collect(Collectors.toUnmodifiableMap(AggregatePublisher::type, Function.identity()));
         this.aggregates = aggregates;
@@ -55,6 +60,7 @@ public class SyncPushService {
         this.arbiter = arbiter;
         this.feed = feed;
         this.access = access;
+        this.coachExercises = coachExercises;
         this.metrics = metrics;
     }
 
@@ -91,19 +97,36 @@ public class SyncPushService {
 
     private <P extends PayloadV1> ItemResult replace(Write write, AggregatePublisher<P> publisher) {
         var payload = parser.parse(write.item().payload(), publisher.payloadType());
-        return store(write, () -> publisher.replace(write.ownerId(), write.item().id(), payload));
+        if (payload instanceof ProgramPayloadV1 program && !write.byOwner()) {
+            return store(write, () -> replaceCoachProgram(write, publisher, program));
+        }
+        return store(write, () -> {
+            publisher.replace(write.ownerId(), write.item().id(), payload);
+            return Effects.NONE;
+        });
+    }
+
+    /** Программа тренера: его упражнения сначала копируются в библиотеку подопечного. */
+    private <P extends PayloadV1> Effects replaceCoachProgram(Write write, AggregatePublisher<P> publisher,
+                                                              ProgramPayloadV1 program) {
+        var adoption = coachExercises.adopt(write.callerId(), write.ownerId(), program);
+        publisher.replace(write.ownerId(), write.item().id(), publisher.payloadType().cast(adoption.program()));
+        return new Effects(adoption.copies(), adoption.rewritten(program));
     }
 
     /** Удаление — та же запись с tombstone: конкурирует с правкой по {@code changedAt}. */
     private ItemResult delete(Write write, AggregatePublisher<?> publisher) {
-        return store(write, () -> publisher.delete(write.ownerId(), write.item().id()));
+        return store(write, () -> {
+            publisher.delete(write.ownerId(), write.item().id());
+            return Effects.NONE;
+        });
     }
 
     /**
      * Порядок блокировок во всех записях: аккаунт владельца (разделяемая), строка агрегата, курсоры лент.
      * Изменения связей берут аккаунт подопечного исключительно, поэтому права и фан-аут не меняются до коммита.
      */
-    private ItemResult store(Write write, Runnable data) {
+    private ItemResult store(Write write, Supplier<Effects> data) {
         var item = write.item();
         var ownerId = write.ownerId();
         return transactions.execute(status -> {
@@ -132,7 +155,7 @@ public class SyncPushService {
             }
             var lost = conflict && state.exists() ? arbiter.captureStored(ownerId, item.type(), item.id(), state)
                     : null;
-            data.run();
+            var effects = data.get();
             var revision = aggregates.storeSynced(ownerId, item.type(), item.id(), item.deleted(), changedAt,
                     item.clientId(), item.clientVersion());
             if (!state.exists() && !write.callerId().equals(ownerId)) {
@@ -141,12 +164,25 @@ public class SyncPushService {
             if (lost != null) {
                 arbiter.storedLost(lost, revision);
             }
+            for (var copy : effects.copies()) {
+                feed.changed(ownerId, AggregateType.EXERCISE, copy.id(), copy.revision(), false);
+            }
             feed.changed(ownerId, item.type(), item.id(), revision, item.deleted());
-            return ItemResult.of(item, ItemStatus.ACCEPTED, revision);
+            return ItemResult.accepted(item, revision, effects.payloadRewritten());
         });
     }
 
     /** Кто пишет, чьи данные и что. */
     private record Write(UUID callerId, UUID ownerId, Item item) {
+
+        boolean byOwner() {
+            return callerId.equals(ownerId);
+        }
+    }
+
+    /** Побочные результаты записи данных: созданные копии упражнений и замена payload. */
+    private record Effects(List<CoachExerciseAdoption.CopiedExercise> copies, boolean payloadRewritten) {
+
+        static final Effects NONE = new Effects(List.of(), false);
     }
 }
