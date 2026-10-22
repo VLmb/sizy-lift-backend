@@ -8,8 +8,11 @@ import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.InjuryPayloadV1;
 import com.sizylift.backend.publication.dto.payload.OneRepMaxPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.dto.payload.WorkoutCommentPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
+import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.AthleteDataRepository;
+import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.springframework.context.annotation.Bean;
@@ -60,6 +63,18 @@ class AggregatePublishers {
     AggregatePublisher<ContraindicationPayloadV1> contraindicationPublisher(AthleteDataRepository athlete) {
         return new AggregatePublisher<>(AggregateType.CONTRAINDICATION, ContraindicationPayloadV1.class,
                 athlete::insertContraindication, athlete::deleteContraindication);
+    }
+
+    @Bean
+    AggregatePublisher<WorkoutReschedulePayloadV1> workoutReschedulePublisher(BetweenDataRepository between) {
+        return new AggregatePublisher<>(AggregateType.WORKOUT_RESCHEDULE, WorkoutReschedulePayloadV1.class,
+                between::insertReschedule, between::deleteReschedule);
+    }
+
+    @Bean
+    AggregatePublisher<WorkoutCommentPayloadV1> workoutCommentPublisher(BetweenDataRepository between) {
+        return new AggregatePublisher<>(AggregateType.WORKOUT_COMMENT, WorkoutCommentPayloadV1.class,
+                between::insertComment, between::deleteComment);
     }
 
     /** Своя копия пользователя уже удалена, поэтому оставшаяся строка принадлежит каталогу или другому пользователю. */

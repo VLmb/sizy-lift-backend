@@ -28,7 +28,8 @@ public class SyncFeedRepository {
             DO UPDATE SET seq = EXCLUDED.seq, revision = EXCLUDED.revision, kind = EXCLUDED.kind
             """;
     private static final String SELECT_PAGE = """
-            SELECT f.seq, f.owner_user_id, f.type, f.aggregate_id, f.revision, f.kind, a.changed_at
+            SELECT f.seq, f.owner_user_id, f.type, f.aggregate_id, f.revision, f.kind, a.changed_at,
+                a.author_user_id
             FROM sizylift.sync_feed f
             LEFT JOIN sizylift.published_aggregate a
                 ON a.user_id = f.owner_user_id AND a.type = f.type AND a.aggregate_id = f.aggregate_id
@@ -118,6 +119,7 @@ public class SyncFeedRepository {
         var changedAt = row.getObject("changed_at", OffsetDateTime.class);
         return new FeedEntry(row.getLong("seq"), row.getObject("owner_user_id", UUID.class),
                 row.getString("type"), row.getObject("aggregate_id", UUID.class), row.getLong("revision"),
-                FeedKind.of(row.getString("kind")), changedAt == null ? null : changedAt.toInstant());
+                FeedKind.of(row.getString("kind")), changedAt == null ? null : changedAt.toInstant(),
+                row.getObject("author_user_id", UUID.class));
     }
 }

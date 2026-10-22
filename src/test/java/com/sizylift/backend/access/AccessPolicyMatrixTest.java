@@ -24,7 +24,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AccessPolicyMatrixTest extends PostgresIntegrationTest {
 
     static final List<String> TYPES = List.of("workout", "program", "exercise", "athlete_profile", "one_rep_max",
-            "injury", "contraindication");
+            "injury", "contraindication", "workout_reschedule", "workout_comment");
+    /** Тренер пишет за подопечного свои программы и свои комментарии; переносы — только подопечный. */
+    static final List<String> COACH_WRITES = List.of("program", "workout_comment");
     static final List<String> HEALTH_TYPES = List.of("injury", "contraindication");
 
     enum Role {
@@ -69,12 +71,12 @@ class AccessPolicyMatrixTest extends PostgresIntegrationTest {
         assertThat(access.recipients(world.athlete(), type).contains(caller)).as("fan-out")
                 .isEqualTo(expectedRead(role, type, healthAccess));
         assertThat(access.canWrite(caller, world.athlete(), type, null, false)).as("create")
-                .isEqualTo(role == Role.OWNER || role == Role.ACTIVE_COACH && type.equals("program"));
+                .isEqualTo(role == Role.OWNER || role == Role.ACTIVE_COACH && COACH_WRITES.contains(type));
         assertThat(access.canWrite(caller, world.athlete(), type, null, true)).as("edit owner's aggregate")
                 .isEqualTo(role == Role.OWNER);
         assertThat(access.canWrite(caller, world.athlete(), type, world.activeCoach(), true))
                 .as("edit active coach's aggregate")
-                .isEqualTo(role == Role.ACTIVE_COACH && type.equals("program"));
+                .isEqualTo(role == Role.ACTIVE_COACH && COACH_WRITES.contains(type));
         assertThat(access.canWrite(caller, world.athlete(), type, world.endedCoach(), true))
                 .as("edit ended coach's aggregate").isFalse();
     }

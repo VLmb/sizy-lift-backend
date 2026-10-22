@@ -13,8 +13,11 @@ import tools.jackson.databind.JsonNode;
  */
 public record SyncChangesResponse(List<Change> changes, long nextCursor, boolean hasMore) {
 
-    /** {@code payload} и {@code schemaVersion} есть только у {@code upsert}. */
+    /**
+     * {@code payload} и {@code schemaVersion} есть только у {@code upsert}. {@code authorId} — автор, если
+     * агрегат пишет не владелец (программа или комментарий тренера); иначе {@code null}.
+     */
     public record Change(long seq, UUID ownerId, String type, UUID id, long revision, FeedKind kind,
-                         Instant changedAt, Integer schemaVersion, JsonNode payload) {
+                         Instant changedAt, UUID authorId, Integer schemaVersion, JsonNode payload) {
     }
 }
