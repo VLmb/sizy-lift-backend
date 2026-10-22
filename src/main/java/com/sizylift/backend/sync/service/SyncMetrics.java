@@ -17,6 +17,8 @@ class SyncMetrics {
 
     static final String PUSH_OBSERVATION = "sizylift.sync.push";
     static final String PUSH_ITEMS_METER = "sizylift.sync.push.items";
+    /** Клиент прислал ревизию новее серверной: так бывает после восстановления базы из бэкапа. */
+    static final String BASE_AHEAD_METER = "sizylift.sync.push.base.ahead";
     static final String UNKNOWN_TYPE = "unknown";
 
     private final MeterRegistry meters;
@@ -33,6 +35,11 @@ class SyncMetrics {
         return Observation.createNotStarted(PUSH_OBSERVATION, observations)
                 .contextualName("sync push")
                 .observe(push);
+    }
+
+    /** Вызывается только для известного типа: неизвестные отклоняются раньше. */
+    void countBaseAhead(String type) {
+        meters.counter(BASE_AHEAD_METER, "type", type).increment();
     }
 
     void count(ItemResult result) {

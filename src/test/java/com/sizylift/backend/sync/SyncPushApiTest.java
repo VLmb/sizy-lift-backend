@@ -182,6 +182,58 @@ class SyncPushApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void retryOfAnAppliedEditDoesNotRollBackALaterEditFromAnotherClient() throws Exception {
+        var applied = revision(push(edit(0, T12, PHONE, 5, "phone v5")).get(0));
+        push(edit(applied, T10, WEB, 1, "web, clock behind"));
+
+        var retry = push(edit(0, T12, PHONE, 5, "phone v5")).get(0);
+
+        assertThat(retry.get("status").asString()).isEqualTo("stale");
+        assertThat(name()).isEqualTo("web, clock behind");
+        assertThat(conflicts()).isZero();
+    }
+
+    @Test
+    void retryOfAnAppliedEditIsNotReportedAsSuperseded() throws Exception {
+        var applied = revision(push(edit(0, T10, PHONE, 5, "phone v5")).get(0));
+        var web = revision(push(edit(applied, T12, WEB, 1, "web")).get(0));
+
+        var retry = push(edit(0, T10, PHONE, 5, "phone v5")).get(0);
+
+        assertThat(retry.get("status").asString()).isEqualTo("stale");
+        assertThat(revision(retry)).isEqualTo(web);
+        assertThat(conflicts()).isZero();
+    }
+
+    @Test
+    void baseRevisionAheadOfTheServerIsResolvedByChangedAtAndCounted() throws Exception {
+        var current = revision(push(edit(0, T12, WEB, 1, "web")).get(0));
+        var ahead = baseAheadCount();
+
+        var older = push(edit(current + 1000, T10, PHONE, 1, "restored phone, older")).get(0);
+        var newer = push(edit(current + 1000, T12.plusSeconds(60), PHONE, 2, "restored phone, newer")).get(0);
+
+        assertThat(older.get("status").asString()).isEqualTo("superseded");
+        assertThat(newer.get("status").asString()).isEqualTo("accepted");
+        assertThat(name()).isEqualTo("restored phone, newer");
+        assertThat(baseAheadCount()).isEqualTo(ahead + 2);
+    }
+
+    @Test
+    void writesKeepTheAuthorOfTheAggregate() throws Exception {
+        var base = revision(push(edit(0, T10, PHONE, 1, "a")).get(0));
+        var author = UUID.randomUUID();
+        jdbc.update("UPDATE sizylift.published_aggregate SET author_user_id = ? "
+                + "WHERE user_id = ? AND aggregate_id = ?", author, userId(), id);
+
+        push(edit(base, T12, PHONE, 2, "b"));
+        legacyStatus(legacy(1, T12.plusSeconds(60), "c"));
+
+        assertThat(name()).isEqualTo("c");
+        assertThat(state().get("author_user_id")).isEqualTo(author);
+    }
+
+    @Test
     void deletionCompetesByChangedAtLikeAnEdit() throws Exception {
         var base = revision(push(edit(0, T10, PHONE, 1, "phone")).get(0));
 
@@ -333,6 +385,7 @@ class SyncPushApiTest extends PostgresIntegrationTest {
         assertThat(meters.get("sizylift.sync.push").timer().count()).isPositive();
         meters.getMeters().stream()
                 .filter(m -> m.getId().getName().equals("sizylift.sync.push.items")
+                        || m.getId().getName().equals("sizylift.sync.push.base.ahead")
                         || m.getId().getName().equals("sizylift.sync.conflicts"))
                 .forEach(m -> assertThat(m.getId().getTags()).allMatch(
                         tag -> tag.getKey().equals("type") || tag.getKey().equals("status")
@@ -464,6 +517,11 @@ class SyncPushApiTest extends PostgresIntegrationTest {
     private double conflictCount(String outcome) {
         var counter = meters.find("sizylift.sync.conflicts").tags("type", CONTRAINDICATION, "outcome", outcome)
                 .counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    private double baseAheadCount() {
+        var counter = meters.find("sizylift.sync.push.base.ahead").tags("type", CONTRAINDICATION).counter();
         return counter == null ? 0 : counter.count();
     }
 

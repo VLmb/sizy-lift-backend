@@ -98,11 +98,15 @@ public class SyncPushService {
     private ItemResult store(UUID userId, Item item, Runnable write) {
         return transactions.execute(status -> {
             var state = aggregates.lock(userId, item.type(), item.id());
-            if (isRepeat(state.sourceClientId(), state.sourceVersion(), item)) {
+            if (item.clientVersion() <= aggregates.clientVersion(userId, item.type(), item.id(), item.clientId())) {
                 return ItemResult.of(item, ItemStatus.STALE, state.revision());
             }
+            aggregates.rememberClientVersion(userId, item.type(), item.id(), item.clientId(), item.clientVersion());
+            if (item.baseRevision() > state.revision()) {
+                metrics.countBaseAhead(item.type());
+            }
             var changedAt = arbiter.effectiveChangedAt(item.changedAt());
-            var conflict = item.baseRevision() < state.revision();
+            var conflict = item.baseRevision() != state.revision();
             if (conflict && !arbiter.incomingWins(changedAt, state)) {
                 arbiter.incomingLost(userId, item.type(), item.id(), item.payload(), changedAt, item.clientId(),
                         state.revision());
@@ -111,16 +115,10 @@ public class SyncPushService {
             write.run();
             var revision = aggregates.storeSynced(userId, item.type(), item.id(), item.deleted(), changedAt,
                     item.clientId(), item.clientVersion());
-            if (conflict) {
+            if (conflict && state.revision() > 0) {
                 arbiter.storedLost(userId, item.type(), item.id(), state, revision);
             }
             return ItemResult.of(item, ItemStatus.ACCEPTED, revision);
         });
-    }
-
-    /** Повторная доставка уже применённой правки того же клиента. */
-    private static boolean isRepeat(String sourceClientId, Long sourceVersion, Item item) {
-        return item.clientId().equals(sourceClientId) && sourceVersion != null
-                && item.clientVersion() <= sourceVersion;
     }
 }

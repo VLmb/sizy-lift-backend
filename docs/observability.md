@@ -28,6 +28,8 @@ OTLP-экспорт идёт параллельно. В логах и трейс
   (`accepted`/`superseded`/`stale`/`rejected`).
 - `sizylift.sync.conflicts{type, outcome}` — конфликты записи: `accepted` (входящая правка выиграла),
   `superseded` (проиграла); считаются и для проигрышей публикации v1.
+- `sizylift.sync.push.base.ahead{type}` — клиент прислал `baseRevision` новее серверной ревизии
+  (восстановление базы из бэкапа или ошибка клиента); такая правка решается как конфликт.
 - `sizylift.sync.push` — наблюдение (таймер + span `sync push`) на обработку пачки v2.
 
 SQL-запросы отдельными span'ами пока не трассируются.

@@ -11,7 +11,10 @@ import org.springframework.stereotype.Repository;
 
 import static com.sizylift.backend.publication.repository.Sql.timestamp;
 
-/** Состояние опубликованных агрегатов: версия телефона, серверная ревизия, время и автор последней записи. */
+/**
+ * Состояние опубликованных агрегатов: версия телефона, серверная ревизия, время и клиент последней записи.
+ * Автора ({@code author_user_id}) запись не меняет: его ставят только создание и передача программы тренера.
+ */
 @Repository
 public class PublishedAggregateRepository {
 
@@ -28,17 +31,27 @@ public class PublishedAggregateRepository {
             """;
     private static final String STORE_SYNCED = """
             UPDATE sizylift.published_aggregate
-            SET revision = nextval('sizylift.aggregate_revision_seq'), changed_at = ?, author_user_id = NULL,
-                source_client_id = ?, source_version = ?, deleted = ?, received_at = now()
+            SET revision = nextval('sizylift.aggregate_revision_seq'), changed_at = ?, source_client_id = ?,
+                source_version = ?, deleted = ?, received_at = now()
             WHERE user_id = ? AND type = ? AND aggregate_id = ?
             RETURNING revision
             """;
     private static final String STORE_LEGACY = """
             UPDATE sizylift.published_aggregate
-            SET revision = nextval('sizylift.aggregate_revision_seq'), changed_at = ?, author_user_id = NULL,
-                source_client_id = NULL, source_version = NULL, version = ?, deleted = ?, received_at = now()
+            SET revision = nextval('sizylift.aggregate_revision_seq'), changed_at = ?, source_client_id = NULL,
+                source_version = NULL, version = ?, deleted = ?, received_at = now()
             WHERE user_id = ? AND type = ? AND aggregate_id = ?
             RETURNING revision
+            """;
+    private static final String SELECT_CLIENT_VERSION = """
+            SELECT version FROM sizylift.aggregate_client_version
+            WHERE user_id = ? AND type = ? AND aggregate_id = ? AND client_id = ?
+            """;
+    private static final String UPSERT_CLIENT_VERSION = """
+            INSERT INTO sizylift.aggregate_client_version (user_id, type, aggregate_id, client_id, version)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (user_id, type, aggregate_id, client_id)
+            DO UPDATE SET version = GREATEST(aggregate_client_version.version, EXCLUDED.version)
             """;
 
     private final JdbcTemplate jdbc;
@@ -69,6 +82,16 @@ public class PublishedAggregateRepository {
                             Instant changedAt) {
         return jdbc.queryForObject(STORE_LEGACY, Long.class, timestamp(changedAt), version, deleted, userId, type,
                 aggregateId);
+    }
+
+    /** Последняя обработанная правка клиента по агрегату ({@code 0}, если клиент его не писал). */
+    public long clientVersion(UUID userId, String type, UUID aggregateId, String clientId) {
+        return jdbc.query(SELECT_CLIENT_VERSION, (row, rowNumber) -> row.getLong(1), userId, type, aggregateId,
+                clientId).stream().findFirst().orElse(0L);
+    }
+
+    public void rememberClientVersion(UUID userId, String type, UUID aggregateId, String clientId, long version) {
+        jdbc.update(UPSERT_CLIENT_VERSION, userId, type, aggregateId, clientId, version);
     }
 
     private static AggregateState state(ResultSet row, int rowNumber) throws SQLException {
