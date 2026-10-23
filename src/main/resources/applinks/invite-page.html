@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Приглашение в SizyLift</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f6f4; --card: #fff; --text: #1b1b1b; --muted: #5f6368; --accent: #1f6feb; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #121212; --card: #1e1e1e; --text: #f1f1f1; --muted: #a0a4a8; --accent: #4c8dff; } }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+         background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { box-sizing: border-box; width: 100%; max-width: 420px; margin: 16px; padding: 28px 24px;
+         background: var(--card); border-radius: 16px; text-align: center; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p { margin: 0 0 20px; color: var(--muted); }
+  .open { display: block; padding: 14px; border-radius: 12px; background: var(--accent); color: #fff;
+          text-decoration: none; font-weight: 600; }
+  .stores { display: flex; gap: 8px; justify-content: center; margin: 16px 0 0; }
+  .store { flex: 1; padding: 10px; border: 1px solid var(--muted); border-radius: 10px; color: var(--text);
+           text-decoration: none; }
+  .code { margin-top: 24px; font-size: 14px; color: var(--muted); }
+  code { display: block; margin-top: 6px; padding: 10px; border-radius: 8px; background: var(--bg);
+         color: var(--text); font-size: 18px; letter-spacing: 1px; user-select: all; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Тренер приглашает вас в SizyLift</h1>
+  <p>Откройте приглашение в приложении: тренер увидит ваши тренировки и сможет составлять программы.</p>
+  <a class="open" href="{{appLink}}">Открыть в приложении</a>
+  <div class="stores">{{storeLinks}}</div>
+  <div class="code">
+    Ещё нет приложения? Установите SizyLift, войдите и введите код в профиле, пункт «Код тренера»:
+    <code>{{token}}</code>
+  </div>
+</main>
+</body>
+</html>

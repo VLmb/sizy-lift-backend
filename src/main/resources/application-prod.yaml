@@ -17,6 +17,14 @@ spring:
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
 
 sizylift:
+  app-links:
+    # Apple Developer Team ID and SHA-256 fingerprints of the Android signing certificates (comma-separated).
+    apple-team-id: ${APPLE_TEAM_ID}
+    android-cert-fingerprints: ${ANDROID_CERT_FINGERPRINTS}
+  keycloak-admin:
+    # Internal address of Keycloak, e.g. http://keycloak:8080
+    url: ${KEYCLOAK_ADMIN_URL}
+    client-secret: ${KEYCLOAK_BACKEND_CLIENT_SECRET}
   notifications:
     enabled: true
     expo:

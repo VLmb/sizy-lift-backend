@@ -15,7 +15,9 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
 
-    private static final String[] PUBLIC_PATHS = {"/actuator/health", "/actuator/health/**", "/error"};
+    /** Здоровье, страница ссылки приглашения и файлы связи домена с приложением (docs/coaching.md). */
+    private static final String[] PUBLIC_PATHS = {"/actuator/health", "/actuator/health/**", "/error",
+        "/invite/*", "/.well-known/apple-app-site-association", "/.well-known/assetlinks.json"};
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

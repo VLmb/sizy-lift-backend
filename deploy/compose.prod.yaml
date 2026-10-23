@@ -42,6 +42,12 @@ services:
       OTLP_ENDPOINT: http://otel-lgtm:4318
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:?Set EXPO_ACCESS_TOKEN}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?Set DEEPSEEK_API_KEY}
+      # Account deletion through the Keycloak Admin API, inside the Docker network.
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      KEYCLOAK_BACKEND_CLIENT_SECRET: ${KEYCLOAK_BACKEND_CLIENT_SECRET:?Set KEYCLOAK_BACKEND_CLIENT_SECRET}
+      # Universal Links / App Links for invite links; empty switches the /.well-known file off.
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      ANDROID_CERT_FINGERPRINTS: ${ANDROID_CERT_FINGERPRINTS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -99,6 +105,7 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}
       # Realm import placeholders (keycloak/realm-sizylift.json), applied on the first start only.
       KC_REALM_SSL_REQUIRED: all
+      KEYCLOAK_BACKEND_CLIENT_SECRET: ${KEYCLOAK_BACKEND_CLIENT_SECRET:?Set KEYCLOAK_BACKEND_CLIENT_SECRET}
       KC_SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST}
       KC_SMTP_PORT: ${SMTP_PORT:?Set SMTP_PORT}
       KC_SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM}

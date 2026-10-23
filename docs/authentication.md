@@ -52,6 +52,8 @@ Keycloak — сервер авторизации (OpenID Provider): регист
 | Scope по умолчанию | `openid profile email` |
 | Дополнительно | `offline_access` — долгоживущий refresh token |
 
+Второй клиент realm — `sizylift-backend`, только для удаления пользователей (см. «Удаление аккаунта»).
+
 Endpoints (discovery: `<issuer>/.well-known/openid-configuration`):
 
 - authorization: `<issuer>/protocol/openid-connect/auth`
@@ -126,6 +128,37 @@ Spring Security (`spring-boot-starter-security-oauth2-resource-server`) пров
   "createdAt": "2026-10-18T12:40:58.588962Z"
 }
 ```
+
+### `DELETE /api/v1/me` → `204`
+
+Удаление аккаунта (требование App Store и Google Play к приложениям с регистрацией). Без подтверждения на
+сервере: приложение спрашивает пользователя заранее.
+
+## Удаление аккаунта
+
+1. Пользователь удаляется в Keycloak через Admin API (`DELETE /admin/realms/sizylift/users/{sub}`): сессии
+   и refresh-токены перестают действовать, войти тем же паролем или через Google нельзя, e-mail свободен для
+   новой регистрации. Если Keycloak недоступен или отказал — `503`, в базе ничего не удалено, запрос можно
+   повторить. Уже удалённый пользователь (`404` от Keycloak) — не ошибка.
+2. В одной транзакции: все связи пользователя разрываются по правилам `DELETE /api/v2/coaching/links/{id}`
+   ([coaching.md](coaching.md)) — программы удаляемого тренера переходят подопечным, тренер удаляемого
+   подопечного получает `revoke` по его данным; затем удаляется строка `user_account`.
+3. Остальное удаляют каскады внешних ключей на `user_account`: опубликованные агрегаты и их таблицы,
+   ревизии, конфликты, лента и курсор, устройства и очередь уведомлений, приглашения и связи, сессии
+   импорта, свои упражнения.
+
+Остаются только чужие данные со ссылкой на удалённого: комментарии удалённого тренера в тренировках
+подопечного (автор — его id, имени больше нет) и строки `revoke` в лентах других пользователей (поэтому
+у `sync_feed.owner_user_id` нет внешнего ключа). Access token живёт до 5 минут после удаления: запрос с ним
+создаст новый пустой аккаунт с тем же `sub`, повторный `DELETE` удалит его.
+
+Бэкенд ходит в Admin API как конфиденциальный клиент `sizylift-backend` (client credentials, service
+account с единственной ролью `realm-management/manage-users`). Секрет — `KEYCLOAK_BACKEND_CLIENT_SECRET`:
+переменная окружения Keycloak (подставляется в realm-файл при импорте) и бэкенда; адрес — внутренний
+`KEYCLOAK_ADMIN_URL` (`http://keycloak:8080`). При `KC_HOSTNAME=https://…` Keycloak считает такой запрос
+пришедшим на публичный HTTPS-адрес, поэтому `sslRequired: all` его не отклоняет
+(`KeycloakAccountDeletionIntegrationTest`). Пользователь из другого issuer (после смены провайдера) в
+Keycloak не удаляется.
 
 ## Локальная разработка
 

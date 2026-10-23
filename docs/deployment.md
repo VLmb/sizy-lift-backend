@@ -6,7 +6,7 @@
 интернет ──443──▶ Caddy ──▶ api.<домен>  → backend:8080      (Spring Boot, профиль prod)
                         └─▶ auth.<домен> → keycloak:8080     (start --optimized, /admin закрыт)
 backend ──▶ postgres (данные SizyLift)
-backend ──▶ keycloak:8080 (JWKS по внутренней сети)
+backend ──▶ keycloak:8080 (JWKS и Admin API для удаления аккаунтов, по внутренней сети)
 backend ──▶ exp.host (Expo Push, HTTPS)
 backend ──▶ api.deepseek.com, docs.google.com, *.googleusercontent.com (ИИ-импорт, HTTPS)
 keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
@@ -26,6 +26,14 @@ keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
   (https://platform.deepseek.com/api_keys) и скачивает Google Таблицы по ссылке. Без ключа приложение
   не стартует. Провайдер модели — сервис в Китае: это нужно указать в политике конфиденциальности.
   Подробности — [imports.md](imports.md).
+
+- **Удаление аккаунта** удаляет пользователя Keycloak клиентом `sizylift-backend` с секретом
+  `KEYCLOAK_BACKEND_CLIENT_SECRET` (обязателен; Keycloak получает его при первом импорте realm).
+  Подробности — [authentication.md](authentication.md#удаление-аккаунта).
+- **Ссылки приглашений** `https://api.<домен>/invite/<токен>` открывают приложение, если заданы
+  `APPLE_TEAM_ID` и `ANDROID_CERT_FINGERPRINTS` (необязательны: без них работают как обычная страница).
+  Caddy настраивать не нужно — весь `api.<домен>` уже проксируется в бэкенд. Подробности —
+  [coaching.md](coaching.md#ссылка-приглашения).
 
 Минимальный сервер: 2 vCPU, 4 ГБ RAM (приложение ~1,3 ГБ, телеметрия `otel-lgtm` ещё ~1–1,5 ГБ),
 Docker Engine и Compose v2.
@@ -77,7 +85,10 @@ Liquibase применяет новые changeset-файлы при старте
 обратно совместимы.
 
 Изменения `keycloak/realm-sizylift.json` **не применяются** к уже созданному realm:
-их нужно повторить в админке.
+их нужно повторить в админке. Например, если realm создан до появления клиента `sizylift-backend`:
+Clients → Create client `sizylift-backend` (Client authentication — on, только Service accounts roles),
+вкладка Credentials — секрет из `KEYCLOAK_BACKEND_CLIENT_SECRET`, вкладка Service accounts roles →
+Assign role → client `realm-management`, роль `manage-users`.
 
 ## Резервные копии
 

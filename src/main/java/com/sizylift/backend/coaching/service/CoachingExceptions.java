@@ -14,7 +14,7 @@ public final class CoachingExceptions {
     public static class NotFound extends RuntimeException {
     }
 
-    /** Приглашение использовано или истекло. */
+    /** Приглашение использовано, отозвано или истекло. */
     @ResponseStatus(HttpStatus.GONE)
     public static class InviteGone extends RuntimeException {
     }
@@ -24,7 +24,10 @@ public final class CoachingExceptions {
     public static class Forbidden extends RuntimeException {
     }
 
-    /** Состояние не позволяет: своё приглашение, у подопечного уже есть тренер, связь разорвана. */
+    /**
+     * Состояние не позволяет: своё приглашение, у подопечного уже есть тренер, связь разорвана, отзывается
+     * принятое приглашение.
+     */
     @ResponseStatus(HttpStatus.CONFLICT)
     public static class Conflict extends RuntimeException {
     }

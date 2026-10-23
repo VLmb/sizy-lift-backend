@@ -44,6 +44,7 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
             .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", "admin")
             .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin")
             .withEnv("KC_HEALTH_ENABLED", "true")
+            .withEnv("KEYCLOAK_BACKEND_CLIENT_SECRET", "backend-secret-for-tests")
             .withCopyFileToContainer(MountableFile.forHostPath("keycloak/realm-sizylift.json"),
                     "/opt/keycloak/data/import/realm-sizylift.json")
             .withExposedPorts(8080, 9000)

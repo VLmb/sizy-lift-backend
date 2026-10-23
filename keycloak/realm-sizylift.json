@@ -73,6 +73,33 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "sizylift-backend",
+      "name": "SizyLift backend (account deletion)",
+      "description": "Service account of the backend: deletes users through the Admin API. Role: manage-users.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_BACKEND_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "frontchannelLogout": false,
+      "redirectUris": [],
+      "webOrigins": []
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-sizylift-backend",
+      "enabled": true,
+      "serviceAccountClientId": "sizylift-backend",
+      "clientRoles": {
+        "realm-management": ["manage-users"]
+      }
     }
   ],
   "identityProviders": [

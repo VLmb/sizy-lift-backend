@@ -44,3 +44,6 @@ databaseChangeLog:
   - include:
       file: changes/015-create-import-session.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/016-invite-revocation-and-account-deletion.sql
+      relativeToChangelogFile: true
