@@ -20,7 +20,7 @@ public class UserAccountService {
     public UserAccountService(UserAccountRepository accounts, MeterRegistry meters) {
         this.accounts = accounts;
         this.accountsCreated = Counter.builder(ACCOUNTS_CREATED_METER)
-                .description("SizyLift accounts created on the first authenticated request")
+                .description("Sizy accounts created on the first authenticated request")
                 .register(meters);
     }
 

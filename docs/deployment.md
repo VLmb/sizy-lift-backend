@@ -5,7 +5,7 @@
 ```text
 интернет ──443──▶ Caddy ──▶ api.<домен>  → backend:8080      (Spring Boot, профиль prod)
                         └─▶ auth.<домен> → keycloak:8080     (start --optimized, /admin закрыт)
-backend ──▶ postgres (данные SizyLift)
+backend ──▶ postgres (данные Sizy)
 backend ──▶ keycloak:8080 (JWKS по внутренней сети)
 keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
 ```
@@ -77,7 +77,7 @@ docker compose --env-file deploy/.env -f deploy/compose.prod.yaml exec -T postgr
 docker compose --env-file deploy/.env -f deploy/compose.prod.yaml exec -T keycloak-postgres pg_dump -U keycloak -Fc keycloak > keycloak.dump
 ```
 
-Обе базы нужны вместе: аккаунты SizyLift ссылаются на пользователей Keycloak через `sub`.
+Обе базы нужны вместе: аккаунты Sizy ссылаются на пользователей Keycloak через `sub`.
 Копии храните вне сервера.
 
 ## Локальная проверка production-стека

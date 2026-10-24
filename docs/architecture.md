@@ -30,7 +30,7 @@
 Keycloak управляет регистрацией через email/пароль, подтверждением почты,
 восстановлением доступа и входом через Google/Facebook. Бэкенд — OAuth 2.0 resource
 server: Spring Security проверяет подпись, срок, `iss` и `aud` access token. Аккаунт
-SizyLift (`identity.user_account`) связан с внешней идентичностью по `issuer` и `sub`
+Sizy (`identity.user_account`) связан с внешней идентичностью по `issuer` и `sub`
 и создаётся при первом запросе. Мобильный клиент использует системный браузер и
 Authorization Code + PKCE, секреты провайдеров не попадают в клиент.
 
