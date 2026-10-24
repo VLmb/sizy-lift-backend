@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,6 +23,8 @@ import com.sizylift.backend.sync.service.FeedMaintenance;
 import com.sizylift.backend.sync.service.FeedMaintenance.Operation;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -78,6 +81,29 @@ public class CoachingService {
         return new CreatedInvite(token, expiresAt);
     }
 
+    /** Действующие приглашения тренера; токенов в ответе нет, они не хранятся. */
+    public List<CoachingInvite> pendingInvites(UUID coachId) {
+        return coaching.pendingInvites(coachId, clock.instant());
+    }
+
+    /**
+     * Отзыв неиспользованного приглашения: ссылка начинает отвечать 410. Повторный отзыв ничего не меняет,
+     * принятое приглашение отозвать нельзя — для этого разрывают связь.
+     */
+    public void revokeInvite(UUID coachId, UUID inviteId) {
+        transactions.executeWithoutResult(status -> {
+            var invite = coaching.lockInvite(inviteId).filter(found -> found.coachId().equals(coachId))
+                    .orElseThrow(CoachingExceptions.NotFound::new);
+            if (invite.acceptedAt() != null) {
+                throw new CoachingExceptions.Conflict();
+            }
+            if (invite.revokedAt() == null) {
+                coaching.revokeInvite(inviteId);
+                metrics.count(Event.INVITE_REVOKED);
+            }
+        });
+    }
+
     /** Что увидит подопечный до принятия: кто приглашает и до какого срока. */
     public CoachingInvite preview(String token) {
         var invite = findInvite(token).orElseThrow(CoachingExceptions.NotFound::new);
@@ -85,6 +111,11 @@ public class CoachingService {
             throw new CoachingExceptions.InviteGone();
         }
         return invite;
+    }
+
+    /** Действует ли приглашение по ссылке; для публичной страницы приглашения, без данных тренера. */
+    public boolean inviteUsable(String token) {
+        return findInvite(token).filter(invite -> invite.usableAt(clock.instant())).isPresent();
     }
 
     /** Создаёт связь и засевает ленту тренера всем, что он видит у подопечного. */
@@ -148,23 +179,44 @@ public class CoachingService {
      */
     public void end(UUID callerId, UUID linkId) {
         var found = participantLink(callerId, linkId);
-        transactions.executeWithoutResult(status -> {
-            coaching.lockAccount(found.athleteId());
-            var link = coaching.lockLink(linkId);
-            if (!link.active()) {
-                return;
-            }
-            coaching.endLink(linkId);
-            var operations = new ArrayList<Operation>();
-            for (var program : aggregates.transferToOwner(link.athleteId(), AggregateType.PROGRAM, link.coachId())) {
-                operations.add(new FeedMaintenance.Upsert(link.athleteId(), link.athleteId(), AggregateType.PROGRAM,
-                        program.aggregateId(), program.revision(), program.deleted()));
-            }
-            operations.add(new FeedMaintenance.Revoke(link.coachId(), link.athleteId(),
-                    AccessPolicy.coachVisibleTypes(true)));
-            feeds.apply(operations);
-            metrics.count(Event.LINK_ENDED);
-        });
+        transactions.executeWithoutResult(status -> endLocked(found.athleteId(), linkId));
+    }
+
+    /**
+     * Разрывает все активные связи пользователя в транзакции вызывающего (удаление аккаунта). Аккаунты
+     * подопечных блокируются в {@link AccessPolicy#LOCK_ORDER}, затем собственный: после этого новая связь
+     * с пользователем не появится до конца транзакции.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void endAll(UUID userId) {
+        var asCoach = coaching.activeAsCoach(userId).stream()
+                .sorted(Comparator.comparing(CoachingLink::athleteId, AccessPolicy.LOCK_ORDER)).toList();
+        for (var link : asCoach) {
+            endLocked(link.athleteId(), link.id());
+        }
+        coaching.lockAccount(userId);
+        for (var link : coaching.activeAsCoach(userId)) {
+            endLocked(link.athleteId(), link.id());
+        }
+        coaching.activeAsAthlete(userId).ifPresent(link -> endLocked(userId, link.id()));
+    }
+
+    private void endLocked(UUID athleteId, UUID linkId) {
+        coaching.lockAccount(athleteId);
+        var link = coaching.lockLink(linkId);
+        if (!link.active()) {
+            return;
+        }
+        coaching.endLink(linkId);
+        var operations = new ArrayList<Operation>();
+        for (var program : aggregates.transferToOwner(link.athleteId(), AggregateType.PROGRAM, link.coachId())) {
+            operations.add(new FeedMaintenance.Upsert(link.athleteId(), link.athleteId(), AggregateType.PROGRAM,
+                    program.aggregateId(), program.revision(), program.deleted()));
+        }
+        operations.add(new FeedMaintenance.Revoke(link.coachId(), link.athleteId(),
+                AccessPolicy.coachVisibleTypes(true)));
+        feeds.apply(operations);
+        metrics.count(Event.LINK_ENDED);
     }
 
     public String displayName(UUID userId) {

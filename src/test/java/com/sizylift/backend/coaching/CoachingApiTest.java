@@ -113,6 +113,34 @@ class CoachingApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void coachListsAndRevokesPendingInvites() throws Exception {
+        var first = invite(coach);
+        var second = invite(coach);
+        accept(athlete, invite(coach));
+        invite(stranger);
+
+        var pending = body(call(coach, get("/api/v2/coaching/invites")).andExpect(status().isOk()));
+
+        assertThat(pending.size()).isEqualTo(2);
+        assertThat(pending.toString()).doesNotContain(first, second);
+        var firstId = pending.get(0).get("id").asString();
+        assertThat(pending.get(0).get("expiresAt").asString()).isNotBlank();
+        call(stranger, delete("/api/v2/coaching/invites/" + firstId)).andExpect(status().isNotFound());
+        call(coach, delete("/api/v2/coaching/invites/" + firstId)).andExpect(status().isNoContent());
+        call(coach, delete("/api/v2/coaching/invites/" + firstId)).andExpect(status().isNoContent());
+        call(stranger, get("/api/v2/coaching/invites/" + first)).andExpect(status().isGone());
+        call(stranger, post("/api/v2/coaching/invites/" + first + "/accept")).andExpect(status().isGone());
+        var left = body(call(coach, get("/api/v2/coaching/invites")).andExpect(status().isOk()));
+        assertThat(left.size()).isEqualTo(1);
+        assertThat(left.get(0).get("id").asString()).isNotEqualTo(firstId);
+
+        var accepted = jdbc.queryForObject("SELECT id FROM sizylift.coaching_invite "
+                + "WHERE coach_user_id = ? AND accepted_at IS NOT NULL", UUID.class, userId(coach));
+        call(coach, delete("/api/v2/coaching/invites/" + accepted)).andExpect(status().isConflict());
+        call(coach, delete("/api/v2/coaching/invites/" + UUID.randomUUID())).andExpect(status().isNotFound());
+    }
+
+    @Test
     void athleteHasOnlyOneActiveCoach() throws Exception {
         accept(athlete, invite(coach));
 

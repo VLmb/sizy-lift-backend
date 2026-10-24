@@ -7,6 +7,12 @@ spring:
         jwt:
           issuer-uri: http://keycloak.test/realms/sizylift
           jwk-set-uri: http://keycloak.test/realms/sizylift/protocol/openid-connect/certs
+sizylift:
+  keycloak-admin:
+    # Replaced by MockRestServiceServer or by the Keycloak container in the tests that need it.
+    url: http://keycloak.test
+    client-secret: test-secret
+
 management:
   # No collector in tests; meters are still recorded in the in-memory registry.
   otlp:

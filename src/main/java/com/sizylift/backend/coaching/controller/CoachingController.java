@@ -10,6 +10,7 @@ import com.sizylift.backend.coaching.dto.CoachingDtos.InvitePreviewResponse;
 import com.sizylift.backend.coaching.dto.CoachingDtos.InviteResponse;
 import com.sizylift.backend.coaching.dto.CoachingDtos.LinkResponse;
 import com.sizylift.backend.coaching.dto.CoachingDtos.OverviewResponse;
+import com.sizylift.backend.coaching.dto.CoachingDtos.PendingInviteResponse;
 import com.sizylift.backend.coaching.entity.CoachingLink;
 import com.sizylift.backend.coaching.service.CoachingService;
 import com.sizylift.backend.identity.controller.AuthenticatedAccount;
@@ -58,6 +59,19 @@ public class CoachingController {
     public InviteResponse createInvite(@AuthenticationPrincipal Jwt jwt) {
         var invite = coaching.createInvite(userId(jwt));
         return new InviteResponse(invite.token(), invite.expiresAt());
+    }
+
+    @GetMapping("/invites")
+    public List<PendingInviteResponse> pendingInvites(@AuthenticationPrincipal Jwt jwt) {
+        return coaching.pendingInvites(userId(jwt)).stream()
+                .map(invite -> new PendingInviteResponse(invite.id(), invite.createdAt(), invite.expiresAt()))
+                .toList();
+    }
+
+    @DeleteMapping("/invites/{inviteId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeInvite(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID inviteId) {
+        coaching.revokeInvite(userId(jwt), inviteId);
     }
 
     @GetMapping("/invites/{token}")

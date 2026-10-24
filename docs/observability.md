@@ -20,6 +20,7 @@ OTLP-экспорт идёт параллельно. В логах и трейс
 - Стандартное: HTTP-запросы (`http.server.requests`, с гистограммой для перцентилей), JVM
   (память, GC, потоки), HikariCP, Spring Security, Tomcat.
 - `sizylift.accounts.created` — аккаунты, созданные при первом запросе.
+- `sizylift.accounts.deleted` — аккаунты, удалённые пользователями (`DELETE /api/v1/me`).
 - `sizylift.publication.items{type, status, error}` — результат по каждому агрегату
   (`accepted`/`stale`/`rejected`, код ошибки).
 - `sizylift.publication.batch.size` — агрегатов в пачке.
@@ -37,8 +38,8 @@ OTLP-экспорт идёт параллельно. В логах и трейс
   `sizylift.notifications.queue.oldest.age` — push-уведомления ([notifications.md](notifications.md)).
 - `sizylift.import.requests{source, outcome}`, `sizylift.import.tokens{direction}`,
   `sizylift.import.duration`, `sizylift.import.rounds` — ИИ-импорт ([imports.md](imports.md)).
-- `sizylift.coaching.events{event}` — приглашения и связи: `invite_created`, `link_created`,
-  `link_ended`, `health_granted`, `health_revoked`.
+- `sizylift.coaching.events{event}` — приглашения и связи: `invite_created`, `invite_revoked`,
+  `link_created`, `link_ended`, `health_granted`, `health_revoked`.
 
 SQL-запросы отдельными span'ами пока не трассируются.
 

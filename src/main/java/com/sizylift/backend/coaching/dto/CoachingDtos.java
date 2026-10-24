@@ -28,6 +28,10 @@ public final class CoachingDtos {
     public record InviteResponse(String token, Instant expiresAt) {
     }
 
+    /** Действующее приглашение в списке тренера; токена нет — ссылку показывают только при создании. */
+    public record PendingInviteResponse(UUID id, Instant createdAt, Instant expiresAt) {
+    }
+
     /** Что подопечный видит до принятия: кто приглашает и какие данные увидит тренер. */
     public record InvitePreviewResponse(UUID coachId, String coachName, Instant expiresAt, List<String> coachSees,
                                         List<String> coachSeesWithHealthAccess) {

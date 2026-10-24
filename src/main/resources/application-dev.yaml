@@ -12,6 +12,11 @@ spring:
           issuer-uri: http://localhost:8180/realms/sizylift
           jwk-set-uri: http://localhost:8180/realms/sizylift/protocol/openid-connect/certs
 
+sizylift:
+  keycloak-admin:
+    url: http://localhost:8180
+    client-secret: sizylift-backend-dev
+
 management:
   # grafana/otel-lgtm from compose.yaml; Grafana at http://localhost:3000
   opentelemetry:

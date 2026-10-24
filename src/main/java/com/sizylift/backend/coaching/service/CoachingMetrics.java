@@ -11,6 +11,7 @@ class CoachingMetrics {
 
     enum Event {
         INVITE_CREATED("invite_created"),
+        INVITE_REVOKED("invite_revoked"),
         LINK_CREATED("link_created"),
         LINK_ENDED("link_ended"),
         HEALTH_GRANTED("health_granted"),

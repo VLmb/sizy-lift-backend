@@ -24,6 +24,24 @@ spring:
           audiences: sizylift-api
 
 sizylift:
+  app-links:
+    # Invite links https://<API domain>/invite/<token> open the app (docs/coaching.md).
+    # Empty team id / fingerprints switch the matching /.well-known file off (404).
+    app-scheme: sizylift
+    apple-team-id: ""
+    ios-bundle-id: com.sizylift.app
+    android-package: com.sizylift.app
+    android-cert-fingerprints: ""
+    # Store pages on the invite page; empty hides the button until the app is published.
+    app-store-url: ""
+    play-store-url: ""
+  keycloak-admin:
+    # Account deletion removes the Keycloak user through the Admin API (docs/authentication.md),
+    # as the confidential client "sizylift-backend" (service account, role manage-users).
+    realm: sizylift
+    client-id: sizylift-backend
+    connect-timeout: 5s
+    read-timeout: 15s
   notifications:
     # Push via Expo (ADR-0009). Off in dev and tests: notifications pile up in the outbox unsent.
     enabled: false

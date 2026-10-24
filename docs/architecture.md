@@ -71,6 +71,13 @@ Feature `imports`: сессии импорта, разбор текста и т�
 (`spring.threads.virtual.enabled`), одновременные вызовы модели ограничены общим `Semaphore`.
 Подробности — [imports.md](imports.md).
 
+## Удаление аккаунта и ссылки приглашений
+
+Feature `accountdeletion`: `DELETE /api/v1/me` удаляет пользователя в Keycloak (Admin API), разрывает его
+связи через `coaching` и удаляет строку аккаунта; остальное удаляют каскады
+([authentication.md](authentication.md#удаление-аккаунта)). Feature `applinks`: публичная страница
+`/invite/{token}` и файлы `/.well-known` для Universal Links и App Links ([coaching.md](coaching.md)).
+
 ## Конфигурация и развёртывание
 
 Настройки разделены на профили Spring `dev` и `prod` (YAML). Production работает на

@@ -26,8 +26,18 @@ public class CoachingRepository {
     private static final String INSERT_INVITE = """
             INSERT INTO sizylift.coaching_invite (coach_user_id, token_hash, expires_at) VALUES (?, ?, ?)
             """;
-    private static final String SELECT_INVITE = """
-            SELECT id, coach_user_id, expires_at, accepted_at FROM sizylift.coaching_invite WHERE token_hash = ?
+    private static final String INVITE_COLUMNS = "id, coach_user_id, created_at, expires_at, accepted_at, revoked_at";
+    private static final String SELECT_INVITE = "SELECT %s FROM sizylift.coaching_invite WHERE token_hash = ?"
+            .formatted(INVITE_COLUMNS);
+    private static final String SELECT_INVITE_BY_ID = "SELECT %s FROM sizylift.coaching_invite WHERE id = ?"
+            .formatted(INVITE_COLUMNS);
+    private static final String PENDING_INVITES = """
+            SELECT %s FROM sizylift.coaching_invite
+            WHERE coach_user_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?
+            ORDER BY created_at
+            """.formatted(INVITE_COLUMNS);
+    private static final String REVOKE_INVITE = """
+            UPDATE sizylift.coaching_invite SET revoked_at = now() WHERE id = ? AND revoked_at IS NULL
             """;
     private static final String ACCEPT_INVITE = """
             UPDATE sizylift.coaching_invite SET accepted_at = now(), accepted_by = ? WHERE id = ?
@@ -84,6 +94,20 @@ public class CoachingRepository {
         return jdbc.query(SELECT_INVITE + " FOR UPDATE", CoachingRepository::invite, tokenHash).stream().findFirst();
     }
 
+    public Optional<CoachingInvite> lockInvite(UUID inviteId) {
+        return jdbc.query(SELECT_INVITE_BY_ID + " FOR UPDATE", CoachingRepository::invite, inviteId).stream()
+                .findFirst();
+    }
+
+    /** Неиспользованные, неотозванные и неистёкшие приглашения тренера, старые первыми. */
+    public List<CoachingInvite> pendingInvites(UUID coachId, Instant now) {
+        return jdbc.query(PENDING_INVITES, CoachingRepository::invite, coachId, now.atOffset(ZoneOffset.UTC));
+    }
+
+    public void revokeInvite(UUID inviteId) {
+        jdbc.update(REVOKE_INVITE, inviteId);
+    }
+
     public void acceptInvite(UUID inviteId, UUID athleteId) {
         jdbc.update(ACCEPT_INVITE, athleteId, inviteId);
     }
@@ -123,7 +147,8 @@ public class CoachingRepository {
 
     private static CoachingInvite invite(ResultSet row, int rowNumber) throws SQLException {
         return new CoachingInvite(row.getObject("id", UUID.class), row.getObject("coach_user_id", UUID.class),
-                instant(row, "expires_at"), instant(row, "accepted_at"));
+                instant(row, "created_at"), instant(row, "expires_at"), instant(row, "accepted_at"),
+                instant(row, "revoked_at"));
     }
 
     private static CoachingLink link(ResultSet row, int rowNumber) throws SQLException {
