@@ -30,6 +30,8 @@ dependencies {
     // Sends Logback events through the OpenTelemetry SDK; built against the same OTel version as the Boot BOM.
     implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.28.1-alpha")
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+    // Streaming .xlsx reader for program import (ADR-0008); reads cached formula values.
+    implementation("org.dhatim:fastexcel-reader:0.20.2")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -37,6 +39,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    testImplementation("org.dhatim:fastexcel:0.20.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
