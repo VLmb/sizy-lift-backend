@@ -6,8 +6,11 @@ import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.InjuryPayloadV1;
 import com.sizylift.backend.publication.dto.payload.OneRepMaxPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.dto.payload.WorkoutCommentPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
+import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.AthleteDataRepository;
+import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.springframework.context.annotation.Bean;
@@ -50,5 +53,15 @@ class AggregateReaders {
     @Bean
     AggregateReader<ContraindicationPayloadV1> contraindicationReader(AthleteDataRepository athlete) {
         return new AggregateReader<>(AggregateType.CONTRAINDICATION, athlete::findContraindication);
+    }
+
+    @Bean
+    AggregateReader<WorkoutReschedulePayloadV1> workoutRescheduleReader(BetweenDataRepository between) {
+        return new AggregateReader<>(AggregateType.WORKOUT_RESCHEDULE, between::findReschedule);
+    }
+
+    @Bean
+    AggregateReader<WorkoutCommentPayloadV1> workoutCommentReader(BetweenDataRepository between) {
+        return new AggregateReader<>(AggregateType.WORKOUT_COMMENT, between::findComment);
     }
 }

@@ -40,7 +40,7 @@ erDiagram
     program ||--o{ planned_workout : "через циклы и недели"
     planned_workout ||--o| workout_reschedule : "перенос подопечным"
     workout ||--o{ workout_comment : "комментарии"
-    user_account ||--o{ workout_comment : "автор"
+    user_account ||--o{ workout_comment : "владелец тренировки"
     user_account ||--|| sync_cursor : "позиция ленты"
     user_account ||--o{ sync_feed : "лента получателя"
     sync_feed }o--|| published_aggregate : "указывает на агрегат"
@@ -68,8 +68,8 @@ erDiagram
 | --------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------ |
 | `coaching_invite`     | `id`; `UNIQUE (token_hash)`                | `coach_user_id`, `token_hash bytea`, `expires_at`, `accepted_at`, `accepted_by`                                          | тренер                    | одноразовая ссылка-приглашение; хранится только SHA-256 токена           |
 | `coaching_link`       | `id`; частичный `UNIQUE (athlete_user_id) WHERE ended_at IS NULL` | `coach_user_id`, `athlete_user_id`, `health_access`, `created_at`, `ended_at`                      | обе стороны (разрыв), подопечный (`health_access`) | связь и доступ к травмам; один активный тренер у подопечного |
-| `workout_reschedule`  | `(user_id, planned_workout_id)`; FK на `planned_workout` с каскадом | `program_id`, `scheduled_date`, `changed_at`                                                 | подопечный                | перенос тренировки тренера без правки самой программы                     |
-| `workout_comment`     | `(user_id, id)`; FK `(workout_owner_id, workout_id)` на `workout` с каскадом | `user_id` = автор, `workout_owner_id`, `workout_id`, `text`, `created_at`, `updated_at`, `deleted` | автор               | комментарии к тренировке                                                  |
+| `workout_reschedule`  | `(user_id, planned_workout_id)`; без FK, каскад в коде (ADR-0007, раздел 7) | `program_id`, `scheduled_date`, `updated_at`                                          | подопечный                | перенос тренировки тренера без правки самой программы                     |
+| `workout_comment`     | `(user_id, id)`; без FK, каскад в коде (ADR-0007, раздел 8) | `user_id` = владелец тренировки, `workout_id`, `text`, `created_at`, `updated_at`; автор — `published_aggregate.author_user_id` | автор               | комментарии к тренировке                                                  |
 | `aggregate_conflict`  | `id`                                       | `user_id`, `type`, `aggregate_id`, `lost_payload jsonb`, `lost_changed_at`, `lost_client_id`, `winner_revision`, `created_at` | сервер            | проигравшие при last-writer-wins версии, 30 дней                          |
 | `aggregate_client_version` | `(user_id, type, aggregate_id, client_id)` | `version`                                                                                                     | сервер                    | последняя обработанная правка каждого клиента: идемпотентность повтора   |
 | `sync_cursor`         | `user_id`                                  | `last_seq`                                                                                                              | сервер                    | счётчик ленты; блокировка строки упорядочивает ленту                     |
@@ -86,7 +86,8 @@ erDiagram
 
 - `coaching_link (coach_user_id) WHERE ended_at IS NULL` — список подопечных и фан-аут тренеру.
 - `sync_feed (user_id, seq)` — первичный ключ, по нему идёт чтение ленты.
-- `workout_comment (workout_owner_id, workout_id)` — комментарии тренировки.
+- `workout_comment (user_id, workout_id)` — комментарии тренировки.
+- `workout_reschedule (user_id, program_id)` — переносы программы для каскада.
 - `notification_outbox (next_attempt_at) WHERE sent_at IS NULL` — выборка очереди.
 - `import_session (user_id, created_at)` — суточный лимит.
 - `exercise USING gin (name gin_trgm_ops)` — нечёткое сопоставление упражнений при импорте
@@ -95,11 +96,13 @@ erDiagram
 ### Удаление и каскады
 
 - Удаление аккаунта: каскадом уходят все его строки, включая связи, ленту, устройства и импорты.
-- Подопечный удалил тренировку → каскадом удаляются её комментарии. Для каждого удалённого
-  комментария в ленты пишется `delete`, чтобы копии на телефонах тоже исчезли.
-- Тренер удалил плановую тренировку → каскадом удаляется её перенос.
-- Разрыв связи ничего не удаляет из данных подопечного. Тренеру — `revoke` в ленту,
-  программы тренера переходят подопечному.
+- Подопечный удалил тренировку → сервер удаляет её комментарии (включая тренерские). Для каждого
+  удалённого комментария в ленты пишется `delete`, чтобы копии на телефонах тоже исчезли.
+- Тренер удалил плановую тренировку или сменил её дату → сервер снимает её перенос, `delete` в ленты.
+- Эти каскады явные, в транзакции записи главного агрегата, а не FK: программа и тренировка
+  заменяются целиком, и FK удалял бы зависимые при каждой правке.
+- Разрыв связи ничего не удаляет из данных подопечного, включая комментарии тренера. Тренеру —
+  `revoke` в ленту, программы тренера переходят подопечному.
 
 ## 2. Архитектура сервера
 

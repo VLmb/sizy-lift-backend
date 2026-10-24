@@ -17,6 +17,7 @@ import com.sizylift.backend.publication.service.AggregateArbiter;
 import com.sizylift.backend.publication.service.AggregateChangeListener;
 import com.sizylift.backend.publication.service.AggregatePublisher;
 import com.sizylift.backend.publication.service.AggregateType;
+import com.sizylift.backend.publication.service.DependentAggregates;
 import com.sizylift.backend.publication.service.IdConflictException;
 import com.sizylift.backend.publication.service.PayloadParser;
 import com.sizylift.backend.sync.dto.SyncPushRequest.Item;
@@ -46,12 +47,13 @@ public class SyncPushService {
     private final AggregateChangeListener feed;
     private final AccessPolicy access;
     private final CoachExerciseAdoption coachExercises;
+    private final DependentAggregates dependents;
     private final SyncMetrics metrics;
 
     SyncPushService(List<AggregatePublisher<?>> publishers, PublishedAggregateRepository aggregates,
                     TransactionTemplate transactions, PayloadParser parser, AggregateArbiter arbiter,
                     AggregateChangeListener feed, AccessPolicy access, CoachExerciseAdoption coachExercises,
-                    SyncMetrics metrics) {
+                    DependentAggregates dependents, SyncMetrics metrics) {
         this.publishers = publishers.stream()
                 .collect(Collectors.toUnmodifiableMap(AggregatePublisher::type, Function.identity()));
         this.aggregates = aggregates;
@@ -61,6 +63,7 @@ public class SyncPushService {
         this.feed = feed;
         this.access = access;
         this.coachExercises = coachExercises;
+        this.dependents = dependents;
         this.metrics = metrics;
     }
 
@@ -155,6 +158,7 @@ public class SyncPushService {
             }
             var lost = conflict && state.exists() ? arbiter.captureStored(ownerId, item.type(), item.id(), state)
                     : null;
+            var before = dependents.capture(ownerId, item.type(), item.id());
             var effects = data.get();
             var revision = aggregates.storeSynced(ownerId, item.type(), item.id(), item.deleted(), changedAt,
                     item.clientId(), item.clientVersion());
@@ -166,6 +170,9 @@ public class SyncPushService {
             }
             for (var copy : effects.copies()) {
                 feed.changed(ownerId, AggregateType.EXERCISE, copy.id(), copy.revision(), false);
+            }
+            for (var removed : dependents.reconcile(ownerId, item.type(), item.id(), item.deleted(), before)) {
+                feed.changed(ownerId, removed.type(), removed.id(), removed.revision(), true);
             }
             feed.changed(ownerId, item.type(), item.id(), revision, item.deleted());
             return ItemResult.accepted(item, revision, effects.payloadRewritten());

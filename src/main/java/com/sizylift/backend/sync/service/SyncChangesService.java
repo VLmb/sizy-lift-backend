@@ -96,7 +96,7 @@ public class SyncChangesService {
 
     private Change change(FeedEntry entry, FeedKind kind, Object payload) {
         return new Change(entry.seq(), entry.ownerId(), entry.type(), entry.aggregateId(), entry.revision(), kind,
-                entry.changedAt(), payload == null ? null : SyncPushService.SCHEMA_VERSION,
+                entry.changedAt(), entry.authorId(), payload == null ? null : SyncPushService.SCHEMA_VERSION,
                 payload == null ? null : json.valueToTree(payload));
     }
 }

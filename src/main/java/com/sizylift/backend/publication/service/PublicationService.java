@@ -38,18 +38,22 @@ public class PublicationService {
     private final PayloadParser parser;
     private final AggregateArbiter arbiter;
     private final AggregateChangeListener changes;
+    private final DependentAggregates dependents;
     private final PublicationMetrics metrics;
 
     PublicationService(List<AggregatePublisher<?>> publishers, PublishedAggregateRepository aggregates,
                        TransactionTemplate transactions, PayloadParser parser, AggregateArbiter arbiter,
-                       AggregateChangeListener changes, PublicationMetrics metrics) {
+                       AggregateChangeListener changes, DependentAggregates dependents,
+                       PublicationMetrics metrics) {
         this.publishers = publishers.stream()
+                .filter(publisher -> AggregateType.V1.contains(publisher.type()))
                 .collect(Collectors.toUnmodifiableMap(AggregatePublisher::type, Function.identity()));
         this.aggregates = aggregates;
         this.transactions = transactions;
         this.parser = parser;
         this.arbiter = arbiter;
         this.changes = changes;
+        this.dependents = dependents;
         this.metrics = metrics;
     }
 
@@ -118,11 +122,15 @@ public class PublicationService {
                 return ItemResult.of(item, ItemStatus.STALE);
             }
             var lost = state.writtenBySync() ? arbiter.captureStored(userId, item.type(), item.id(), state) : null;
+            var before = dependents.capture(userId, item.type(), item.id());
             write.run();
             var revision = aggregates.storeLegacy(userId, item.type(), item.id(), item.version(), deleted,
                     changedAt);
             if (lost != null) {
                 arbiter.storedLost(lost, revision);
+            }
+            for (var removed : dependents.reconcile(userId, item.type(), item.id(), deleted, before)) {
+                changes.changed(userId, removed.type(), removed.id(), removed.revision(), true);
             }
             changes.changed(userId, item.type(), item.id(), revision, deleted);
             return ItemResult.of(item, ItemStatus.ACCEPTED);
