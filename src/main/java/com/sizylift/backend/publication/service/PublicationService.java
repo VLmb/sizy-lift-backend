@@ -130,9 +130,11 @@ public class PublicationService {
                 arbiter.storedLost(lost, revision);
             }
             for (var removed : dependents.reconcile(userId, item.type(), item.id(), deleted, before)) {
-                changes.changed(userId, removed.type(), removed.id(), removed.revision(), true);
+                changes.changed(AggregateChange.byServer(userId, removed.type(), removed.id(), removed.revision(),
+                        true));
             }
-            changes.changed(userId, item.type(), item.id(), revision, deleted);
+            changes.changed(new AggregateChange(userId, userId, item.type(), item.id(), revision, deleted,
+                    !state.exists() || state.deleted()));
             return ItemResult.of(item, ItemStatus.ACCEPTED);
         });
     }

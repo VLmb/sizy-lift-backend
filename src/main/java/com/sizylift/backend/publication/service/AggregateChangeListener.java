@@ -12,5 +12,5 @@ public interface AggregateChangeListener {
     /** Перед блокировкой агрегата: связи владельца не должны меняться до коммита записи. */
     void beforeWrite(UUID ownerId);
 
-    void changed(UUID ownerId, String type, UUID aggregateId, long revision, boolean deleted);
+    void changed(AggregateChange change);
 }

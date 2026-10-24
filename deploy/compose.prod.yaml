@@ -40,6 +40,7 @@ services:
       KEYCLOAK_ISSUER_URI: https://${AUTH_DOMAIN}/realms/sizylift
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/sizylift/protocol/openid-connect/certs
       OTLP_ENDPOINT: http://otel-lgtm:4318
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:?Set EXPO_ACCESS_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy

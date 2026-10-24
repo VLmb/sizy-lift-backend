@@ -84,6 +84,23 @@ CREATE TABLE sizylift.notification_outbox (
    за минуту, даёт одно уведомление.
 5. **Очистка.** Отправленные строки старше 7 дней удаляются.
 
+**Уточнения реализации (этап 5):**
+- **Виды** (`kind`): `program_updated`, `comment_added`, `workout_completed` (только новая тренировка, не
+  правка), `workout_rescheduled`, `invite_accepted`.
+- **Аренда вместо открытой транзакции.** Строки берутся `FOR UPDATE SKIP LOCKED` и сразу откладываются
+  на 2 минуты, HTTP к Expo идёт без открытой транзакции. Упавший процесс не теряет строки.
+- **Склейка** — частичный уникальный индекс `(user_id, dedup_key) WHERE sent_at IS NULL AND
+  gave_up_at IS NULL`, где `dedup_key` = вид + id агрегата. `INSERT … ON CONFLICT DO NOTHING`.
+- **Брошенные строки.** После 6 попыток строка получает `gave_up_at`: иначе она навсегда блокировала
+  бы склейкой новые уведомления того же вида.
+- **Тикеты.** `ticket_ids` хранит тикет, устройство и токен. По квитанции `DeviceNotRegistered`
+  обнуляется только тот же токен, а не перерегистрированный новый. `receipts_checked_at` отмечает
+  проверенные строки.
+- **Лимиты Expo сверены** с официальной документацией (обновлена 13.10.2026): 100 сообщений в запросе,
+  1000 квитанций в запросе, квитанции через 15 минут и 24 часа хранения, 600 уведомлений в секунду
+  на проект, 4096 байт payload.
+- В `device` и `notification_outbox` — FK на `user_account` с каскадом (удаление аккаунта).
+
 ## 4. Содержимое
 
 - Заголовок и текст общие, без данных: «Тренер обновил программу», «Новый комментарий
@@ -104,7 +121,8 @@ CREATE TABLE sizylift.notification_outbox (
 - Тесты: уведомление ставится только при коммите; склейка; повтор и разбор ответов Expo
   через `MockRestServiceServer`; `DeviceNotRegistered` обнуляет токен.
 - Метрики: `sizylift.notifications.sent{kind,outcome}`, размер очереди, возраст самой
-  старой неотправленной строки.
+  старой неотправленной строки (`sizylift.notifications.queue.size`, `.queue.oldest.age`), а также
+  `sizylift.notifications.enqueued{kind,coalesced}` и `sizylift.notifications.receipts{outcome}`.
 
 ## Рассмотрено и отклонено
 

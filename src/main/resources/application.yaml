@@ -15,6 +15,18 @@ spring:
           # With jwk-set-uri set, signing keys are fetched lazily, so startup does not depend on Keycloak.
           audiences: sizylift-api
 
+sizylift:
+  notifications:
+    # Push через Expo (ADR-0009). В dev и тестах выключено: уведомления копятся в outbox без отправки.
+    enabled: false
+    send-interval: 5s
+    receipts-interval: 15m
+    expo:
+      url: https://exp.host/--/api/v2/push
+      access-token: ""
+      connect-timeout: 5s
+      read-timeout: 15s
+
 server:
   port: 8080
   shutdown: graceful

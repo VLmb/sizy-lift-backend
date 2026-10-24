@@ -57,6 +57,12 @@ Feature `access` — `AccessPolicy`, единственное место реш�
 и фан-аут. Feature `coaching` — режим тренера, приглашения (хранится только хеш токена), связи,
 разрешение на травмы и разрыв с передачей программ подопечному. Подробности — [coaching.md](coaching.md).
 
+## Push-уведомления
+
+Feature `notifications`: устройства (`/api/v2/devices`), транзакционный outbox и отправка в Expo
+фоновыми задачами с `SKIP LOCKED`. О тренировках не знает: уведомление ставят `sync` и `coaching`
+в транзакции изменения. Подробности — [notifications.md](notifications.md).
+
 ## Конфигурация и развёртывание
 
 Настройки разделены на профили Spring `dev` и `prod` (YAML). Production работает на

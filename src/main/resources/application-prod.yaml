@@ -16,6 +16,13 @@ spring:
           # Internal address is fine here, e.g. http://keycloak:8080/realms/sizylift/protocol/openid-connect/certs
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
 
+sizylift:
+  notifications:
+    enabled: true
+    expo:
+      # Expo "enhanced push security" access token; requests without it are rejected.
+      access-token: ${EXPO_ACCESS_TOKEN}
+
 server:
   # TLS is terminated by the reverse proxy; trust its X-Forwarded-* headers.
   forward-headers-strategy: framework
