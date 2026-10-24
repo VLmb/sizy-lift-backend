@@ -16,6 +16,9 @@ spring:
           audiences: sizylift-api
 
 sizylift:
+  web:
+    # CORS для веба на отдельном адресе. В production веб на том же домене, что и API, поэтому пусто.
+    allowed-origins: []
   notifications:
     # Push через Expo (ADR-0009). В dev и тестах выключено: уведомления копятся в outbox без отправки.
     enabled: false

@@ -73,6 +73,41 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "sizylift-web",
+      "name": "Sizy web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "fullScopeAllowed": false,
+      "rootUrl": "${WEB_PUBLIC_URL:http://localhost:5173}",
+      "redirectUris": ["${WEB_PUBLIC_URL:http://localhost:5173}/auth/callback", "${WEB_PUBLIC_URL:http://localhost:5173}/auth/silent"],
+      "webOrigins": ["${WEB_PUBLIC_URL:http://localhost:5173}"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${WEB_PUBLIC_URL:http://localhost:5173}/"
+      },
+      "defaultClientScopes": ["basic", "profile", "email", "acr"],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "sizylift-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "sizylift-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "identityProviders": [
