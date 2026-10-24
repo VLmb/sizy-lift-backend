@@ -2,6 +2,7 @@
 #   ./gradlew bootJar
 #   docker compose --env-file deploy/.env -f deploy/compose.prod.yaml up -d --build --wait
 # Every secret and address comes from deploy/.env (template: deploy/.env.example); nothing has a default.
+# The web app is built from a clone of sizy-lift-frontend at WEB_SOURCE.
 name: sizylift
 
 services:
@@ -12,6 +13,7 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
       API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
       AUTH_DOMAIN: ${AUTH_DOMAIN:?Set AUTH_DOMAIN}
+      WEB_DOMAIN: ${WEB_DOMAIN:?Set WEB_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
@@ -25,6 +27,18 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      web:
+        condition: service_healthy
+
+  # Web app: static files; addresses are baked in at build time.
+  web:
+    build:
+      context: ${WEB_SOURCE:?Set WEB_SOURCE}
+      args:
+        VITE_API_URL: https://${API_DOMAIN}
+        VITE_AUTH_ISSUER: https://${AUTH_DOMAIN}/realms/sizylift
+    image: sizy-web:${WEB_VERSION:-latest}
+    restart: unless-stopped
 
   backend:
     build:
@@ -41,6 +55,7 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/sizylift/protocol/openid-connect/certs
       OTLP_ENDPOINT: http://otel-lgtm:4318
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:?Set EXPO_ACCESS_TOKEN}
+      WEB_ALLOWED_ORIGINS: https://${WEB_DOMAIN}
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,6 +113,7 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD}
       # Realm import placeholders (keycloak/realm-sizylift.json), applied on the first start only.
       KC_REALM_SSL_REQUIRED: all
+      WEB_PUBLIC_URL: https://${WEB_DOMAIN}
       KC_SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST}
       KC_SMTP_PORT: ${SMTP_PORT:?Set SMTP_PORT}
       KC_SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM}

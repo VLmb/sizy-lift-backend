@@ -1,4 +1,4 @@
-# Public entry point: HTTPS with automatic Let's Encrypt certificates for both domains.
+# Public entry point: HTTPS with automatic Let's Encrypt certificates for every domain.
 {
 	email {$ACME_EMAIL}
 }
@@ -14,4 +14,12 @@
 	@admin path /admin /admin/*
 	respond @admin 404
 	reverse_proxy keycloak:8080
+}
+
+{$WEB_DOMAIN} {
+	reverse_proxy web:80
+}
+
+www.{$WEB_DOMAIN} {
+	redir https://{$WEB_DOMAIN}{uri} permanent
 }

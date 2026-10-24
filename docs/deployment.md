@@ -3,7 +3,8 @@
 Один сервер с Docker: всё описано в [`deploy/compose.prod.yaml`](../deploy/compose.prod.yaml).
 
 ```text
-интернет ──443──▶ Caddy ──▶ api.<домен>  → backend:8080      (Spring Boot, профиль prod)
+интернет ──443──▶ Caddy ──▶ <домен>      → web:80            (веб-версия, статика)
+                        ├─▶ api.<домен>  → backend:8080      (Spring Boot, профиль prod)
                         └─▶ auth.<домен> → keycloak:8080     (start --optimized, /admin закрыт)
 backend ──▶ postgres (данные Sizy)
 backend ──▶ keycloak:8080 (JWKS по внутренней сети)
@@ -12,6 +13,9 @@ keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
 ```
 
 - **Caddy** сам получает и продлевает сертификаты Let's Encrypt, перенаправляет HTTP на HTTPS.
+- **Веб**: образ собирается из клона `sizy-lift-frontend` (путь — `WEB_SOURCE`), адреса API и
+  Keycloak зашиваются при сборке. `www.<домен>` перенаправляется на `<домен>`. Бэкенд разрешает CORS
+  с `https://<домен>`, клиент Keycloak `sizylift-web` принимает возврат на него.
 - **Бэкенд**: образ из корневого `Dockerfile`, работает не от root, actuator слушает только
   внутренний порт 8081 (Caddy его не проксирует), логи в JSON.
 - **Keycloak**: образ из `deploy/keycloak/Dockerfile` с заранее выполненной сборкой
@@ -31,10 +35,11 @@ SSH-туннель `ssh -L 3000:127.0.0.1:3000 <сервер>`, вход `admin`
 
 ## Первое развёртывание
 
-1. DNS: записи A/AAAA для `api.<домен>` и `auth.<домен>` указывают на сервер.
+1. DNS: записи A/AAAA для `<домен>`, `www.<домен>`, `api.<домен>` и `auth.<домен>` указывают на сервер.
 2. На сервере:
    ```bash
-   git clone <репозиторий> sizylift && cd sizylift
+   git clone <репозиторий бэкенда> sizylift && cd sizylift
+   git clone <репозиторий веба> /opt/sizy-lift-frontend   # путь — WEB_SOURCE в deploy/.env
    cp deploy/.env.example deploy/.env && chmod 600 deploy/.env
    # заполните deploy/.env; пароли: openssl rand -base64 32
    ```
@@ -45,6 +50,7 @@ SSH-туннель `ssh -L 3000:127.0.0.1:3000 <сервер>`, вход `admin`
    ```
 4. Проверка:
    ```bash
+   curl -I https://<домен>/                    # 200
    curl -i https://api.<домен>/api/v1/me      # 401
    curl https://auth.<домен>/realms/sizylift/.well-known/openid-configuration
    ```
@@ -61,9 +67,9 @@ SSH-туннель `ssh -L 3000:127.0.0.1:3000 <сервер>`, вход `admin`
 ## Обновление
 
 ```bash
-git pull
+git pull && git -C /opt/sizy-lift-frontend pull
 ./gradlew bootJar
-BACKEND_VERSION=$(git rev-parse --short HEAD) \
+BACKEND_VERSION=$(git rev-parse --short HEAD) WEB_VERSION=$(git -C /opt/sizy-lift-frontend rev-parse --short HEAD) \
   docker compose --env-file deploy/.env -f deploy/compose.prod.yaml up -d --build --wait
 ```
 

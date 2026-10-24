@@ -63,6 +63,12 @@ Feature `notifications`: устройства (`/api/v2/devices`), транза�
 фоновыми задачами с `SKIP LOCKED`. О тренировках не знает: уведомление ставят `sync` и `coaching`
 в транзакции изменения. Подробности — [notifications.md](notifications.md).
 
+## Веб-версия
+
+Feature `web`: чтение для веба (`/api/v2/web`) — каталог упражнений, список программ, программа с ревизией,
+1ПМ, история упражнения. Права — `AccessPolicy`, как у ленты; запись — `sync/push`. Вход — клиент Keycloak
+`sizylift-web`, CORS — `sizylift.web.allowed-origins`. Подробности — [web.md](web.md).
+
 ## Конфигурация и развёртывание
 
 Настройки разделены на профили Spring `dev` и `prod` (YAML). Production работает на

@@ -23,6 +23,8 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())
+                // Источники — CorsConfigurationSource из web.config; пустой — CORS выключен.
+                .cors(Customizer.withDefaults())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(Customizer.withDefaults()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Браузер не подставляет Bearer token сам, поэтому защита от CSRF не нужна.

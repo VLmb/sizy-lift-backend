@@ -17,6 +17,10 @@ spring:
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
 
 sizylift:
+  web:
+    # Адрес веб-версии (Origin), с которого браузер вызывает API, например https://example.com.
+    # Несколько адресов — через запятую.
+    allowed-origins: ${WEB_ALLOWED_ORIGINS}
   notifications:
     enabled: true
     expo:
