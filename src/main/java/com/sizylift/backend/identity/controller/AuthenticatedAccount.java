@@ -8,7 +8,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimNames;
 import org.springframework.stereotype.Component;
 
-/** Находит аккаунт SizyLift по проверенному access token; используется контроллерами всех фич. */
+/** Находит аккаунт Sizy по проверенному access token; используется контроллерами всех фич. */
 @Component
 public class AuthenticatedAccount {
 

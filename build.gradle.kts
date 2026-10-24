@@ -7,7 +7,7 @@ plugins {
 
 group = "com.sizylift"
 version = "0.1.0-SNAPSHOT"
-description = "SizyLift backend"
+description = "Sizy backend"
 
 java {
     toolchain {

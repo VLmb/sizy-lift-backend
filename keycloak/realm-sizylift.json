@@ -1,6 +1,6 @@
 {
   "realm": "sizylift",
-  "displayName": "SizyLift",
+  "displayName": "Sizy",
   "enabled": true,
   "sslRequired": "${KC_REALM_SSL_REQUIRED:external}",
   "registrationAllowed": true,
@@ -32,7 +32,7 @@
     "host": "${KC_SMTP_HOST:mailpit}",
     "port": "${KC_SMTP_PORT:1025}",
     "from": "${KC_SMTP_FROM:no-reply@sizylift.local}",
-    "fromDisplayName": "SizyLift",
+    "fromDisplayName": "Sizy",
     "ssl": "${KC_SMTP_SSL:false}",
     "starttls": "${KC_SMTP_STARTTLS:false}",
     "auth": "${KC_SMTP_AUTH:false}",
@@ -42,7 +42,7 @@
   "clients": [
     {
       "clientId": "sizylift-mobile",
-      "name": "SizyLift mobile",
+      "name": "Sizy mobile",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": true,

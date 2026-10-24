@@ -1,4 +1,4 @@
-# SizyLift backend
+# Sizy backend
 
 - Use JDK 25 and the checked-in Gradle Wrapper. Read README.md and docs/architecture.md.
 - Run `./gradlew build` before completing code changes. Tests require Docker and real PostgreSQL; do not skip them or substitute H2.

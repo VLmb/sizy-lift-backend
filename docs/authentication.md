@@ -2,7 +2,7 @@
 
 Keycloak — сервер авторизации (OpenID Provider): регистрация, пароли, подтверждение
 почты, восстановление доступа, вход через Google/Facebook, выдача и отзыв токенов.
-Бэкенд SizyLift — OAuth 2.0 resource server: он не видит паролей и не выдаёт токенов,
+Бэкенд Sizy — OAuth 2.0 resource server: он не видит паролей и не выдаёт токенов,
 а только проверяет access token в каждом запросе.
 
 ```text
@@ -10,7 +10,7 @@ Keycloak — сервер авторизации (OpenID Provider): регист
         │                                                                   │
         │◀───────────── access token (JWT, 5 мин) + refresh token ─────────┘
         │
-        └──(Authorization: Bearer <access token>)──▶ SizyLift API ──(JWKS, кэш)──▶ Keycloak
+        └──(Authorization: Bearer <access token>)──▶ Sizy API ──(JWKS, кэш)──▶ Keycloak
 ```
 
 ## Realm `sizylift`
@@ -105,7 +105,7 @@ Spring Security (`spring-boot-starter-security-oauth2-resource-server`) пров
 внутри Docker-сети). Ключи загружаются при первом запросе, поэтому бэкенд стартует
 без доступного Keycloak.
 
-## Аккаунт SizyLift
+## Аккаунт Sizy
 
 Таблица `sizylift.user_account` связывает внешнюю идентичность (`issuer` + `sub`) с
 собственным UUID аккаунта (UUIDv7). Аккаунт создаётся при первом обращении к API
