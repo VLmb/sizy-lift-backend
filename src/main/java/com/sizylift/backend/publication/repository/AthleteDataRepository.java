@@ -81,6 +81,9 @@ public class AthleteDataRepository {
             SELECT name, description, updated_at FROM sizylift.contraindication WHERE user_id = ? AND id = ?
             """;
 
+    private static final String SELECT_OWNED_EXERCISES =
+            "SELECT id FROM sizylift.exercise WHERE user_id = ? AND id = ANY (?)";
+
     private final JdbcTemplate jdbc;
 
     public AthleteDataRepository(JdbcTemplate jdbc) {
@@ -91,6 +94,12 @@ public class AthleteDataRepository {
     public boolean exerciseExists(UUID exerciseId) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM sizylift.exercise WHERE id = ?)", Boolean.class, exerciseId));
+    }
+
+    /** Какие из упражнений — собственные упражнения пользователя (не каталог и не чужие). */
+    public List<UUID> ownedExercises(UUID userId, List<UUID> exerciseIds) {
+        return jdbc.query(SELECT_OWNED_EXERCISES, (row, n) -> uuid(row, "id"), userId,
+                exerciseIds.toArray(UUID[]::new));
     }
 
     public void insertExercise(UUID userId, UUID exerciseId, ExercisePayloadV1 exercise) {

@@ -97,12 +97,17 @@ public class PublicationService {
     }
 
     /**
-     * Версия не новее сохранённой — {@code stale}. Если агрегат последним писал sync v2 (веб, другой
+     * Агрегат чужого автора (программа тренера) v1 не пишет: старое приложение не знает авторов и иначе забрало бы
+     * программу себе. Версия не новее сохранённой — {@code stale}. Если агрегат последним писал sync v2 (веб, другой
      * клиент), побеждает правка с более поздним {@code updatedAt} корня; проигравшая версия идёт в журнал.
      */
     private ItemResult storeIfNewer(UUID userId, Item item, Instant updatedAt, boolean deleted, Runnable write) {
         return transactions.execute(status -> {
+            changes.beforeWrite(userId);
             var state = aggregates.lock(userId, item.type(), item.id());
+            if (state.authorUserId() != null && !state.authorUserId().equals(userId)) {
+                return ItemResult.rejected(item, RejectionReason.FORBIDDEN);
+            }
             if (item.version() <= state.version()) {
                 return ItemResult.of(item, ItemStatus.STALE);
             }

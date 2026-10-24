@@ -93,7 +93,8 @@
 
 Ответ — по каждому элементу: `accepted` (сохранена версия N), `stale` (на сервере уже
 такая или новее — тоже доставлено), `rejected` + код
-(`invalid_payload`, `id_conflict`, `unsupported_type`, `unsupported_schema`). Ошибка одного
+(`invalid_payload`, `id_conflict`, `unsupported_type`, `unsupported_schema`, `forbidden` — агрегат
+пишет другой автор, программа тренера; см. [coaching.md](coaching.md)). Ошибка одного
 элемента не влияет на остальные.
 
 Приём: Jackson → record `WorkoutPayloadV1` и т.п. → Bean Validation → в одной транзакции на агрегат: `published_aggregate` (сравнение версии) → удалить

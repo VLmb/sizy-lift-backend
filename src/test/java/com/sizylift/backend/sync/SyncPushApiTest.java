@@ -221,16 +221,18 @@ class SyncPushApiTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void writesKeepTheAuthorOfTheAggregate() throws Exception {
+    void ownerCannotOverwriteAnAggregateOfAnotherAuthorInV2OrV1() throws Exception {
         var base = revision(push(edit(0, T10, PHONE, 1, "a")).get(0));
         var author = UUID.randomUUID();
         jdbc.update("UPDATE sizylift.published_aggregate SET author_user_id = ? "
                 + "WHERE user_id = ? AND aggregate_id = ?", author, userId(), id);
 
-        push(edit(base, T12, PHONE, 2, "b"));
-        legacyStatus(legacy(1, T12.plusSeconds(60), "c"));
+        var v2 = push(edit(base, T12, PHONE, 2, "b")).get(0);
+        var v1 = legacyStatus(legacy(1, T12.plusSeconds(60), "c"));
 
-        assertThat(name()).isEqualTo("c");
+        assertThat(v2.get("error").asString()).isEqualTo("forbidden");
+        assertThat(v1).isEqualTo("rejected");
+        assertThat(name()).isEqualTo("a");
         assertThat(state().get("author_user_id")).isEqualTo(author);
     }
 

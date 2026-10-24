@@ -1,8 +1,10 @@
 package com.sizylift.backend.sync.service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.UUID;
 
+import com.sizylift.backend.access.service.AccessPolicy;
 import com.sizylift.backend.publication.service.PayloadReader;
 import com.sizylift.backend.sync.dto.SyncChangesResponse;
 import com.sizylift.backend.sync.dto.SyncChangesResponse.Change;
@@ -17,7 +19,10 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-/** Чтение персональной ленты изменений с актуальным payload агрегатов (ADR-0007, раздел 4). */
+/**
+ * Чтение персональной ленты изменений с актуальным payload агрегатов (ADR-0007, раздел 4). Каждая запись
+ * о чужих данных перепроверяется {@link AccessPolicy}: без права чтения вместо данных отдаётся {@code revoke}.
+ */
 @Service
 public class SyncChangesService {
 
@@ -31,11 +36,13 @@ public class SyncChangesService {
     private final PayloadReader payloads;
     private final ObjectMapper json;
     private final SyncMetrics metrics;
+    private final AccessPolicy access;
     private final TransactionTemplate snapshot;
 
     SyncChangesService(SyncFeedRepository feed, PayloadReader payloads, ObjectMapper json, SyncMetrics metrics,
-                       PlatformTransactionManager transactionManager) {
+                       AccessPolicy access, PlatformTransactionManager transactionManager) {
         this.feed = feed;
+        this.access = access;
         this.payloads = payloads;
         this.json = json;
         this.metrics = metrics;
@@ -53,6 +60,7 @@ public class SyncChangesService {
 
     private SyncChangesResponse page(UUID userId, long after, int limit) {
         var entries = feed.page(userId, after, limit + 1);
+        var readable = new HashMap<String, Boolean>();
         var changes = new ArrayList<Change>();
         var bytes = 0L;
         var cursor = after;
@@ -60,7 +68,9 @@ public class SyncChangesService {
             if (changes.size() == limit) {
                 break;
             }
-            var change = change(entry);
+            var allowed = readable.computeIfAbsent(entry.ownerId() + "/" + entry.type(),
+                    key -> access.canRead(userId, entry.ownerId(), entry.type()));
+            var change = allowed ? change(entry) : change(entry, FeedKind.REVOKE, null);
             bytes += change.payload() == null ? 0 : json.writeValueAsBytes(change.payload()).length;
             if (!changes.isEmpty() && bytes > MAX_PAGE_BYTES) {
                 break;
