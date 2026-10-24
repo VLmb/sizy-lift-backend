@@ -75,7 +75,9 @@
   `planned_block`, `planned_exercise`, `planned_set`.
 - **Прочее**: `athlete_profile`, `one_rep_max`, `injury`, `contraindication`.
 - **Служебное**: `published_aggregate` (`user_id`, `type`, `aggregate_id`, `version`,
-  `deleted`, `received_at`) — версия каждого агрегата.
+  `deleted`, `received_at`, а также `revision`, `changed_at`, `author_user_id`, `source_client_id`,
+  `source_version` для sync v2) — состояние каждого агрегата; `aggregate_conflict` — журнал
+  проигравших версий.
 
 Колонки дочерних таблиц повторяют SQLite (кроме `created_at`/`updated_at`/`revision`
 дочерних строк — не нужны), плюс `user_id`. Корни хранят `updated_at` из приложения.
@@ -112,6 +114,14 @@
   `rejected` → пауза 1 мин…6 ч, остальные не блокируются.
 - Первая публикация (новый аккаунт на устройстве) = поставить в outbox все существующие
   агрегаты; неизменённые сервер вернёт как `stale`.
+
+## Совместимость с sync v2
+
+Публикация v1 продолжает работать. Каждая запись получает серверную ревизию и `changed_at`
+(`updatedAt` корня, у tombstone — время получения; не позже серверного «сейчас»). Если агрегат
+последним записан через `POST /api/v2/sync/push`, побеждает правка с более поздним `updatedAt`:
+проигравшая v1-запись получает `stale` и попадает в журнал конфликтов. Подробности —
+[sync.md](sync.md).
 
 ## Контракт и проверки
 

@@ -20,3 +20,12 @@ databaseChangeLog:
   - include:
       file: changes/007-index-publication-parents.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/008-add-aggregate-revisions.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/009-create-aggregate-conflict.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/010-create-aggregate-client-version.sql
+      relativeToChangelogFile: true

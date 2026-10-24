@@ -27,5 +27,5 @@ public record AthleteProfilePayloadV1(
         @Size(max = LONG_TEXT) String exercisePreferences,
         @Size(max = LONG_TEXT) String schedule,
         @Size(max = LONG_TEXT) String competitionNotes,
-        @NotNull Instant updatedAt) {
+        @NotNull Instant updatedAt) implements PayloadV1 {
 }

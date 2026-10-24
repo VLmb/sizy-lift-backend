@@ -2,11 +2,14 @@ package com.sizylift.backend.publication.service;
 
 import java.util.UUID;
 
+import com.sizylift.backend.publication.dto.payload.PayloadV1;
+
 /**
- * Сохраняет агрегаты одного типа. Вызывается внутри транзакции, держащей блокировку версии агрегата;
- * перед {@code insert} предыдущая копия уже удалена.
+ * Сохраняет агрегаты одного типа. Вызывается внутри транзакции, держащей блокировку состояния агрегата;
+ * перед {@code insert} предыдущая копия уже удалена (см. {@link #replace}).
  */
-public record AggregatePublisher<P>(String type, Class<P> payloadType, Inserter<P> inserter, Deleter deleter) {
+public record AggregatePublisher<P extends PayloadV1>(String type, Class<P> payloadType, Inserter<P> inserter,
+                                                      Deleter deleter) {
 
     @FunctionalInterface
     public interface Inserter<P> {
@@ -18,11 +21,17 @@ public record AggregatePublisher<P>(String type, Class<P> payloadType, Inserter<
         void delete(UUID userId, UUID id);
     }
 
-    void insert(UUID userId, UUID id, P payload) {
+    public void insert(UUID userId, UUID id, P payload) {
         inserter.insert(userId, id, payload);
     }
 
-    void delete(UUID userId, UUID id) {
+    public void delete(UUID userId, UUID id) {
         deleter.delete(userId, id);
+    }
+
+    /** Заменяет агрегат целиком: удаляет прежнюю копию и вставляет новую. */
+    public void replace(UUID userId, UUID id, P payload) {
+        delete(userId, id);
+        insert(userId, id, payload);
     }
 }

@@ -16,5 +16,5 @@ public record InjuryPayloadV1(
         @NotNull @Pattern(regexp = INJURY_STATUS) String status,
         LocalDate startedOn,
         LocalDate endedOn,
-        @NotNull Instant updatedAt) {
+        @NotNull Instant updatedAt) implements PayloadV1 {
 }

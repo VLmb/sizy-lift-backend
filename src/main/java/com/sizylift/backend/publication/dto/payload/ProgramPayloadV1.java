@@ -22,7 +22,7 @@ public record ProgramPayloadV1(
         LocalDate startDate,
         @NotNull @Pattern(regexp = PROGRAM_STATUS) String status,
         @NotNull Instant updatedAt,
-        @NotNull @Size(max = MAX_CYCLES) List<@NotNull @Valid Cycle> cycles) {
+        @NotNull @Size(max = MAX_CYCLES) List<@NotNull @Valid Cycle> cycles) implements PayloadV1 {
 
     public record Cycle(
             @NotNull UUID id,

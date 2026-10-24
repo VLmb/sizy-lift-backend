@@ -11,5 +11,5 @@ import static com.sizylift.backend.publication.dto.payload.PayloadValues.*;
 public record ContraindicationPayloadV1(
         @NotBlank @Size(max = SHORT_TEXT) String name,
         @Size(max = LONG_TEXT) String description,
-        @NotNull Instant updatedAt) {
+        @NotNull Instant updatedAt) implements PayloadV1 {
 }

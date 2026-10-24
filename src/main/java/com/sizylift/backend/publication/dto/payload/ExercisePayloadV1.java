@@ -22,7 +22,7 @@ public record ExercisePayloadV1(
         @Size(max = LONG_TEXT) String note,
         @NotNull Instant updatedAt,
         @NotNull @Size(max = MAX_MUSCLES) List<@NotNull @Valid Muscle> muscles,
-        @NotNull @Size(max = MAX_EQUIPMENT) List<@NotNull UUID> equipmentIds) {
+        @NotNull @Size(max = MAX_EQUIPMENT) List<@NotNull UUID> equipmentIds) implements PayloadV1 {
 
     public record Muscle(@NotNull UUID muscleGroupId, @NotNull @Pattern(regexp = MUSCLE_ROLE) String role) {
     }
