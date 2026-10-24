@@ -19,7 +19,8 @@ class ProductionProfileTest {
             "spring.datasource.password",
             "spring.security.oauth2.resourceserver.jwt.issuer-uri",
             "spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
-            "sizylift.notifications.expo.access-token");
+            "sizylift.notifications.expo.access-token",
+            "sizylift.web.allowed-origins");
 
     static final List<String> TELEMETRY_ENDPOINTS = List.of(
             "management.otlp.metrics.export.url",

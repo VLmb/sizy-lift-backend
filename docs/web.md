@@ -79,7 +79,8 @@
 | Web origins | `${WEB_PUBLIC_URL}` |
 | Audience | `sizylift-api`, как у мобильного клиента |
 
-`WEB_PUBLIC_URL` по умолчанию `http://localhost:5173` (Vite dev server). Refresh token веб держит только
+`WEB_PUBLIC_URL` по умолчанию `http://localhost:5173` (Vite dev server), в production — `https://<домен>`
+из `deploy/compose.prod.yaml`. Refresh token веб держит только
 в памяти, после перезагрузки страницы сессия восстанавливается через cookie Keycloak (`prompt=none`).
 
 Realm импортируется только при первом старте Keycloak: локально — `docker compose down --volumes`, в production
@@ -87,9 +88,10 @@ Realm импортируется только при первом старте K
 
 ## CORS
 
-`sizylift.web.allowed-origins` — адреса веба на другом origin. В `dev` — `http://localhost:5173`, в
-`application.yaml` и production — пусто: веб в production отдаётся с того же домена, что и API, CORS не нужен.
-Публикация веба в production (Caddy, статика) — отдельная задача.
+`sizylift.web.allowed-origins` — адреса веба (Origin), с которых браузер вызывает API. В `dev` —
+`http://localhost:5173`, в `application.yaml` — пусто (CORS выключен), в production — `WEB_ALLOWED_ORIGINS`
+без значения по умолчанию: веб живёт на `<домен>`, API — на `api.<домен>`. Публикация веба —
+[deployment.md](deployment.md).
 
 ## Проверки
 
