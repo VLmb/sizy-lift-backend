@@ -11,6 +11,7 @@ import com.sizylift.backend.publication.dto.RejectionReason;
 import com.sizylift.backend.publication.dto.payload.PayloadV1;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateArbiter;
+import com.sizylift.backend.publication.service.AggregateChangeListener;
 import com.sizylift.backend.publication.service.AggregatePublisher;
 import com.sizylift.backend.publication.service.IdConflictException;
 import com.sizylift.backend.publication.service.PayloadParser;
@@ -38,17 +39,19 @@ public class SyncPushService {
     private final TransactionTemplate transactions;
     private final PayloadParser parser;
     private final AggregateArbiter arbiter;
+    private final AggregateChangeListener feed;
     private final SyncMetrics metrics;
 
     SyncPushService(List<AggregatePublisher<?>> publishers, PublishedAggregateRepository aggregates,
                     TransactionTemplate transactions, PayloadParser parser, AggregateArbiter arbiter,
-                    SyncMetrics metrics) {
+                    AggregateChangeListener feed, SyncMetrics metrics) {
         this.publishers = publishers.stream()
                 .collect(Collectors.toUnmodifiableMap(AggregatePublisher::type, Function.identity()));
         this.aggregates = aggregates;
         this.transactions = transactions;
         this.parser = parser;
         this.arbiter = arbiter;
+        this.feed = feed;
         this.metrics = metrics;
     }
 
@@ -112,12 +115,15 @@ public class SyncPushService {
                         state.revision());
                 return ItemResult.of(item, ItemStatus.SUPERSEDED, state.revision());
             }
+            var lost = conflict && state.revision() > 0
+                    ? arbiter.captureStored(userId, item.type(), item.id(), state) : null;
             write.run();
             var revision = aggregates.storeSynced(userId, item.type(), item.id(), item.deleted(), changedAt,
                     item.clientId(), item.clientVersion());
-            if (conflict && state.revision() > 0) {
-                arbiter.storedLost(userId, item.type(), item.id(), state, revision);
+            if (lost != null) {
+                arbiter.storedLost(lost, revision);
             }
+            feed.changed(userId, item.type(), item.id(), revision, item.deleted());
             return ItemResult.of(item, ItemStatus.ACCEPTED, revision);
         });
     }

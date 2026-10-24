@@ -37,17 +37,19 @@ public class PublicationService {
     private final TransactionTemplate transactions;
     private final PayloadParser parser;
     private final AggregateArbiter arbiter;
+    private final AggregateChangeListener changes;
     private final PublicationMetrics metrics;
 
     PublicationService(List<AggregatePublisher<?>> publishers, PublishedAggregateRepository aggregates,
                        TransactionTemplate transactions, PayloadParser parser, AggregateArbiter arbiter,
-                       PublicationMetrics metrics) {
+                       AggregateChangeListener changes, PublicationMetrics metrics) {
         this.publishers = publishers.stream()
                 .collect(Collectors.toUnmodifiableMap(AggregatePublisher::type, Function.identity()));
         this.aggregates = aggregates;
         this.transactions = transactions;
         this.parser = parser;
         this.arbiter = arbiter;
+        this.changes = changes;
         this.metrics = metrics;
     }
 
@@ -110,12 +112,14 @@ public class PublicationService {
                         state.revision());
                 return ItemResult.of(item, ItemStatus.STALE);
             }
+            var lost = state.writtenBySync() ? arbiter.captureStored(userId, item.type(), item.id(), state) : null;
             write.run();
             var revision = aggregates.storeLegacy(userId, item.type(), item.id(), item.version(), deleted,
                     changedAt);
-            if (state.writtenBySync()) {
-                arbiter.storedLost(userId, item.type(), item.id(), state, revision);
+            if (lost != null) {
+                arbiter.storedLost(lost, revision);
             }
+            changes.changed(userId, item.type(), item.id(), revision, deleted);
             return ItemResult.of(item, ItemStatus.ACCEPTED);
         });
     }

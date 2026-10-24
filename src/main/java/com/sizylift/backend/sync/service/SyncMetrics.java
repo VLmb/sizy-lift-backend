@@ -6,6 +6,7 @@ import java.util.function.Supplier;
 
 import com.sizylift.backend.publication.service.AggregatePublisher;
 import com.sizylift.backend.sync.dto.SyncPushResponse.ItemResult;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
@@ -19,16 +20,26 @@ class SyncMetrics {
     static final String PUSH_ITEMS_METER = "sizylift.sync.push.items";
     /** Клиент прислал ревизию новее серверной: так бывает после восстановления базы из бэкапа. */
     static final String BASE_AHEAD_METER = "sizylift.sync.push.base.ahead";
+    static final String CHANGES_PAGE_METER = "sizylift.sync.changes.page.size";
     static final String UNKNOWN_TYPE = "unknown";
 
     private final MeterRegistry meters;
     private final ObservationRegistry observations;
     private final Set<String> knownTypes;
+    private final DistributionSummary pageSize;
 
     SyncMetrics(MeterRegistry meters, ObservationRegistry observations, List<AggregatePublisher<?>> publishers) {
         this.meters = meters;
         this.observations = observations;
         this.knownTypes = Set.copyOf(publishers.stream().map(AggregatePublisher::type).toList());
+        this.pageSize = DistributionSummary.builder(CHANGES_PAGE_METER)
+                .description("Feed entries per sync changes page")
+                .baseUnit("changes")
+                .register(meters);
+    }
+
+    void recordPage(int size) {
+        pageSize.record(size);
     }
 
     <T> T observePush(Supplier<T> push) {
