@@ -20,6 +20,21 @@
   контейнеры коллектора, Prometheus/Mimir, Tempo, Loki вместо `otel-lgtm`; sampling трейсов
   ниже 1.0 (`TRACING_SAMPLING_PROBABILITY`).
 
+## Вход и аккаунты
+
+- **Своя тема Keycloak в стиле Sizy** (`keycloak/themes/sizy`, поверх стандартной `keycloak.v2`): вход,
+  регистрация, «Забыли пароль?», подтверждение почты, ошибки — тёмный фон, оранжевый акцент, шрифт DIN,
+  логотип, короткие тексты на русском. Письма (подтверждение почты, сброс пароля) — своя email-тема в том же
+  стиле. Логику Keycloak не трогаем; страницы общие для веба и мобильного приложения. Сначала HTML-макеты на
+  согласование. Тема копируется в образ Keycloak, в realm — `loginTheme` и `emailTheme`; на уже созданном
+  realm в production тему один раз выбрать в админке (Realm settings → Themes).
+- **Вход через Google и Meta (Facebook).** Провайдеры уже описаны в realm и выключены
+  (`GOOGLE_IDP_ENABLED`, `FACEBOOK_IDP_ENABLED`). Нужно: приложения в Google Cloud Console и Meta for
+  Developers, redirect URI `https://<AUTH_DOMAIN>/realms/sizylift/broker/{google|facebook}/endpoint`, ключи в
+  `deploy/.env` и включение в админке (на созданном realm переменные уже не применяются); кнопки на странице
+  входа (вместе с темой); проверка привязки к существующему аккаунту с той же почтой и входа из мобильного
+  приложения. У Meta — проверка приложения и политика конфиденциальности на домене.
+
 ## Прочее
 
 - Rate limits на API (E11-T14).
