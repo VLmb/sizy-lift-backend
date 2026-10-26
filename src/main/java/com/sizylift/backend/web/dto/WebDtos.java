@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.UUID;
 
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.dto.payload.PayloadV1;
+import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 
 /** Ответы чтения для веба (docs/web.md). Записывает веб через синхронизацию v2. */
 public final class WebDtos {
@@ -64,5 +66,27 @@ public final class WebDtos {
     }
 
     public record ExerciseHistoryResponse(UUID ownerId, UUID exerciseId, List<HistoryEntry> entries) {
+    }
+
+    public record AggregateResponse(UUID id, long revision, UUID authorId, PayloadV1 payload) {
+    }
+
+    public record WorkoutSummary(UUID id, LocalDate workoutDate, String title, Instant startedAt,
+                                 Instant completedAt, String quality, UUID plannedWorkoutId, int recordCount) {
+    }
+
+    public record PlannedSummary(UUID id, UUID programId, String title, LocalDate originalDate,
+                                 LocalDate scheduledDate, Instant rescheduledAt, UUID workoutId, LocalDate linkedWorkoutDate) {
+    }
+
+    public record TimelineResponse(UUID ownerId, List<PlannedSummary> planned, List<WorkoutSummary> workouts) {
+    }
+
+    public record WorkoutResponse(UUID ownerId, UUID id, long revision, WorkoutPayloadV1 workout,
+                                  List<AggregateResponse> comments) {
+    }
+
+    public record ProfileResponse(UUID ownerId, AggregateResponse profile, boolean healthAccess,
+                                  List<AggregateResponse> injuries, List<AggregateResponse> contraindications) {
     }
 }

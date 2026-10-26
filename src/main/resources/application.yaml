@@ -16,6 +16,11 @@ spring:
           audiences: sizylift-api
 
 sizylift:
+  account-deletion:
+    enabled: false
+    admin-url: ""
+    client-id: ""
+    client-secret: ""
   web:
     # CORS для веба на отдельном адресе. В production веб на том же домене, что и API, поэтому пусто.
     allowed-origins: []

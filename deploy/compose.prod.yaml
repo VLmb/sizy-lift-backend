@@ -55,6 +55,10 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/sizylift/protocol/openid-connect/certs
       OTLP_ENDPOINT: http://otel-lgtm:4318
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:?Set EXPO_ACCESS_TOKEN}
+      ACCOUNT_DELETION_ENABLED: ${ACCOUNT_DELETION_ENABLED}
+      KEYCLOAK_ADMIN_URL: http://keycloak:8080
+      KEYCLOAK_DELETION_CLIENT_ID: ${KEYCLOAK_DELETION_CLIENT_ID}
+      KEYCLOAK_DELETION_CLIENT_SECRET: ${KEYCLOAK_DELETION_CLIENT_SECRET}
       WEB_ALLOWED_ORIGINS: https://${WEB_DOMAIN}
     depends_on:
       postgres:

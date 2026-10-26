@@ -55,7 +55,7 @@ class DeviceApiTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void installationMovesToTheNewAccountAndTokenLeavesOtherInstallations() throws Exception {
+    void anotherAccountCannotTakeADeviceAndLogoutAllowsTheNextOwner() throws Exception {
         var first = UUID.randomUUID().toString();
         var second = UUID.randomUUID().toString();
         var device = UUID.randomUUID();
@@ -63,6 +63,11 @@ class DeviceApiTest extends PostgresIntegrationTest {
         var body = "{\"platform\":\"android\",\"pushToken\":\"" + TOKEN + "\"}";
 
         register(first, device, body).andExpect(status().isOk());
+        register(second, device, body).andExpect(status().isForbidden());
+        assertThat(token(device)).isEqualTo(TOKEN);
+        assertThat(jdbc.queryForObject("SELECT u.subject FROM sizylift.device d JOIN sizylift.user_account u "
+                + "ON u.id = d.user_id WHERE d.id = ?", String.class, device)).isEqualTo(first);
+        mvc.perform(delete("/api/v2/devices/" + device).with(token(first))).andExpect(status().isNoContent());
         register(second, device, body).andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT u.subject FROM sizylift.device d JOIN sizylift.user_account u "
                 + "ON u.id = d.user_id WHERE d.id = ?", String.class, device)).isEqualTo(second);
@@ -70,6 +75,25 @@ class DeviceApiTest extends PostgresIntegrationTest {
         register(second, reinstalled, body).andExpect(status().isOk());
         assertThat(token(device)).as("тот же токен не остаётся на старой установке").isNull();
         assertThat(token(reinstalled)).isEqualTo(TOKEN);
+    }
+
+    @Test
+    void forbiddenDeviceRegistrationRollsBackTokenReleaseAndCannotDisableTheVictim() throws Exception {
+        var owner = UUID.randomUUID().toString();
+        var attacker = UUID.randomUUID().toString();
+        var victimDevice = UUID.randomUUID();
+        var attackerDevice = UUID.randomUUID();
+        var attackerToken = "ExponentPushToken[attacker-owned-device]";
+        register(owner, victimDevice, "{\"platform\":\"ios\",\"pushToken\":\"" + TOKEN + "\"}")
+                .andExpect(status().isOk());
+        register(attacker, attackerDevice, "{\"platform\":\"ios\",\"pushToken\":\"" + attackerToken + "\"}")
+                .andExpect(status().isOk());
+        register(attacker, victimDevice, "{\"platform\":\"ios\",\"pushToken\":\"" + attackerToken + "\"}")
+                .andExpect(status().isForbidden());
+        register(attacker, victimDevice, "{\"platform\":\"ios\",\"pushToken\":null}")
+                .andExpect(status().isForbidden());
+        assertThat(token(victimDevice)).isEqualTo(TOKEN);
+        assertThat(token(attackerDevice)).isEqualTo(attackerToken);
     }
 
     @Test

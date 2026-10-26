@@ -102,3 +102,41 @@ docker compose --env-file deploy/.env -f deploy/compose.prod.yaml exec -T keyclo
 для них Caddy выпускает сертификаты своим локальным CA, без Let's Encrypt.
 В `deploy/.env` укажите эти домены и SMTP Mailpit (добавив его отдельным compose-файлом)
 и не забудьте `curl -k`. Так проверялись образы и полный сценарий регистрации.
+
+## Удаление аккаунтов
+
+До включения функции в существующем realm через админку Keycloak создайте confidential-клиент
+`sizylift-account-deletion`: Client authentication включено, Service accounts включено, браузерные
+потоки и Direct access grants выключены. Его service account назначьте client role
+`realm-management/manage-users`. Секрет хранится только на сервере. Этот клиент не выдаёт токены вебу.
+Существующие клиент sizylift-web, PKCE, темы и юридические согласия не меняются.
+
+В `deploy/.env` добавьте:
+
+```dotenv
+ACCOUNT_DELETION_ENABLED=true
+KEYCLOAK_DELETION_CLIENT_ID=sizylift-account-deletion
+KEYCLOAK_DELETION_CLIENT_SECRET=<секрет из Keycloak>
+```
+
+Если функция пока выключена: ACCOUNT_DELETION_ENABLED=false, client id можно оставить указанным,
+секрет — пустым. Адрес Keycloak для backend берётся из Compose (`http://keycloak:8080`), наружный issuer
+остаётся прежним. Для запуска вне Compose дополнительно задайте KEYCLOAK_ADMIN_URL в prod-профиле.
+В dev настройка передаётся через SIZYLIFT_ACCOUNT_DELETION_ENABLED, SIZYLIFT_ACCOUNT_DELETION_ADMIN_URL,
+SIZYLIFT_ACCOUNT_DELETION_CLIENT_ID и SIZYLIFT_ACCOUNT_DELETION_CLIENT_SECRET.
+
+Порядок обновления для оставшихся экранов веба: сначала PR backend, затем PR frontend.
+После получения изменений и настройки переменных выполните обычное обновление:
+
+```bash
+./gradlew build
+./gradlew bootJar
+BACKEND_VERSION=$(git rev-parse --short HEAD) WEB_VERSION=$(git -C /opt/sizy-lift-frontend rev-parse --short HEAD) \
+  docker compose --env-file deploy/.env -f deploy/compose.prod.yaml up -d --build --wait
+```
+
+Liquibase применит 015–017: снимки архива, очередь удаления/отпечатки удалённых идентичностей,
+отметки просмотра подопечных и отзыв приглашений. Пересоздавать БД и realm не нужно.
+Контролируйте метрику deletion.pending: длительный остаток означает проблему доступа к Keycloak.
+Перед откатом на версию без обработчика удаления дождитесь пустой очереди.
+Эти команды — инструкция обновления; при разработке продакшен не обновлялся.

@@ -86,8 +86,8 @@ public class WebReadRepository {
             WHERE w.user_id = ? AND EXISTS (
                 SELECT 1 FROM sizylift.workout_exercise we
                 WHERE we.user_id = w.user_id AND we.workout_id = w.id AND we.exercise_id = ?)
-            ORDER BY w.workout_date DESC, w.completed_at DESC
-            LIMIT ?
+            ORDER BY w.workout_date DESC, w.completed_at DESC, w.id
+            LIMIT ? OFFSET ?
             """;
     private static final String SELECT_COMPLETED_SETS = """
             SELECT s.set_type, s.weight_grams, s.repetitions, s.duration_ms, s.distance_m, s.rpe_tenths
@@ -148,10 +148,10 @@ public class WebReadRepository {
     }
 
     /** Последние тренировки с упражнением и его выполненные подходы, новые сначала. */
-    public List<HistoryEntry> history(UUID owner, UUID exerciseId, int limit) {
+    public List<HistoryEntry> history(UUID owner, UUID exerciseId, int limit, int offset) {
         var workouts = jdbc.query(SELECT_RECENT_WORKOUTS, (row, n) -> new HistoryEntry(uuid(row, "id"),
                 row.getObject("workout_date", LocalDate.class), row.getString("title"), List.of()),
-                owner, exerciseId, limit);
+                owner, exerciseId, limit, offset);
         return workouts.stream()
                 .map(entry -> new HistoryEntry(entry.workoutId(), entry.workoutDate(), entry.title(),
                         jdbc.query(SELECT_COMPLETED_SETS, (row, n) -> historySet(row), owner, entry.workoutId(),
