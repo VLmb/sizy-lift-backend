@@ -53,10 +53,21 @@ services:
       FACEBOOK_IDP_ENABLED: ${FACEBOOK_IDP_ENABLED:-false}
       FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
       FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
+      SIZY_CONSENT_ENABLED: ${SIZY_CONSENT_ENABLED:-false}
+      SIZY_CONSENT_VERSION: ${SIZY_CONSENT_VERSION:-}
+      SIZY_PRIVACY_URL: ${SIZY_PRIVACY_URL:-}
+      SIZY_CONSENT_URL: ${SIZY_CONSENT_URL:-}
     ports:
       - "127.0.0.1:${KEYCLOAK_PORT:-8180}:8080"
     volumes:
       - ./keycloak/realm-sizylift.json:/opt/keycloak/data/import/realm-sizylift.json:ro
+      - ./keycloak/themes/sizy:/opt/keycloak/themes/sizy:ro
+      - type: bind
+        source: ./keycloak-provider/build/libs/sizy-keycloak-provider.jar
+        target: /opt/keycloak/providers/sizy-keycloak-provider.jar
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       keycloak-postgres:
         condition: service_healthy

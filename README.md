@@ -36,6 +36,7 @@
 Из корня этого репозитория:
 
 ```bash
+./gradlew :keycloak-provider:jar
 docker compose up -d --wait
 ./gradlew bootRun
 ```
@@ -54,6 +55,10 @@ curl -i http://localhost:8080/api/v1/me             # 401 без токена
 
 Для остановки: `docker compose down` (тома сохраняются; `--volumes` удаляет данные
 и заставляет Keycloak заново импортировать realm).
+
+Страницы авторизации используют тему Sizy «Бронза». Настройка существующего realm,
+провайдер согласия и отложенное включение юридических документов описаны в
+[keycloak-theme.md](docs/keycloak-theme.md).
 
 ## Production
 

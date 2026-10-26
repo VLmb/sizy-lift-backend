@@ -1,3 +1,5 @@
 *
 !build/libs/*.jar
 !keycloak/realm-sizylift.json
+!keycloak/themes/**
+!keycloak-provider/build/libs/sizy-keycloak-provider.jar
