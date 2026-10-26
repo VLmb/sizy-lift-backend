@@ -84,7 +84,7 @@
 
 ## API
 
-`POST /api/v1/publication/batch` — до 100 агрегатов и 1 МБ.
+`POST /api/v1/publication/batch` — до 100 агрегатов и 1 MiB HTTP-тела. Превышение — 413 до разбора JSON, в том числе без Content-Length.
 
 ```json
 { "items": [ { "type": "workout", "id": "…", "version": 12, "schemaVersion": 1,

@@ -13,8 +13,9 @@ public class DeviceRepository {
 
     private static final String UPSERT = """
             INSERT INTO sizylift.device (id, user_id, platform, push_token) VALUES (?, ?, ?, ?)
-            ON CONFLICT (id) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform,
+            ON CONFLICT (id) DO UPDATE SET platform = EXCLUDED.platform,
                 push_token = EXCLUDED.push_token, last_seen_at = now()
+            WHERE device.user_id = EXCLUDED.user_id
             """;
     private static final String RELEASE_TOKEN =
             "UPDATE sizylift.device SET push_token = NULL WHERE push_token = ? AND id <> ?";
@@ -33,14 +34,13 @@ public class DeviceRepository {
     }
 
     /**
-     * Регистрирует установку приложения за пользователем. Тот же id после входа другим аккаунтом переходит
-     * к новому пользователю; токен снимается с других установок, чтобы он не получал чужие уведомления.
+     * Чужой id не перезаписывается. Вызывается сервисом в транзакции, чтобы отказ откатывал снятие токена.
      */
-    public void register(UUID deviceId, UUID userId, String platform, String pushToken) {
+    public boolean register(UUID deviceId, UUID userId, String platform, String pushToken) {
         if (pushToken != null) {
             jdbc.update(RELEASE_TOKEN, pushToken, deviceId);
         }
-        jdbc.update(UPSERT, deviceId, userId, platform, pushToken);
+        return jdbc.update(UPSERT, deviceId, userId, platform, pushToken) == 1;
     }
 
     public void deleteOwn(UUID deviceId, UUID userId) {

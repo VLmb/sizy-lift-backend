@@ -6,6 +6,7 @@ import com.sizylift.backend.identity.controller.AuthenticatedAccount;
 import com.sizylift.backend.notifications.dto.DeviceRequest;
 import com.sizylift.backend.notifications.dto.DeviceResponse;
 import com.sizylift.backend.notifications.repository.DeviceRepository;
+import com.sizylift.backend.notifications.service.DeviceRegistrationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,17 +26,19 @@ public class DeviceController {
 
     private final AuthenticatedAccount authenticatedAccount;
     private final DeviceRepository devices;
+    private final DeviceRegistrationService registration;
 
-    public DeviceController(AuthenticatedAccount authenticatedAccount, DeviceRepository devices) {
+    public DeviceController(AuthenticatedAccount authenticatedAccount, DeviceRepository devices, DeviceRegistrationService registration) {
         this.authenticatedAccount = authenticatedAccount;
         this.devices = devices;
+        this.registration = registration;
     }
 
     /** После входа и при смене токена. */
     @PutMapping("/{deviceId}")
     public DeviceResponse register(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID deviceId,
                                    @Valid @RequestBody DeviceRequest request) {
-        devices.register(deviceId, authenticatedAccount.resolve(jwt).id(), request.platform(), request.pushToken());
+        registration.register(deviceId, authenticatedAccount.resolve(jwt).id(), request.platform(), request.pushToken());
         return new DeviceResponse(deviceId, request.platform(), request.pushToken() != null);
     }
 
