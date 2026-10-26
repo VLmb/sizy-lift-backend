@@ -49,6 +49,10 @@ tasks.named<Jar>("jar") {
     enabled = false
 }
 
+tasks.named("bootJar") {
+    dependsOn(":keycloak-provider:jar")
+}
+
 // `./gradlew bootRun` uses the dev profile unless SPRING_PROFILES_ACTIVE says otherwise.
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
     if (System.getenv("SPRING_PROFILES_ACTIVE").isNullOrBlank()) {
@@ -60,5 +64,8 @@ tasks.withType<Test> {
     useJUnitPlatform()
     // KeycloakAuthenticationIntegrationTest imports the realm file into a real Keycloak.
     inputs.file("keycloak/realm-sizylift.json")
+    inputs.dir("keycloak/themes")
+    inputs.file("keycloak-provider/build/libs/sizy-keycloak-provider.jar")
+    dependsOn(":keycloak-provider:jar")
     maxParallelForks = 1
 }

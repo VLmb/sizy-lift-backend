@@ -80,6 +80,12 @@ Liquibase применяет новые changeset-файлы при старте
 Изменения `keycloak/realm-sizylift.json` **не применяются** к уже созданному realm:
 их нужно повторить в админке.
 
+Для темы Sizy после обновления образа выберите в существующем realm
+**Realm settings → Themes → Login theme → sizy**. В новом realm это уже задано
+импортом. `bootJar` также собирает `keycloak-provider` для образа авторизации.
+Согласие выключено по умолчанию; порядок отдельного включения после оформления
+документов — [keycloak-theme.md](keycloak-theme.md).
+
 ## Резервные копии
 
 ```bash
