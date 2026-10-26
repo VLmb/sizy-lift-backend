@@ -45,6 +45,9 @@ class WebApiTest extends PostgresIntegrationTest {
     static final UUID CATALOG_SQUAT = UUID.fromString("14000000-0000-4000-8000-000000000001");
     static final String ALLOWED_ORIGIN = "http://web.test";
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.sizylift.backend.identity.deletion.KeycloakAccountDeletion accountDeletion;
+
     @Autowired
     MockMvc mvc;
 
@@ -218,6 +221,248 @@ class WebApiTest extends PostgresIntegrationTest {
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
                 .andExpect(status().isForbidden())
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+
+    @Test
+    void diaryReturnsRescheduledDaysActualSnapshotsAndCommentsWithOwnerChecks() throws Exception {
+        var programId = UUID.randomUUID();
+        var workoutId = UUID.randomUUID();
+        publish(owner, "program", programId, 1, fixture("program"));
+        publish(owner, "workout", workoutId, 1, fixture("workout"));
+        var athleteId = userId(owner);
+        var link = accept(owner, invite(coach));
+        var plannedId = UUID.fromString("30000000-0000-4000-8000-000000000004");
+        var reschedule = json.valueToTree(Map.of("programId", programId, "scheduledDate", "2026-10-16",
+                "updatedAt", T10.toString()));
+        assertThat(push(owner, item("workout_reschedule", plannedId, null, 0, 1, reschedule))
+                .get("status").asString()).isEqualTo("accepted");
+        var comment = json.valueToTree(Map.of("workoutId", workoutId, "text", "Ответ тренера",
+                "createdAt", T10.toString(), "updatedAt", T10.toString()));
+        assertThat(push(coach, item("workout_comment", UUID.randomUUID(), athleteId, 0, 1, comment))
+                .get("status").asString()).isEqualTo("accepted");
+        var timeline = body(call(coach, get("/api/v2/web/timeline").param("ownerId", athleteId.toString())
+                .param("from", "2026-10-01").param("to", "2026-10-31")).andExpect(status().isOk()));
+        assertThat(timeline.get("planned").get(0).get("scheduledDate").asString()).isEqualTo("2026-10-16");
+        assertThat(timeline.get("planned").get(0).get("originalDate").asString()).isEqualTo("2026-10-14");
+        assertThat(timeline.get("workouts").get(0).get("id").asString()).isEqualTo(workoutId.toString());
+        assertThat(timeline.get("workouts").get(0).get("recordCount").asInt()).isEqualTo(1);
+        assertThat(timeline.get("planned").get(0).get("linkedWorkoutDate").asString()).isEqualTo("2026-10-14");
+        var outsideFact = body(call(owner, get("/api/v2/web/timeline")
+                .param("from", "2026-10-16").param("to", "2026-10-16")).andExpect(status().isOk()));
+        assertThat(outsideFact.get("workouts").size()).isZero();
+        assertThat(outsideFact.get("planned").get(0).get("linkedWorkoutDate").asString()).isEqualTo("2026-10-14");
+        var detail = body(call(coach, get("/api/v2/web/workouts/" + workoutId)
+                .param("ownerId", athleteId.toString())).andExpect(status().isOk()));
+        assertThat(detail.get("workout").get("planSetSnapshots").size()).isEqualTo(1);
+        assertThat(detail.get("comments").get(0).get("payload").get("text").asString()).isEqualTo("Ответ тренера");
+        call(stranger, get("/api/v2/web/workouts/" + workoutId).param("ownerId", athleteId.toString()))
+                .andExpect(status().isNotFound());
+        call(owner, get("/api/v2/web/timeline").param("from", "2026-10-31").param("to", "2026-10-01"))
+                .andExpect(status().isBadRequest());
+        call(owner, get("/api/v2/web/timeline").param("from", "2020-01-01").param("to", "2026-10-01"))
+                .andExpect(status().isBadRequest());
+        call(owner, delete("/api/v2/coaching/links/" + link)).andExpect(status().isNoContent());
+        call(coach, get("/api/v2/web/timeline").param("ownerId", athleteId.toString())
+                .param("from", "2026-10-01").param("to", "2026-10-31")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void profileNeverLeaksHealthWithoutPermissionAndRevocationTakesEffectImmediately() throws Exception {
+        publish(owner, "athlete_profile", UUID.randomUUID(), 1, fixture("athlete_profile"));
+        publish(owner, "injury", UUID.randomUUID(), 1, fixture("injury"));
+        publish(owner, "contraindication", UUID.randomUUID(), 1, fixture("contraindication"));
+        var link = accept(owner, invite(coach));
+        var ownerId = userId(owner).toString();
+        var hidden = body(call(coach, get("/api/v2/web/profile").param("ownerId", ownerId))
+                .andExpect(status().isOk()));
+        assertThat(hidden.get("profile").isNull()).isFalse();
+        assertThat(hidden.get("healthAccess").asBoolean()).isFalse();
+        assertThat(hidden.get("injuries").size()).isZero();
+        assertThat(hidden.get("contraindications").size()).isZero();
+        call(coach, put("/api/v2/coaching/links/" + link + "/health-access").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true}")).andExpect(status().isForbidden());
+        call(owner, put("/api/v2/coaching/links/" + link + "/health-access").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true}")).andExpect(status().isOk());
+        var visible = body(call(coach, get("/api/v2/web/profile").param("ownerId", ownerId))
+                .andExpect(status().isOk()));
+        assertThat(visible.get("injuries").size()).isEqualTo(1);
+        assertThat(visible.get("contraindications").size()).isEqualTo(1);
+        call(owner, put("/api/v2/coaching/links/" + link + "/health-access").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":false}")).andExpect(status().isOk());
+        var revoked = body(call(coach, get("/api/v2/web/profile").param("ownerId", ownerId))
+                .andExpect(status().isOk()));
+        assertThat(revoked.get("injuries").size()).isZero();
+        call(stranger, get("/api/v2/web/profile").param("ownerId", ownerId)).andExpect(status().isNotFound());
+        assertThat(push(coach, item("athlete_profile", UUID.randomUUID(), userId(owner), 0, 1,
+                fixture("athlete_profile"))).get("error").asString()).isEqualTo("forbidden");
+    }
+
+    @Test
+    void archiveChecksRevisionAndAuthorAndRestoresProgramThroughSync() throws Exception {
+        var id = UUID.randomUUID();
+        publish(owner, "program", id, 1, fixture("program"));
+        var revision = body(call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk()))
+                .get("revision").asLong();
+        var link = accept(owner, invite(coach));
+        call(coach, post("/api/v2/web/programs/" + id + "/archive").param("ownerId", userId(owner).toString())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("revision", revision))))
+                .andExpect(status().isForbidden());
+        call(owner, post("/api/v2/web/programs/" + id + "/archive").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("revision", revision + 1)))).andExpect(status().isConflict());
+        call(owner, post("/api/v2/web/programs/" + id + "/archive").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("revision", revision)))).andExpect(status().isNoContent());
+        call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isNotFound());
+        var archive = body(call(owner, get("/api/v2/web/programs/archive")).andExpect(status().isOk()));
+        assertThat(archive.size()).isEqualTo(1);
+        call(stranger, get("/api/v2/web/programs/archive").param("ownerId", userId(owner).toString()))
+                .andExpect(status().isNotFound());
+        call(owner, post("/api/v2/web/programs/" + id + "/restore")).andExpect(status().isNoContent());
+        var restored = body(call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk()));
+        assertThat(restored.get("revision").asLong()).isGreaterThan(revision);
+        assertThat(restored.get("program").get("cycles")).isEqualTo(fixture("program").get("cycles"));
+        assertThat(body(call(owner, get("/api/v2/web/programs/archive")).andExpect(status().isOk())).size()).isZero();
+        call(owner, delete("/api/v2/coaching/links/" + link)).andExpect(status().isNoContent());
+    }
+
+    @Test
+    void revokedInviteIsGoneAndOnlyItsCreatorCanRevokeIt() throws Exception {
+        var token = invite(coach);
+        var pending = body(call(coach, get("/api/v2/coaching/invites")).andExpect(status().isOk()));
+        assertThat(pending.size()).isEqualTo(1);
+        assertThat(pending.get(0).has("token")).isFalse();
+        var id = pending.get(0).get("id").asString();
+        call(stranger, delete("/api/v2/coaching/invites/" + id)).andExpect(status().isNotFound());
+        call(coach, delete("/api/v2/coaching/invites/" + id)).andExpect(status().isNoContent());
+        call(owner, post("/api/v2/coaching/invites/" + token + "/accept")).andExpect(status().isGone());
+        assertThat(body(call(coach, get("/api/v2/coaching/invites")).andExpect(status().isOk())).size()).isZero();
+    }
+
+    @Test
+    void replacingCoachWithAnInvalidInviteKeepsTheOriginalLinkAndHealthConsentIsExplicit() throws Exception {
+        var original = accept(owner, invite(coach));
+        var nextToken = invite(stranger);
+        var pending = body(call(stranger, get("/api/v2/coaching/invites")).andExpect(status().isOk()));
+        call(stranger, delete("/api/v2/coaching/invites/" + pending.get(0).get("id").asString()))
+                .andExpect(status().isNoContent());
+        var request = json.writeValueAsString(Map.of("replaceLinkId", original, "healthAccess", true));
+        call(owner, post("/api/v2/coaching/invites/" + nextToken + "/accept").contentType(MediaType.APPLICATION_JSON)
+                .content(request)).andExpect(status().isGone());
+        var overview = body(call(owner, get("/api/v2/coaching")).andExpect(status().isOk()));
+        assertThat(overview.get("coach").get("id").asString()).isEqualTo(original.toString());
+        var valid = invite(stranger);
+        call(owner, post("/api/v2/coaching/invites/" + valid + "/accept").contentType(MediaType.APPLICATION_JSON)
+                .content("{}")).andExpect(status().isConflict());
+        var changed = body(call(owner, post("/api/v2/coaching/invites/" + valid + "/accept")
+                .contentType(MediaType.APPLICATION_JSON).content(request)).andExpect(status().isOk()));
+        assertThat(changed.get("coachId").asString()).isEqualTo(userId(stranger).toString());
+        assertThat(changed.get("healthAccess").asBoolean()).isTrue();
+        call(coach, get("/api/v2/web/profile").param("ownerId", userId(owner).toString()))
+                .andExpect(status().isNotFound());
+    }
+
+
+    @Test
+    void accountDeletionRequiresRecentLoginErasesOwnerDataAndTransfersCoachedPrograms() throws Exception {
+        var ownProgram = UUID.randomUUID();
+        publish(coach, "program", ownProgram, 1, fixture("program"));
+        var token = invite(coach);
+        accept(owner, token);
+        var athleteId = userId(owner);
+        var coachId = userId(coach);
+        var coachedProgram = UUID.randomUUID();
+        assertThat(push(coach, item("program", coachedProgram, athleteId, 0, 1, fixture("program")))
+                .get("status").asString()).isEqualTo("accepted");
+        call(coach, delete("/api/v1/me")).andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/me").with(jwt().jwt(jwt -> jwt.issuer(ISSUER).subject(coach)
+                .claim("auth_time", Instant.now().minusSeconds(600).getEpochSecond()))))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/me").with(jwt().jwt(jwt -> jwt.issuer(ISSUER).subject(coach)
+                .claim("auth_time", Instant.now().getEpochSecond())))).andExpect(status().isAccepted());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.user_account WHERE id = ?", Integer.class,
+                coachId)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.program WHERE user_id = ?", Integer.class,
+                coachId)).isZero();
+        var transferred = body(call(owner, get("/api/v2/web/programs/" + coachedProgram))
+                .andExpect(status().isOk()));
+        assertThat(transferred.get("authorId").isNull()).isTrue();
+        call(coach, get("/api/v1/me")).andExpect(status().isUnauthorized());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.user_account WHERE issuer = ? AND subject = ?",
+                Integer.class, ISSUER, coach)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.program WHERE user_id = ?", Integer.class,
+                athleteId)).isEqualTo(1);
+    }
+
+    @Test
+    void unavailableDeletionDoesNotEraseAnyData() throws Exception {
+        var id = UUID.randomUUID();
+        publish(owner, "program", id, 1, fixture("program"));
+        org.mockito.Mockito.doThrow(new com.sizylift.backend.identity.deletion.KeycloakAccountDeletion.Unavailable())
+                .when(accountDeletion).requireConfigured();
+        mvc.perform(delete("/api/v1/me").with(jwt().jwt(jwt -> jwt.issuer(ISSUER).subject(owner)
+                .claim("auth_time", Instant.now().getEpochSecond())))).andExpect(status().isServiceUnavailable());
+        call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk());
+    }
+
+    @Test
+    void rosterListsOnlyActiveAthletesAndSeenBelongsToTheCoach() throws Exception {
+        var link = accept(owner, invite(coach));
+        publish(owner, "workout", UUID.randomUUID(), 1, fixture("workout"));
+        var roster = body(call(coach, get("/api/v2/web/athletes")).andExpect(status().isOk()));
+        assertThat(roster.size()).isEqualTo(1);
+        assertThat(roster.get(0).get("workoutTitle").asString()).isEqualTo("Присед и жим");
+        assertThat(body(call(stranger, get("/api/v2/web/athletes")).andExpect(status().isOk())).size()).isZero();
+        call(owner, post("/api/v2/web/athletes/" + link + "/seen")).andExpect(status().isNotFound());
+        call(coach, post("/api/v2/web/athletes/" + link + "/seen")).andExpect(status().isNoContent());
+        call(owner, delete("/api/v2/coaching/links/" + link)).andExpect(status().isNoContent());
+        assertThat(body(call(coach, get("/api/v2/web/athletes")).andExpect(status().isOk())).size()).isZero();
+    }
+
+    @Test
+    void sheetImportRejectsNonGoogleUrlsBeforeFetching() throws Exception {
+        for (var url : List.of("http://localhost:8080/actuator/health", "https://docs.google.com.evil.test/spreadsheets/d/x",
+                "https://docs.google.com@localhost/spreadsheets/d/x")) {
+            call(owner, post("/api/v2/web/import/sheet").contentType(MediaType.APPLICATION_JSON)
+                    .content(json.writeValueAsString(Map.of("url", url)))).andExpect(status().isBadRequest());
+        }
+    }
+
+
+    @Test
+    void archivedCoachProgramTransfersToTheAthleteOnDisconnect() throws Exception {
+        var link = accept(owner, invite(coach));
+        var ownerId = userId(owner);
+        var id = UUID.randomUUID();
+        var saved = push(coach, item("program", id, ownerId, 0, 1, fixture("program")));
+        call(coach, post("/api/v2/web/programs/" + id + "/archive").param("ownerId", ownerId.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("revision", saved.get("revision").asLong()))))
+                .andExpect(status().isNoContent());
+        call(owner, delete("/api/v2/coaching/links/" + link)).andExpect(status().isNoContent());
+        var archive = body(call(owner, get("/api/v2/web/programs/archive")).andExpect(status().isOk()));
+        assertThat(archive.size()).isEqualTo(1);
+        assertThat(archive.get(0).get("authorId").isNull()).isTrue();
+        call(owner, post("/api/v2/web/programs/" + id + "/restore")).andExpect(status().isNoContent());
+        call(coach, get("/api/v2/web/programs/archive").param("ownerId", ownerId.toString()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aNewerTombstoneCannotRestoreAnOldArchiveSnapshot() throws Exception {
+        var id = UUID.randomUUID();
+        publish(owner, "program", id, 1, fixture("program"));
+        var revision = body(call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk()))
+                .get("revision").asLong();
+        call(owner, post("/api/v2/web/programs/" + id + "/archive").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("revision", revision)))).andExpect(status().isNoContent());
+        var state = jdbc.queryForObject("SELECT revision FROM sizylift.published_aggregate WHERE user_id = ? AND type = 'program' AND aggregate_id = ?",
+                Long.class, userId(owner), id);
+        var newer = item("program", id, null, state, 1, null);
+        newer.put("deleted", true);
+        newer.put("changedAt", Instant.now().toString());
+        assertThat(push(owner, newer).get("status").asString()).isEqualTo("accepted");
+        call(owner, post("/api/v2/web/programs/" + id + "/restore")).andExpect(status().isConflict());
+        assertThat(body(call(owner, get("/api/v2/web/programs/archive")).andExpect(status().isOk())).size()).isZero();
     }
 
     private static JsonNode exercise(JsonNode catalog, UUID id) {

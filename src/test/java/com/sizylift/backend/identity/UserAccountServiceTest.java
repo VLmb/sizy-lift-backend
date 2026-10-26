@@ -37,7 +37,7 @@ class UserAccountServiceTest {
         when(repository.findByIssuerAndSubject(ISSUER, SUBJECT)).thenReturn(Optional.of(account));
         var meters = new SimpleMeterRegistry();
         try {
-            var service = new UserAccountService(repository, meters);
+            var service = new UserAccountService(repository, meters, mock(com.sizylift.backend.identity.deletion.AccountDeletionRepository.class));
 
             assertThat(service.resolve(new ExternalIdentity(ISSUER, SUBJECT, email, true))).isSameAs(account);
 
@@ -59,7 +59,7 @@ class UserAccountServiceTest {
         when(repository.updateContact(original, email, verified)).thenReturn(Optional.of(updated));
         var meters = new SimpleMeterRegistry();
         try {
-            var service = new UserAccountService(repository, meters);
+            var service = new UserAccountService(repository, meters, mock(com.sizylift.backend.identity.deletion.AccountDeletionRepository.class));
 
             assertThat(service.resolve(new ExternalIdentity(ISSUER, SUBJECT, email, verified))).isSameAs(updated);
 

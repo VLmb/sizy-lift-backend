@@ -1,6 +1,8 @@
 package com.sizylift.backend.web.controller;
 
 import java.util.UUID;
+import java.time.LocalDate;
+import com.sizylift.backend.web.dto.WebDtos.*;
 
 import com.sizylift.backend.identity.controller.AuthenticatedAccount;
 import com.sizylift.backend.web.dto.WebDtos.CatalogResponse;
@@ -62,8 +64,26 @@ public class WebController {
     public ExerciseHistoryResponse history(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId,
                                            @RequestParam(required = false) UUID ownerId,
                                            @RequestParam(defaultValue = "" + WebReadService.DEFAULT_HISTORY_LIMIT)
-                                           @Min(1) @Max(WebReadService.MAX_HISTORY_LIMIT) int limit) {
-        return reads.history(userId(jwt), ownerId, exerciseId, limit);
+                                           @Min(1) @Max(WebReadService.MAX_HISTORY_LIMIT) int limit,
+                                           @RequestParam(defaultValue = "0") @Min(0) @Max(WebReadService.MAX_HISTORY_OFFSET) int offset) {
+        return reads.history(userId(jwt), ownerId, exerciseId, limit, offset);
+    }
+
+    @GetMapping("/timeline")
+    public TimelineResponse timeline(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) UUID ownerId,
+                                     @RequestParam LocalDate from, @RequestParam LocalDate to) {
+        return reads.timeline(userId(jwt), ownerId, from, to);
+    }
+
+    @GetMapping("/workouts/{id}")
+    public WorkoutResponse workout(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
+                                    @RequestParam(required = false) UUID ownerId) {
+        return reads.workout(userId(jwt), ownerId, id);
+    }
+
+    @GetMapping("/profile")
+    public ProfileResponse profile(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) UUID ownerId) {
+        return reads.profile(userId(jwt), ownerId);
     }
 
     private UUID userId(Jwt jwt) {

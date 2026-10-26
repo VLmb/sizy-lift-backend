@@ -27,7 +27,7 @@ public class CoachingRepository {
             INSERT INTO sizylift.coaching_invite (coach_user_id, token_hash, expires_at) VALUES (?, ?, ?)
             """;
     private static final String SELECT_INVITE = """
-            SELECT id, coach_user_id, expires_at, accepted_at FROM sizylift.coaching_invite WHERE token_hash = ?
+            SELECT id, coach_user_id, expires_at, accepted_at, revoked_at FROM sizylift.coaching_invite WHERE token_hash = ?
             """;
     private static final String ACCEPT_INVITE = """
             UPDATE sizylift.coaching_invite SET accepted_at = now(), accepted_by = ? WHERE id = ?
@@ -49,6 +49,28 @@ public class CoachingRepository {
             """.formatted(LINK_COLUMNS);
     private static final String DISPLAY_NAME =
             "SELECT display_name FROM sizylift.athlete_profile WHERE user_id = ?";
+
+    private static final String PENDING_INVITES = """
+            SELECT id, created_at, expires_at FROM sizylift.coaching_invite
+            WHERE coach_user_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
+            ORDER BY created_at DESC
+            """;
+    private static final String REVOKE_INVITE = """
+            UPDATE sizylift.coaching_invite SET revoked_at = coalesce(revoked_at, now())
+            WHERE coach_user_id = ? AND id = ? AND accepted_at IS NULL
+            """;
+
+    public record PendingInvite(UUID id, Instant createdAt, Instant expiresAt) {
+    }
+
+    public List<PendingInvite> pendingInvites(UUID coachId) {
+        return jdbc.query(PENDING_INVITES, (row, n) -> new PendingInvite(row.getObject("id", UUID.class),
+                instant(row, "created_at"), instant(row, "expires_at")), coachId);
+    }
+
+    public boolean revokeInvite(UUID coachId, UUID id) {
+        return jdbc.update(REVOKE_INVITE, coachId, id) > 0;
+    }
 
     private final JdbcTemplate jdbc;
 
@@ -123,7 +145,7 @@ public class CoachingRepository {
 
     private static CoachingInvite invite(ResultSet row, int rowNumber) throws SQLException {
         return new CoachingInvite(row.getObject("id", UUID.class), row.getObject("coach_user_id", UUID.class),
-                instant(row, "expires_at"), instant(row, "accepted_at"));
+                instant(row, "expires_at"), instant(row, "accepted_at"), instant(row, "revoked_at"));
     }
 
     private static CoachingLink link(ResultSet row, int rowNumber) throws SQLException {

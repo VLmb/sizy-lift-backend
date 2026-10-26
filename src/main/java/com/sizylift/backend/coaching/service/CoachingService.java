@@ -1,6 +1,7 @@
 package com.sizylift.backend.coaching.service;
 
 import java.time.Clock;
+import com.sizylift.backend.web.repository.ProgramArchiveRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,10 +43,12 @@ public class CoachingService {
     private final CoachingMetrics metrics;
     private final NotificationQueue notifications;
     private final Clock clock;
+    private final ProgramArchiveRepository archives;
 
     CoachingService(CoachingRepository coaching, PublishedAggregateRepository aggregates, FeedMaintenance feeds,
                     InviteTokens tokens, TransactionTemplate transactions, CoachingMetrics metrics,
-                    NotificationQueue notifications, Clock clock) {
+                    NotificationQueue notifications, Clock clock,
+                    ProgramArchiveRepository archives) {
         this.coaching = coaching;
         this.aggregates = aggregates;
         this.feeds = feeds;
@@ -54,6 +57,7 @@ public class CoachingService {
         this.metrics = metrics;
         this.notifications = notifications;
         this.clock = clock;
+        this.archives = archives;
     }
 
     public Overview overview(UUID userId) {
@@ -89,6 +93,21 @@ public class CoachingService {
 
     /** Создаёт связь и засевает ленту тренера всем, что он видит у подопечного. */
     public CoachingLink accept(UUID athleteId, String token) {
+        return accept(athleteId, token, null, false);
+    }
+
+    public List<CoachingRepository.PendingInvite> pendingInvites(UUID coachId) {
+        return coaching.pendingInvites(coachId);
+    }
+
+    public void revokeInvite(UUID coachId, UUID id) {
+        if (!coaching.revokeInvite(coachId, id)) {
+            throw new CoachingExceptions.NotFound();
+        }
+    }
+
+    /** Смена тренера, передача программ и согласие на травмы — одна транзакция. */
+    public CoachingLink accept(UUID athleteId, String token, UUID replaceLinkId, boolean healthAccess) {
         if (!tokens.wellFormed(token)) {
             throw new CoachingExceptions.NotFound();
         }
@@ -99,13 +118,26 @@ public class CoachingService {
                 if (!invite.usableAt(clock.instant())) {
                     throw new CoachingExceptions.InviteGone();
                 }
-                if (invite.coachId().equals(athleteId) || coaching.activeAsAthlete(athleteId).isPresent()) {
+                if (invite.coachId().equals(athleteId)) {
+                    throw new CoachingExceptions.Conflict();
+                }
+                var current = coaching.activeAsAthlete(athleteId);
+                if (current.isPresent()) {
+                    if (!current.get().id().equals(replaceLinkId)) {
+                        throw new CoachingExceptions.Conflict();
+                    }
+                    end(athleteId, current.get().id());
+                } else if (replaceLinkId != null) {
                     throw new CoachingExceptions.Conflict();
                 }
                 var link = coaching.insertLink(invite.coachId(), athleteId);
+                if (healthAccess) {
+                    coaching.setHealthAccess(link.id(), true);
+                    link = coaching.lockLink(link.id());
+                }
                 coaching.acceptInvite(invite.id(), athleteId);
                 feeds.apply(List.of(new FeedMaintenance.Seed(link.coachId(), athleteId,
-                        AccessPolicy.coachVisibleTypes(false))));
+                        AccessPolicy.coachVisibleTypes(healthAccess))));
                 notifications.enqueue(link.coachId(), NotificationKind.INVITE_ACCEPTED, link.id(),
                         Map.of(NotificationQueue.LINK_ID, link.id().toString(),
                                 NotificationQueue.ACTOR_ID, athleteId.toString()));
@@ -156,7 +188,12 @@ public class CoachingService {
             }
             coaching.endLink(linkId);
             var operations = new ArrayList<Operation>();
+            var archived = archives.heads(link.athleteId());
             for (var program : aggregates.transferToOwner(link.athleteId(), AggregateType.PROGRAM, link.coachId())) {
+                if (program.deleted() && archived.containsKey(program.aggregateId())) {
+                    archives.transfer(link.athleteId(), program.aggregateId(), archived.get(program.aggregateId()),
+                            program.revision());
+                }
                 operations.add(new FeedMaintenance.Upsert(link.athleteId(), link.athleteId(), AggregateType.PROGRAM,
                         program.aggregateId(), program.revision(), program.deleted()));
             }

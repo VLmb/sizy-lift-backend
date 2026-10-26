@@ -68,10 +68,27 @@ public class CoachingController {
                 invite.expiresAt(), sorted(AccessPolicy.COACH_VISIBLE), sorted(AccessPolicy.coachVisibleTypes(true)));
     }
 
+    @GetMapping("/invites")
+    public List<com.sizylift.backend.coaching.repository.CoachingRepository.PendingInvite> pendingInvites(
+            @AuthenticationPrincipal Jwt jwt) {
+        return coaching.pendingInvites(userId(jwt));
+    }
+
+    @DeleteMapping("/invites/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeInvite(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        coaching.revokeInvite(userId(jwt), id);
+    }
+
+    public record AcceptRequest(UUID replaceLinkId, Boolean healthAccess) {
+    }
+
     @PostMapping("/invites/{token}/accept")
-    public LinkResponse acceptInvite(@AuthenticationPrincipal Jwt jwt, @PathVariable String token) {
+    public LinkResponse acceptInvite(@AuthenticationPrincipal Jwt jwt, @PathVariable String token,
+                                     @RequestBody(required = false) AcceptRequest request) {
         var userId = userId(jwt);
-        return link(userId, coaching.accept(userId, token));
+        return link(userId, coaching.accept(userId, token, request == null ? null : request.replaceLinkId(),
+                request != null && Boolean.TRUE.equals(request.healthAccess())));
     }
 
     @PutMapping("/links/{linkId}/health-access")

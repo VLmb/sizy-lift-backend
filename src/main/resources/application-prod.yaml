@@ -17,6 +17,11 @@ spring:
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
 
 sizylift:
+  account-deletion:
+    enabled: ${ACCOUNT_DELETION_ENABLED}
+    admin-url: ${KEYCLOAK_ADMIN_URL}
+    client-id: ${KEYCLOAK_DELETION_CLIENT_ID}
+    client-secret: ${KEYCLOAK_DELETION_CLIENT_SECRET}
   web:
     # Адрес веб-версии (Origin), с которого браузер вызывает API, например https://example.com.
     # Несколько адресов — через запятую.
