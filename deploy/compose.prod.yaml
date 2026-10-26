@@ -1,7 +1,8 @@
 # Production stack on a single host. Run from the repository root:
 #   ./gradlew bootJar
 #   docker compose --env-file deploy/.env -f deploy/compose.prod.yaml up -d --build --wait
-# Every secret and address comes from deploy/.env (template: deploy/.env.example); nothing has a default.
+# Required secrets and addresses come from deploy/.env (template: deploy/.env.example).
+# Optional account deletion stays off until its service client is configured.
 # The web app is built from a clone of sizy-lift-frontend at WEB_SOURCE.
 name: sizylift
 
@@ -55,10 +56,10 @@ services:
       KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/sizylift/protocol/openid-connect/certs
       OTLP_ENDPOINT: http://otel-lgtm:4318
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:?Set EXPO_ACCESS_TOKEN}
-      ACCOUNT_DELETION_ENABLED: ${ACCOUNT_DELETION_ENABLED}
+      ACCOUNT_DELETION_ENABLED: ${ACCOUNT_DELETION_ENABLED:-false}
       KEYCLOAK_ADMIN_URL: http://keycloak:8080
-      KEYCLOAK_DELETION_CLIENT_ID: ${KEYCLOAK_DELETION_CLIENT_ID}
-      KEYCLOAK_DELETION_CLIENT_SECRET: ${KEYCLOAK_DELETION_CLIENT_SECRET}
+      KEYCLOAK_DELETION_CLIENT_ID: ${KEYCLOAK_DELETION_CLIENT_ID:-}
+      KEYCLOAK_DELETION_CLIENT_SECRET: ${KEYCLOAK_DELETION_CLIENT_SECRET:-}
       WEB_ALLOWED_ORIGINS: https://${WEB_DOMAIN}
     depends_on:
       postgres:

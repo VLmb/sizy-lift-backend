@@ -119,8 +119,10 @@ KEYCLOAK_DELETION_CLIENT_ID=sizylift-account-deletion
 KEYCLOAK_DELETION_CLIENT_SECRET=<секрет из Keycloak>
 ```
 
-Если функция пока выключена: ACCOUNT_DELETION_ENABLED=false, client id можно оставить указанным,
-секрет — пустым. Адрес Keycloak для backend берётся из Compose (`http://keycloak:8080`), наружный issuer
+Если функция пока выключена, новые переменные можно не добавлять в существующий `deploy/.env`:
+Compose передаст `ACCOUNT_DELETION_ENABLED=false`, client id и секрет — пустыми. Явно пустое значение
+флага тоже означает false. Остальные обязательные секреты по-прежнему проверяются при запуске.
+Для включения заполните все три значения, как выше. Адрес Keycloak для backend берётся из Compose (`http://keycloak:8080`), наружный issuer
 остаётся прежним. Для запуска вне Compose дополнительно задайте KEYCLOAK_ADMIN_URL в prod-профиле.
 В dev настройка передаётся через SIZYLIFT_ACCOUNT_DELETION_ENABLED, SIZYLIFT_ACCOUNT_DELETION_ADMIN_URL,
 SIZYLIFT_ACCOUNT_DELETION_CLIENT_ID и SIZYLIFT_ACCOUNT_DELETION_CLIENT_SECRET.
@@ -140,3 +142,22 @@ Liquibase применит 015–017: снимки архива, очередь 
 Контролируйте метрику deletion.pending: длительный остаток означает проблему доступа к Keycloak.
 Перед откатом на версию без обработчика удаления дождитесь пустой очереди.
 Эти команды — инструкция обновления; при разработке продакшен не обновлялся.
+
+## Восстановление после перезапуска из-за пустого флага удаления
+
+В версии до исправления пустой `ACCOUNT_DELETION_ENABLED` вызывал `Invalid boolean value []`
+и цикл перезапусков backend. Предупреждения Java об Unsafe/SLF4J не являются причиной этого сбоя.
+Временно передайте значение прямо в команду (оно имеет приоритет над env-файлом):
+
+```bash
+ACCOUNT_DELETION_ENABLED=false docker compose --env-file deploy/.env -f deploy/compose.prod.yaml up -d --force-recreate --wait backend
+docker compose --env-file deploy/.env -f deploy/compose.prod.yaml ps backend
+```
+
+Это использует уже собранный образ и выключает только удаление аккаунтов. Можно также добавить
+`ACCOUNT_DELETION_ENABLED=false` в `deploy/.env`, чтобы последующие запуски старого Compose-файла
+сохраняли значение. Предупреждения о пустом client id/секрете в старом файле безвредны при выключенной
+функции; новый Compose больше их не выдаёт.
+После получения исправления достаточно пересоздать backend с обновлённым Compose. Пересборка jar
+для этой правки, изменение БД и переимпорт Keycloak не нужны. Проверка ProductionComposeStartupTest
+разворачивает настоящий Compose с прежним env-файлом и загружает его значения в Spring prod context.
