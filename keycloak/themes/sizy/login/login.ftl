@@ -21,17 +21,22 @@
                         </#assign>
                         <@field.input name="username" label=label error=messagesPerField.getFirstError('username','password')
                             autofocus=true autocomplete="${(enableWebAuthnConditionalUI?has_content)?then('username webauthn', 'username')}" value=login.username!'' />
-                        <@field.password name="password" label=msg("password") error="" forgotPassword=realm.resetPasswordAllowed autofocus=usernameHidden?? autocomplete="current-password">
-                            <#if realm.rememberMe && !usernameHidden??>
-                                <@field.checkbox name="rememberMe" label=msg("rememberMe") value=login.rememberMe?? />
-                            </#if>
-                        </@field.password>
+                        <@field.password name="password" label=msg("password") error="" forgotPassword=realm.resetPasswordAllowed autofocus=usernameHidden?? autocomplete="current-password" />
                     <#else>
-                        <@field.password name="password" label=msg("password") forgotPassword=realm.resetPasswordAllowed autofocus=usernameHidden?? autocomplete="current-password">
-                            <#if realm.rememberMe && !usernameHidden??>
-                                <@field.checkbox name="rememberMe" label=msg("rememberMe") value=login.rememberMe?? />
-                            </#if>
-                        </@field.password>
+                        <@field.password name="password" label=msg("password") forgotPassword=realm.resetPasswordAllowed autofocus=usernameHidden?? autocomplete="current-password" />
+                    </#if>
+
+                    <#-- Sizy: «Запомнить меня» вынесено из подсказок пароля в заметный блок и отмечено по умолчанию.
+                         После неудачной попытки форма сохраняет выбор пользователя (введённый email есть, флага нет). -->
+                    <#if realm.rememberMe && !usernameHidden??>
+                        <div class="sizy-remember">
+                            <input type="checkbox" id="rememberMe" name="rememberMe" aria-describedby="sizy-remember-hint"
+                                   <#if login.rememberMe?? || !(login.username?has_content)>checked</#if>>
+                            <label for="rememberMe">
+                                <span class="sizy-remember-title">${msg("rememberMe")}<span class="sizy-remember-badge">${msg("sizyRememberMeRecommended")}</span></span>
+                                <span id="sizy-remember-hint" class="sizy-remember-hint">${msg("sizyRememberMeHint")}</span>
+                            </label>
+                        </div>
                     </#if>
 
                     <input type="hidden" id="id-hidden-input" name="credentialId" <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if>/>

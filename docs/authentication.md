@@ -73,6 +73,27 @@ Endpoints (discovery: `<issuer>/.well-known/openid-configuration`):
 | Access token | 5 минут |
 | Refresh token (с `offline_access`) | 30 дней с последнего использования |
 | Refresh token без `offline_access` | 30 минут простоя, максимум 10 часов (SSO-сессия браузера) |
+| То же с «Запомнить меня» | 14 дней простоя, максимум 30 дней |
+
+### «Запомнить меня»
+
+Веб не хранит токены между перезагрузками и восстанавливает вход тихим запросом
+`prompt=none` по SSO-cookie Keycloak. Поэтому срок, через который сайт снова попросит
+войти, задаёт SSO-сессия Keycloak, а не бэкенд (он остаётся `STATELESS`).
+
+В realm включён `rememberMe`. На странице входа темы `sizy` это заметный блок перед
+кнопкой «Войти» с пометкой «Рекомендуем» и предупреждением про общие устройства.
+При первом показе формы галочка отмечена; после неудачной попытки форма сохраняет выбор
+пользователя. С галочкой Keycloak ставит постоянную cookie и держит сессию
+`ssoSessionIdleTimeoutRememberMe` = 14 дней простоя, но не дольше
+`ssoSessionMaxLifespanRememberMe` = 30 дней. Без галочки — прежние 30 минут / 10 часов,
+cookie удаляется при закрытии браузера. Мобильного приложения настройка по сути не
+касается: оно хранит offline refresh token.
+
+Существующий realm эти настройки не получит при перезапуске. В production:
+**Realm settings → Login → Remember me** — включить; **Realm settings → Sessions** —
+*SSO Session Idle Remember Me* 14 дней, *SSO Session Max Remember Me* 30 дней.
+Локально — `docker compose down --volumes`.
 
 Refresh token одноразовый (rotation): каждое обновление возвращает новый refresh
 token, повторное использование старого даёт `invalid_grant`. Клиент должен
