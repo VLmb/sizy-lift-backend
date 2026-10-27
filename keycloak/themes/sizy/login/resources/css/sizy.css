@@ -295,6 +295,46 @@ select:focus-visible {
   font-size: 14px;
   line-height: 1.45;
 }
+/* Страницы изменения аккаунта (kc_action): «Сохранить / Отмена», «Выйти на других устройствах». */
+.pf-v5-c-button.pf-m-secondary::after {
+  border-color: transparent;
+}
+.pf-v5-c-form__actions {
+  margin: 0;
+  gap: 12px;
+}
+.pf-v5-c-form__actions > .pf-v5-c-button {
+  margin: 0;
+}
+.pf-v5-c-check {
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+.pf-v5-c-check__input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sizy-bronze);
+  cursor: pointer;
+}
+.pf-v5-c-check__label {
+  color: var(--sizy-text);
+  cursor: pointer;
+}
+#kc-form-options {
+  margin-bottom: 20px;
+}
+.pf-v5-c-form-control.pf-m-readonly,
+.pf-v5-c-form-control:has(> input[readonly]),
+.pf-v5-c-form-control:has(> input:disabled) {
+  background: transparent;
+  border-style: dashed;
+}
+.pf-v5-c-form-control > input[readonly],
+.pf-v5-c-form-control > input:disabled {
+  color: var(--sizy-muted);
+}
 .sizy-data-notice,
 .sizy-local-note {
   margin-top: 20px;
