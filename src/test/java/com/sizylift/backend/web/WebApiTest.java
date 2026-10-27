@@ -493,6 +493,75 @@ class WebApiTest extends PostgresIntegrationTest {
         return UUID.fromString(link.get("id").asString());
     }
 
+    @Test
+    void standalonePlanHasNoProgramAndUsesRevisionsWithoutInventingCompletedWorkouts() throws Exception {
+        var workout = (ObjectNode) fixture("program").get("cycles").get(0).get("weeks").get(0).get("workouts").get(0).deepCopy();
+        var id = UUID.fromString(workout.get("id").asString());
+        var path = "/api/v2/web/standalone-workouts/" + id;
+        var first = Map.of("revision", 0, "workout", workout);
+        mvc.perform(put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first)))
+                .andExpect(status().isUnauthorized());
+        var created = body(call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first)))
+                .andExpect(status().isOk()));
+        assertThat(created.get("revision").asLong()).isEqualTo(1);
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first)))
+                .andExpect(status().isOk());
+        assertThat(body(call(owner, get("/api/v2/web/programs")).andExpect(status().isOk())).get("programs")).isEmpty();
+        var timeline = body(call(owner, get("/api/v2/web/timeline").param("from", "2026-10-01").param("to", "2026-10-31"))
+                .andExpect(status().isOk()));
+        assertThat(timeline.get("planned").get(0).get("programId").isNull()).isTrue();
+        assertThat(timeline.get("workouts")).isEmpty();
+        workout.put("workoutDate", "2026-10-22");
+        var changed = Map.of("revision", 1, "workout", workout);
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(changed))).andExpect(status().isOk());
+        var stale = workout.deepCopy().put("title", "Устаревшая правка");
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("revision", 1, "workout", stale))))
+                .andExpect(status().isConflict());
+        call(owner, delete(path).param("revision", "1")).andExpect(status().isConflict());
+        var after = body(call(owner, get("/api/v2/web/timeline").param("from", "2026-10-22").param("to", "2026-10-22"))
+                .andExpect(status().isOk())).get("planned").get(0);
+        assertThat(after.get("scheduledDate").asString()).isEqualTo("2026-10-22");
+        assertThat(after.get("rescheduledAt").isNull()).isFalse();
+        call(owner, delete(path).param("revision", "2")).andExpect(status().isNoContent());
+        call(owner, get(path)).andExpect(status().isNotFound());
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first))).andExpect(status().isConflict());
+    }
+
+    @Test
+    void standalonePlanIsReadOnlyToActiveCoachAndUnavailableToStrangersOrFormerCoach() throws Exception {
+        var workout = fixture("program").get("cycles").get(0).get("weeks").get(0).get("workouts").get(0);
+        var path = "/api/v2/web/standalone-workouts/" + workout.get("id").asString();
+        var request = json.writeValueAsString(Map.of("revision", 0, "workout", workout));
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(request)).andExpect(status().isOk());
+        var ownerId = userId(owner).toString();
+        var linkId = accept(owner, invite(coach));
+        call(coach, get(path).param("ownerId", ownerId)).andExpect(status().isOk());
+        call(stranger, get(path).param("ownerId", ownerId)).andExpect(status().isNotFound());
+        call(stranger, get(path)).andExpect(status().isNotFound());
+        for (var actor : List.of(coach, stranger)) {
+            call(actor, put(path).param("ownerId", ownerId).contentType(MediaType.APPLICATION_JSON).content(request)).andExpect(status().isForbidden());
+            call(actor, delete(path).param("ownerId", ownerId).param("revision", "1")).andExpect(status().isForbidden());
+        }
+        call(owner, delete("/api/v2/coaching/links/" + linkId)).andExpect(status().isNoContent());
+        call(coach, get(path).param("ownerId", ownerId)).andExpect(status().isNotFound());
+        assertThat(body(call(owner, get(path)).andExpect(status().isOk())).get("revision").asLong()).isEqualTo(1);
+    }
+
+    @Test
+    void standalonePlanValidatesNestedSetsAndIdentity() throws Exception {
+        var workout = (ObjectNode) fixture("program").get("cycles").get(0).get("weeks").get(0).get("workouts").get(0).deepCopy();
+        var path = "/api/v2/web/standalone-workouts/" + workout.get("id").asString();
+        var wrongId = "/api/v2/web/standalone-workouts/" + UUID.randomUUID();
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("workout", workout)))).andExpect(status().isBadRequest());
+        var valid = json.writeValueAsString(Map.of("revision", 0, "workout", workout));
+        call(owner, put(wrongId).contentType(MediaType.APPLICATION_JSON).content(valid)).andExpect(status().isBadRequest());
+        ((ObjectNode) workout.get("blocks").get(0).get("exercises").get(0).get("sets").get(0)).put("repetitions", -1);
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("revision", 0, "workout", workout))))
+                .andExpect(status().isBadRequest());
+        call(owner, get(path)).andExpect(status().isNotFound());
+    }
+
     private Map<String, Object> item(String type, UUID id, UUID ownerId, long baseRevision, long clientVersion,
                                      JsonNode payload) {
         var item = new HashMap<String, Object>();
