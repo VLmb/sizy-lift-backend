@@ -81,6 +81,9 @@
 `WEB_PUBLIC_URL` по умолчанию `http://localhost:5173` (Vite dev server), в production — `https://<домен>`
 из `deploy/compose.prod.yaml`. Refresh token веб держит только
 в памяти, после перезагрузки страницы сессия восстанавливается через cookie Keycloak (`prompt=none`).
+Сколько живёт эта cookie, зависит от галочки «Запомнить меня» на странице входа: с ней — до 14 дней простоя
+(максимум 30), без неё — 30 минут простоя и до закрытия браузера
+([authentication.md](authentication.md#запомнить-меня)).
 
 Realm импортируется только при первом старте Keycloak: локально — `docker compose down --volumes`, в production
 клиент добавляется через админку с адресом веба.

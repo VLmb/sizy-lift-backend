@@ -250,6 +250,91 @@ select:focus-visible {
 .sizy-consent-check label {
   cursor: pointer;
 }
+.sizy-remember {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(224, 154, 45, .45);
+  border-radius: 8px;
+  background: rgba(224, 154, 45, .08);
+}
+.sizy-remember input {
+  appearance: auto;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--sizy-bronze);
+  cursor: pointer;
+}
+.sizy-remember label {
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+.sizy-remember-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  color: var(--sizy-text);
+  font-size: 17px;
+  font-weight: 700;
+}
+.sizy-remember-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sizy-bronze);
+  color: var(--sizy-bg);
+  font-size: 12px;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+.sizy-remember-hint {
+  color: var(--sizy-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+/* Страницы изменения аккаунта (kc_action): «Сохранить / Отмена», «Выйти на других устройствах». */
+.pf-v5-c-button.pf-m-secondary::after {
+  border-color: transparent;
+}
+.pf-v5-c-form__actions {
+  margin: 0;
+  gap: 12px;
+}
+.pf-v5-c-form__actions > .pf-v5-c-button {
+  margin: 0;
+}
+.pf-v5-c-check {
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+.pf-v5-c-check__input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--sizy-bronze);
+  cursor: pointer;
+}
+.pf-v5-c-check__label {
+  color: var(--sizy-text);
+  cursor: pointer;
+}
+#kc-form-options {
+  margin-bottom: 20px;
+}
+.pf-v5-c-form-control.pf-m-readonly,
+.pf-v5-c-form-control:has(> input[readonly]),
+.pf-v5-c-form-control:has(> input:disabled) {
+  background: transparent;
+  border-style: dashed;
+}
+.pf-v5-c-form-control > input[readonly],
+.pf-v5-c-form-control > input:disabled {
+  color: var(--sizy-muted);
+}
 .sizy-data-notice,
 .sizy-local-note {
   margin-top: 20px;
@@ -268,10 +353,66 @@ select:focus-visible {
 .sizy-error:empty {
   display: none;
 }
-.pf-v5-c-alert {
-  --pf-v5-c-alert--BackgroundColor: #1c1c1c;
-  color: var(--sizy-text);
+/* Сообщения Keycloak (ошибки, подсказки) — мягкая карточка как тосты веба: тёмная подложка с оттенком
+   типа сообщения, цветная точка вместо иконки PatternFly, обычный текст. */
+.pf-v5-c-alert,
+.pf-v5-c-alert.pf-m-inline {
+  --sizy-alert-accent: var(--sizy-muted);
+  --sizy-alert-bg: #262626;
+  display: grid;
+  grid-template-areas: none;
+  grid-template-columns: 8px minmax(0, 1fr);
+  grid-template-rows: auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--sizy-alert-bg);
   box-shadow: none;
+  color: var(--sizy-text);
+}
+.pf-v5-c-alert::before,
+.pf-v5-c-alert::after {
+  display: none;
+}
+.pf-v5-c-alert__icon {
+  width: 8px;
+  height: 8px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--sizy-alert-accent);
+  grid-area: auto;
+  align-self: start;
+  margin-top: 7px;
+}
+.pf-v5-c-alert__icon > * {
+  display: none;
+}
+.pf-v5-c-alert__title,
+.pf-v5-c-alert .kc-feedback-text {
+  grid-area: auto;
+  margin: 0;
+  color: inherit;
+  font: 400 15px/1.45 DIN, Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+.pf-v5-c-alert.pf-m-info {
+  --sizy-alert-accent: var(--sizy-bronze);
+  --sizy-alert-bg: rgba(224, 154, 45, .1);
+}
+.pf-v5-c-alert.pf-m-success {
+  --sizy-alert-accent: #3fbfa2;
+  --sizy-alert-bg: rgba(63, 191, 162, .1);
+}
+.pf-v5-c-alert.pf-m-warning {
+  --sizy-alert-accent: #c3a56a;
+  --sizy-alert-bg: rgba(195, 165, 106, .1);
+}
+.pf-v5-c-alert.pf-m-danger {
+  --sizy-alert-accent: #c87575;
+  --sizy-alert-bg: rgba(200, 117, 117, .12);
 }
 .pf-v5-c-helper-text__item-text {
   overflow-wrap: anywhere;
