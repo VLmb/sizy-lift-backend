@@ -126,6 +126,18 @@ body#keycloak-bg {
   font-size: 17px;
   line-height: 1.45;
 }
+/* Keycloak выводит сообщение (alert) до содержимого страницы, то есть между заголовком и вводным
+   текстом. Вводный текст поднимается выше, и сообщение оказывается под ним, вплотную к форме. */
+.pf-v5-c-login__main-body {
+  display: flex;
+  flex-direction: column;
+}
+.pf-v5-c-login__main-body > .sizy-intro {
+  order: -1;
+}
+.pf-v5-c-login__main-body > .pf-v5-c-alert ~ .sizy-intro {
+  margin-bottom: 16px;
+}
 .pf-v5-c-form {
   gap: 20px;
 }
