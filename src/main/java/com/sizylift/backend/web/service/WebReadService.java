@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import com.sizylift.backend.web.dto.WebDtos.*;
 import com.sizylift.backend.web.repository.DiaryReadRepository;
+import com.sizylift.backend.web.repository.StandaloneWorkoutRepository;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 
@@ -41,15 +42,18 @@ public class WebReadService {
     private final AccessPolicy access;
     private final DiaryReadRepository diary;
     private final BetweenDataRepository between;
+    private final StandaloneWorkoutRepository standalone;
     private static final long MAX_PERIOD_DAYS = 366;
 
     WebReadService(WebReadRepository repository, PayloadReader payloads, AccessPolicy access,
-                   DiaryReadRepository diary, BetweenDataRepository between) {
+                   DiaryReadRepository diary, BetweenDataRepository between,
+                   StandaloneWorkoutRepository standalone) {
         this.repository = repository;
         this.payloads = payloads;
         this.access = access;
         this.diary = diary;
         this.between = between;
+        this.standalone = standalone;
     }
 
     /** Каталог и свои упражнения; тренер с {@code owner} подопечного видит ещё и его упражнения. */
@@ -96,7 +100,9 @@ public class WebReadService {
         if (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) > MAX_PERIOD_DAYS) {
             throw new InvalidPeriod();
         }
-        return new TimelineResponse(target, diary.planned(target, from, to), diary.workouts(target, from, to));
+        var planned = java.util.stream.Stream.concat(diary.planned(target, from, to).stream(),
+                standalone.planned(target, from, to).stream()).sorted(java.util.Comparator.comparing(PlannedSummary::scheduledDate)).toList();
+        return new TimelineResponse(target, planned, diary.workouts(target, from, to));
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)

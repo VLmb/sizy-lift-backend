@@ -161,3 +161,20 @@ docker compose --env-file deploy/.env -f deploy/compose.prod.yaml ps backend
 После получения исправления достаточно пересоздать backend с обновлённым Compose. Пересборка jar
 для этой правки, изменение БД и переимпорт Keycloak не нужны. Проверка ProductionComposeStartupTest
 разворачивает настоящий Compose с прежним env-файлом и загружает его значения в Spring prod context.
+
+## Отдельные планы тренировок в вебе
+
+Обновление с миграцией `018-standalone-workouts`: сначала backend, затем frontend.
+Таблица добавляется без изменения существующих программ; Liquibase применяет её при запуске.
+Новых переменных окружения, настройки Keycloak и ручного SQL не требуется.
+
+```bash
+git pull --ff-only
+./gradlew bootJar
+BACKEND_VERSION=$(git rev-parse --short HEAD) \
+  docker compose --env-file deploy/.env -f deploy/compose.prod.yaml up -d --build --wait backend
+```
+
+После успешного healthcheck backend обновите frontend обычной командой выше. Эти команды
+приведены для оператора; production при разработке не обновлялся. Ограничение мобильной
+синхронизации нового ресурса описано в [web.md](web.md).
