@@ -157,13 +157,11 @@ Realm импортируется только при первом старте K
   в одном снимке REPEATABLE READ. Если старые клиенты создали несколько идентификаторов синглтона,
   для редактирования возвращается наиболее поздняя ревизия.
 - `GET /api/v2/web/athletes` — только активные подопечные вызывающего тренера: linkId, athleteId,
-  name, workoutDate, workoutTitle, activityAt, hasNew, unseen (счётчики непросмотренных событий
+  name, workoutDate, workoutTitle, activityAt, unseen (счётчики непросмотренных событий
   «Входящих» по типам), oldestUnseenAt, openTasks, overdueTasks. Порядок: сначала подопечные
   с непросмотренными событиями по oldestUnseenAt по возрастанию, затем остальные по activityAt по убыванию.
-- `POST /api/v2/web/athletes/{linkId}/seen` → 204 — отметить просмотр, только действующему тренеру.
-  hasNew относится к новым комментариям спортсмена и переносам после последнего просмотра. Оба устарели
-  (заменены `unseen` и «Входящими»); удаляются, когда веб уберёт `hasNew` из своего типа
-  ([coach-workspace.md](coach-workspace.md), раздел 4).
+  Прежние `hasNew` и `POST /api/v2/web/athletes/{linkId}/seen` удалены 29.10.2026 (changeset `024`): их заменили
+  `unseen` и «Входящие» ([coach-workspace.md](coach-workspace.md), раздел 4).
   Локальные неотправленные программы серверу неизвестны.
 
 Каждый запрос с ownerId проверяет AccessPolicy; после разрыва связи — 404. Профиль, упражнения,

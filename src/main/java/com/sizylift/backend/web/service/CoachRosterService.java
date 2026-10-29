@@ -23,11 +23,4 @@ public class CoachRosterService {
     public List<AthleteRow> list(UUID caller) {
         return repository.list(caller, calendar.today());
     }
-
-    @Transactional
-    public void seen(UUID caller, UUID linkId) {
-        if (!repository.seen(caller, linkId)) {
-            throw new WebReadService.NotFound();
-        }
-    }
 }

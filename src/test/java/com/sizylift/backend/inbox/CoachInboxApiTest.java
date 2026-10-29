@@ -326,7 +326,7 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
         assertThat(first.get("oldestUnseenAt").isNull()).isFalse();
         assertThat(first.get("openTasks").asLong()).isEqualTo(3);
         assertThat(first.get("overdueTasks").asLong()).isEqualTo(1);
-        assertThat(first.has("hasNew")).isTrue();
+        assertThat(first.has("hasNew")).isFalse();
 
         markSeen(Map.of("athleteId", athleteId));
         roster = roster();

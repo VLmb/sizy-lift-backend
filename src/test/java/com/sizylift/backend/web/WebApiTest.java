@@ -407,15 +407,14 @@ class WebApiTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void rosterListsOnlyActiveAthletesAndSeenBelongsToTheCoach() throws Exception {
+    void rosterListsOnlyActiveAthletes() throws Exception {
         var link = accept(owner, invite(coach));
         publish(owner, "workout", UUID.randomUUID(), 1, fixture("workout"));
         var roster = body(call(coach, get("/api/v2/web/athletes")).andExpect(status().isOk()));
         assertThat(roster.size()).isEqualTo(1);
         assertThat(roster.get(0).get("workoutTitle").asString()).isEqualTo("Присед и жим");
         assertThat(body(call(stranger, get("/api/v2/web/athletes")).andExpect(status().isOk())).size()).isZero();
-        call(owner, post("/api/v2/web/athletes/" + link + "/seen")).andExpect(status().isNotFound());
-        call(coach, post("/api/v2/web/athletes/" + link + "/seen")).andExpect(status().isNoContent());
+        call(coach, post("/api/v2/web/athletes/" + link + "/seen")).andExpect(status().isNotFound());
         call(owner, delete("/api/v2/coaching/links/" + link)).andExpect(status().isNoContent());
         assertThat(body(call(coach, get("/api/v2/web/athletes")).andExpect(status().isOk())).size()).isZero();
     }

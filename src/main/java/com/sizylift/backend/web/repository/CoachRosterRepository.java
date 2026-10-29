@@ -16,7 +16,6 @@ public class CoachRosterRepository {
     private static final String ROSTER = """
             SELECT l.id, l.athlete_user_id, p.display_name, w.workout_date, w.title,
                    greatest(w.completed_at, s.signal_at, l.created_at) AS activity_at,
-                   s.signal_at > coalesce(l.coach_seen_at, l.created_at) AS has_new,
                    ev.workout_completed, ev.workout_rescheduled, ev.workout_missed, ev.program_ending,
                    ev.invite_accepted, ev.oldest_unseen_at, t.open_tasks, t.overdue_tasks
             FROM sizylift.coaching_link l
@@ -46,10 +45,6 @@ public class CoachRosterRepository {
             WHERE l.coach_user_id = ? AND l.ended_at IS NULL
             ORDER BY ev.oldest_unseen_at ASC NULLS LAST, activity_at DESC, l.id
             """;
-    private static final String SEEN = """
-            UPDATE sizylift.coaching_link SET coach_seen_at = now()
-            WHERE id = ? AND coach_user_id = ? AND ended_at IS NULL
-            """;
     private final JdbcTemplate jdbc;
 
     public CoachRosterRepository(JdbcTemplate jdbc) {
@@ -61,7 +56,7 @@ public class CoachRosterRepository {
      * {@code overdueTasks} — открытые задачи со сроком раньше сегодняшнего дня.
      */
     public record AthleteRow(UUID linkId, UUID athleteId, String name, LocalDate workoutDate,
-                             String workoutTitle, Instant activityAt, boolean hasNew, Unseen unseen,
+                             String workoutTitle, Instant activityAt, Unseen unseen,
                              Instant oldestUnseenAt, long openTasks, long overdueTasks) {
     }
 
@@ -79,17 +74,13 @@ public class CoachRosterRepository {
         return new AthleteRow(row.getObject("id", UUID.class),
                 row.getObject("athlete_user_id", UUID.class), row.getString("display_name"),
                 row.getObject("workout_date", LocalDate.class), row.getString("title"),
-                row.getObject("activity_at", OffsetDateTime.class).toInstant(), row.getBoolean("has_new"),
-                unseen(row), oldest == null ? null : oldest.toInstant(), row.getLong("open_tasks"),
+                row.getObject("activity_at", OffsetDateTime.class).toInstant(), unseen(row),
+                oldest == null ? null : oldest.toInstant(), row.getLong("open_tasks"),
                 row.getLong("overdue_tasks"));
     }
 
     private static Unseen unseen(ResultSet row) throws SQLException {
         return new Unseen(row.getLong("workout_completed"), row.getLong("workout_rescheduled"),
                 row.getLong("workout_missed"), row.getLong("program_ending"), row.getLong("invite_accepted"));
-    }
-
-    public boolean seen(UUID coach, UUID linkId) {
-        return jdbc.update(SEEN, linkId, coach) > 0;
     }
 }
