@@ -16,6 +16,12 @@ spring:
           audiences: sizylift-api
 
 sizylift:
+  admin:
+    keycloak-url: ""
+    keycloak-client-id: ""
+    keycloak-client-secret: ""
+    prometheus-url: ""
+    runtime-url: ""
   account-deletion:
     enabled: false
     admin-url: ""

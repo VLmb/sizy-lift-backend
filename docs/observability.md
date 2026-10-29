@@ -72,3 +72,10 @@ ssh -L 3000:127.0.0.1:3000 <сервер>   # затем http://localhost:3000
 
 Развитие наблюдаемости (дашборды, вход через Keycloak, метрики инфраструктуры, алерты)
 ведётся в [бэклоге](backlog.md#наблюдаемость-развитие-observabilitymd).
+
+## Админка сайта
+
+Основные графики SSD/RAM/CPU, HTTP и отклонений синхронизации доступны в `/admin`
+через защищённый backend API. `node-exporter` добавляет метрики хоста; Prometheus
+использует `deploy/prometheus.yaml`. Состояние и ограниченные stdout/stderr контейнеров
+читает изолированный `admin-runtime`. Подробности и настройка — [administration.md](administration.md).

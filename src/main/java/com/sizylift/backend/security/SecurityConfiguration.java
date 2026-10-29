@@ -1,5 +1,7 @@
 package com.sizylift.backend.security;
 
+import com.sizylift.backend.admin.service.AdminAccess;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -27,6 +29,8 @@ public class SecurityConfiguration {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, HEALTH_PATHS).permitAll()
                         .requestMatchers("/actuator/**").denyAll()
+                        .requestMatchers("/api/v2/admin", "/api/v2/admin/**").access((authentication, context) ->
+                                new AuthorizationDecision(AdminAccess.allowed(authentication.get())))
                         .anyRequest().authenticated())
                 // Источники — CorsConfigurationSource из web.config; пустой — CORS выключен.
                 .cors(Customizer.withDefaults())

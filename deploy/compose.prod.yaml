@@ -61,6 +61,13 @@ services:
       KEYCLOAK_DELETION_CLIENT_ID: ${KEYCLOAK_DELETION_CLIENT_ID:-}
       KEYCLOAK_DELETION_CLIENT_SECRET: ${KEYCLOAK_DELETION_CLIENT_SECRET:-}
       WEB_ALLOWED_ORIGINS: https://${WEB_DOMAIN}
+      KEYCLOAK_ADMIN_READ_CLIENT_ID: ${KEYCLOAK_ADMIN_READ_CLIENT_ID:-}
+      KEYCLOAK_ADMIN_READ_CLIENT_SECRET: ${KEYCLOAK_ADMIN_READ_CLIENT_SECRET:-}
+      ADMIN_PROMETHEUS_URL: http://otel-lgtm:9090
+      ADMIN_RUNTIME_URL: http://admin-runtime:8090
+    networks:
+      - default
+      - admin-runtime
     depends_on:
       postgres:
         condition: service_healthy
@@ -167,6 +174,46 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - otel-lgtm-data:/data
+      - ./prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
+
+  # Только метрики хоста; порты наружу не публикуются.
+  node-exporter:
+    image: prom/node-exporter:v1.9.1@sha256:d00a542e409ee618a4edc67da14dd48c5da66726bbd5537ab2af9c1dfc442c8a
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($|/)
+    volumes:
+      - /:/host:ro,rslave
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # Docker socket есть только у изолированного шлюза; наружу доступны лишь чтения через backend.
+  admin-runtime:
+    build: ./admin-runtime
+    image: sizylift-admin-runtime:${BACKEND_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-sizylift}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - admin-runtime
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 128m
+    pids_limit: 64
+
+networks:
+  admin-runtime:
+    internal: true
 
 volumes:
   caddy-data:

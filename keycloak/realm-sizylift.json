@@ -18,7 +18,10 @@
   "maxFailureWaitSeconds": 900,
   "passwordPolicy": "length(10) and maxLength(128) and notUsername and notEmail",
   "internationalizationEnabled": true,
-  "supportedLocales": ["ru", "en"],
+  "supportedLocales": [
+    "ru",
+    "en"
+  ],
   "defaultLocale": "ru",
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
@@ -54,14 +57,23 @@
       "serviceAccountsEnabled": false,
       "frontchannelLogout": false,
       "fullScopeAllowed": false,
-      "redirectUris": ["sizylift://auth/callback"],
+      "redirectUris": [
+        "sizylift://auth/callback"
+      ],
       "webOrigins": [],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "sizylift://auth/logout"
       },
-      "defaultClientScopes": ["basic", "profile", "email", "acr"],
-      "optionalClientScopes": ["offline_access"],
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email",
+        "acr"
+      ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
       "protocolMappers": [
         {
           "name": "sizylift-api-audience",
@@ -89,13 +101,23 @@
       "frontchannelLogout": false,
       "fullScopeAllowed": false,
       "rootUrl": "${WEB_PUBLIC_URL:http://localhost:5173}",
-      "redirectUris": ["${WEB_PUBLIC_URL:http://localhost:5173}/auth/callback", "${WEB_PUBLIC_URL:http://localhost:5173}/auth/silent"],
-      "webOrigins": ["${WEB_PUBLIC_URL:http://localhost:5173}"],
+      "redirectUris": [
+        "${WEB_PUBLIC_URL:http://localhost:5173}/auth/callback",
+        "${WEB_PUBLIC_URL:http://localhost:5173}/auth/silent"
+      ],
+      "webOrigins": [
+        "${WEB_PUBLIC_URL:http://localhost:5173}"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "${WEB_PUBLIC_URL:http://localhost:5173}/"
       },
-      "defaultClientScopes": ["basic", "profile", "email", "acr"],
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email",
+        "acr"
+      ],
       "optionalClientScopes": [],
       "protocolMappers": [
         {
@@ -107,6 +129,63 @@
             "access.token.claim": "true",
             "id.token.claim": "false",
             "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "sizylift-admin",
+      "name": "Sizy administration",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "rootUrl": "${WEB_PUBLIC_URL:http://localhost:5173}",
+      "redirectUris": [
+        "${WEB_PUBLIC_URL:http://localhost:5173}/auth/admin/callback",
+        "${WEB_PUBLIC_URL:http://localhost:5173}/auth/admin/silent"
+      ],
+      "webOrigins": [
+        "${WEB_PUBLIC_URL:http://localhost:5173}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${WEB_PUBLIC_URL:http://localhost:5173}/"
+      },
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [],
+      "authenticationFlowBindingOverrides": {
+        "browser": "f626bb13-ec43-4c71-a582-9f7bdc7c28cf"
+      },
+      "protocolMappers": [
+        {
+          "name": "sizylift-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "sizylift-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "sizy-admin-role",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "realm_access.roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
           }
         }
       ]
@@ -195,6 +274,28 @@
           "priority": 30
         }
       ]
+    },
+    {
+      "alias": "sizy-admin-browser",
+      "description": "Password and mandatory OTP, without cookie bypass",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20
+        }
+      ],
+      "id": "f626bb13-ec43-4c71-a582-9f7bdc7c28cf"
     }
   ],
   "requiredActions": [
@@ -331,5 +432,21 @@
         }
       }
     ]
-  }
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "sizy-admin",
+        "description": "Read-only Sizy administration"
+      }
+    ]
+  },
+  "scopeMappings": [
+    {
+      "client": "sizylift-admin",
+      "roles": [
+        "sizy-admin"
+      ]
+    }
+  ]
 }
