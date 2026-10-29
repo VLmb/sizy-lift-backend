@@ -299,7 +299,7 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
                 java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
         var callback = "http://localhost:5173/auth/admin/callback";
         var browser = browser();
-        var login = open(browser, realmUrl("localhost") + "/protocol/openid-connect/auth?client_id=sizylift-admin"
+        var login = open(browser, realmUrl("localhost") + "/protocol/openid-connect/auth?client_id=sizy-admin"
                 + "&response_type=code&scope=openid&prompt=login&redirect_uri="
                 + URLEncoder.encode(callback, StandardCharsets.UTF_8) + "&code_challenge_method=S256&code_challenge=" + challenge);
         var otp = submit(browser, login, "kc-form-login", Map.of("username", userEmail, "password", PASSWORD));
@@ -312,7 +312,7 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
                 .filter(part -> part.startsWith("code=")).map(part -> java.net.URLDecoder.decode(part.substring(5), StandardCharsets.UTF_8))
                 .findFirst().orElseThrow();
         var tokens = send(formPost(URI.create(realmUrl("localhost") + "/protocol/openid-connect/token"), Map.of(
-                "grant_type", "authorization_code", "client_id", "sizylift-admin", "redirect_uri", callback,
+                "grant_type", "authorization_code", "client_id", "sizy-admin", "redirect_uri", callback,
                 "code", code, "code_verifier", verifier)), 200);
         var access = JsonPath.<String>read(tokens, "$.access_token");
         var response = HTTP.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v2/admin/access"))
@@ -323,7 +323,7 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
     @Test
     void administrativeClientRequiresOtpEnrollmentWhenCredentialIsMissing() throws Exception {
         var browser = browser();
-        var login = open(browser, realmUrl("localhost") + "/protocol/openid-connect/auth?client_id=sizylift-admin"
+        var login = open(browser, realmUrl("localhost") + "/protocol/openid-connect/auth?client_id=sizy-admin"
                 + "&response_type=code&scope=openid&prompt=login&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fadmin%2Fcallback"
                 + "&code_challenge_method=S256&code_challenge=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG");
         var enrollment = submit(browser, login, "kc-form-login", Map.of("username", email, "password", PASSWORD));

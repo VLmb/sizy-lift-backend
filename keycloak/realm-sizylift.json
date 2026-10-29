@@ -134,7 +134,7 @@
       ]
     },
     {
-      "clientId": "sizylift-admin",
+      "clientId": "sizy-admin",
       "name": "Sizy administration",
       "enabled": true,
       "protocol": "openid-connect",
@@ -188,7 +188,8 @@
             "id.token.claim": "false"
           }
         }
-      ]
+      ],
+      "baseUrl": "${WEB_PUBLIC_URL:http://localhost:5173}/"
     }
   ],
   "identityProviders": [
@@ -443,7 +444,7 @@
   },
   "scopeMappings": [
     {
-      "client": "sizylift-admin",
+      "client": "sizy-admin",
       "roles": [
         "sizy-admin"
       ]

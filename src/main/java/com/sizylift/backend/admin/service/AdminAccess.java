@@ -8,7 +8,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 public final class AdminAccess {
     public static final String ROLE = "sizy-admin";
-    public static final String CLIENT = "sizylift-admin";
+    public static final String CLIENT = "sizy-admin";
 
     private AdminAccess() {
     }

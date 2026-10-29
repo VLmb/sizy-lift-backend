@@ -195,7 +195,7 @@ services:
   # Docker socket есть только у изолированного шлюза; наружу доступны лишь чтения через backend.
   admin-runtime:
     build: ./admin-runtime
-    image: sizylift-admin-runtime:${BACKEND_VERSION:-latest}
+    image: sizy-admin-runtime:${BACKEND_VERSION:-latest}
     restart: unless-stopped
     environment:
       COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-sizylift}
