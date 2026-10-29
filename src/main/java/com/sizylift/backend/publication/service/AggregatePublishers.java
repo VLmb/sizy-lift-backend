@@ -13,6 +13,7 @@ import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.AthleteDataRepository;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
+import com.sizylift.backend.publication.repository.OneRepMaxHistoryRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.springframework.context.annotation.Bean;
@@ -49,9 +50,14 @@ class AggregatePublishers {
     }
 
     @Bean
-    AggregatePublisher<OneRepMaxPayloadV1> oneRepMaxPublisher(AthleteDataRepository athlete) {
+    AggregatePublisher<OneRepMaxPayloadV1> oneRepMaxPublisher(AthleteDataRepository athlete,
+                                                              OneRepMaxHistoryRepository history) {
         return new AggregatePublisher<>(AggregateType.ONE_REP_MAX, OneRepMaxPayloadV1.class,
-                athlete::insertOneRepMax, athlete::deleteOneRepMax);
+                (userId, id, value) -> {
+                    athlete.insertOneRepMax(userId, id, value);
+                    history.record(userId, id, value);
+                },
+                athlete::deleteOneRepMax, history::delete);
     }
 
     @Bean

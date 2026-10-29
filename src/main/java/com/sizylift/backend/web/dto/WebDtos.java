@@ -59,6 +59,14 @@ public final class WebDtos {
     public record OneRepMaxListResponse(UUID ownerId, List<OneRepMax> oneRepMaxes) {
     }
 
+    /** Точка истории 1ПМ; {@code recordedAt} — когда сервер принял значение. */
+    public record OneRepMaxHistoryEntry(int weightGrams, LocalDate achievedOn, Instant recordedAt) {
+    }
+
+    /** История 1ПМ упражнения, новые сначала. */
+    public record OneRepMaxHistoryResponse(List<OneRepMaxHistoryEntry> entries) {
+    }
+
     /** Выполненный подход в истории упражнения; единицы как в payload v1. */
     public record HistorySet(String setType, Integer weightGrams, Integer repetitions, Integer durationMs,
                              Integer distanceM, Integer rpeTenths) {

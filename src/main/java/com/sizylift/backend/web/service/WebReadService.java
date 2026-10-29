@@ -8,6 +8,7 @@ import com.sizylift.backend.web.dto.WebDtos.*;
 import com.sizylift.backend.web.repository.DiaryReadRepository;
 import com.sizylift.backend.web.repository.StandaloneWorkoutRepository;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
+import com.sizylift.backend.publication.repository.OneRepMaxHistoryRepository;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 
 import com.sizylift.backend.access.service.AccessPolicy;
@@ -43,17 +44,19 @@ public class WebReadService {
     private final DiaryReadRepository diary;
     private final BetweenDataRepository between;
     private final StandaloneWorkoutRepository standalone;
+    private final OneRepMaxHistoryRepository oneRepMaxHistory;
     private static final long MAX_PERIOD_DAYS = 366;
 
     WebReadService(WebReadRepository repository, PayloadReader payloads, AccessPolicy access,
                    DiaryReadRepository diary, BetweenDataRepository between,
-                   StandaloneWorkoutRepository standalone) {
+                   StandaloneWorkoutRepository standalone, OneRepMaxHistoryRepository oneRepMaxHistory) {
         this.repository = repository;
         this.payloads = payloads;
         this.access = access;
         this.diary = diary;
         this.between = between;
         this.standalone = standalone;
+        this.oneRepMaxHistory = oneRepMaxHistory;
     }
 
     /** Каталог и свои упражнения; тренер с {@code owner} подопечного видит ещё и его упражнения. */
@@ -85,6 +88,15 @@ public class WebReadService {
     public OneRepMaxListResponse oneRepMaxes(UUID caller, UUID owner) {
         var target = readable(caller, owner, AggregateType.ONE_REP_MAX);
         return new OneRepMaxListResponse(target, repository.oneRepMaxes(target));
+    }
+
+    /** История 1ПМ упражнения; удалённый агрегат истории не имеет. */
+    @Transactional(readOnly = true)
+    public OneRepMaxHistoryResponse oneRepMaxHistory(UUID caller, UUID owner, UUID exerciseId) {
+        var target = readable(caller, owner, AggregateType.ONE_REP_MAX);
+        return new OneRepMaxHistoryResponse(oneRepMaxHistory.history(target, exerciseId).stream()
+                .map(entry -> new OneRepMaxHistoryEntry(entry.weightGrams(), entry.achievedOn(), entry.recordedAt()))
+                .toList());
     }
 
     @Transactional(readOnly = true)

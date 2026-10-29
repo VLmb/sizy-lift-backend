@@ -60,6 +60,12 @@ public class WebController {
         return reads.oneRepMaxes(userId(jwt), ownerId);
     }
 
+    @GetMapping("/one-rep-maxes/{exerciseId}/history")
+    public OneRepMaxHistoryResponse oneRepMaxHistory(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId,
+                                                     @RequestParam(required = false) UUID ownerId) {
+        return reads.oneRepMaxHistory(userId(jwt), ownerId, exerciseId);
+    }
+
     @GetMapping("/exercises/{exerciseId}/history")
     public ExerciseHistoryResponse history(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId,
                                            @RequestParam(required = false) UUID ownerId,
