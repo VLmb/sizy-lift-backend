@@ -17,7 +17,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class WebCorsConfiguration {
 
     private static final String API_PATHS = "/api/**";
-    private static final List<String> METHODS = List.of("GET", "POST", "PUT", "DELETE");
+    private static final List<String> METHODS = List.of("GET", "POST", "PUT", "PATCH", "DELETE");
     private static final List<String> HEADERS = List.of(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE);
     private static final Duration PREFLIGHT_CACHE = Duration.ofHours(1);
 

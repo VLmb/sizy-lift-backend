@@ -140,13 +140,34 @@ Realm импортируется только при первом старте K
   в одном снимке REPEATABLE READ. Если старые клиенты создали несколько идентификаторов синглтона,
   для редактирования возвращается наиболее поздняя ревизия.
 - `GET /api/v2/web/athletes` — только активные подопечные вызывающего тренера: linkId, athleteId,
-  name, workoutDate, workoutTitle, activityAt, hasNew. Порядок — по последней активности.
+  name, workoutDate, workoutTitle, activityAt, hasNew, unseen (счётчики непросмотренных событий
+  «Входящих» по типам), oldestUnseenAt, openTasks, overdueTasks. Порядок: сначала подопечные
+  с непросмотренными событиями по oldestUnseenAt по возрастанию, затем остальные по activityAt по убыванию.
 - `POST /api/v2/web/athletes/{linkId}/seen` → 204 — отметить просмотр, только действующему тренеру.
   hasNew относится к новым комментариям спортсмена и переносам после последнего просмотра.
   Локальные неотправленные программы серверу неизвестны.
 
 Каждый запрос с ownerId проверяет AccessPolicy; после разрыва связи — 404. Профиль, упражнения,
 1ПМ и тренировки подопечного тренер не записывает. Запись остаётся в sync/push с теми же проверками.
+
+## «Входящие» и задачи тренера
+
+Контракт — [coach-workspace.md](coach-workspace.md), разделы 4–5. «Сегодня» считается в зоне
+`sizylift.coach-workspace.zone` (`application.yaml`).
+
+- `GET /api/v2/web/inbox?athleteId=&unseenOnly=false&limit=50&before=&beforeId=` — `{unseenCount, events}`,
+  новые сначала (`occurredAt`, затем `id` по убыванию). `limit` 1–200. `before` — `occurredAt` последнего
+  события страницы; необязательный `beforeId` (его `id`) не теряет события с тем же временем.
+  `unseenCount` учитывает `athleteId`, но не `before` и `unseenOnly`.
+- `POST /api/v2/web/inbox/seen` → 204. Тело: `eventIds`, `athleteId`, `subjectId`, `all` — заданные условия
+  сужают выборку вместе; без условий (`{}`, пустой `eventIds`, `all: false`, нет тела) → 400. Чужие и
+  неизвестные id молча пропускаются.
+- `GET /api/v2/web/tasks?athleteId=&status=open|done|all`, `POST /api/v2/web/tasks` → 201,
+  `PATCH /api/v2/web/tasks/{id}` (`dueOn: null` снимает срок, `done: true` повторно время не двигает),
+  `DELETE /api/v2/web/tasks/{id}` → 204. Текст обрезается по краям, 1–500 символов, иначе 400.
+  Чужая задача или подопечный без активной связи → 404. CORS разрешает `PATCH`.
+
+Проверки — `CoachInboxApiTest`, `CoachTaskApiTest`.
 
 ## Архив программ
 
