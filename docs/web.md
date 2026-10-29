@@ -6,7 +6,8 @@
 
 Статус: реализованы чтение программ, календаря, тренировок, профиля, истории упражнений и списка подопечных; архив с восстановлением и получение публичной Google Таблицы.
 
-В работе: класс упражнения, %ПМ, «Входящие» и задачи тренера — [coach-workspace.md](coach-workspace.md).
+Класс упражнения, %ПМ в плановом подходе и кандидаты для ПМ реализованы; «Входящие» и задачи тренера в работе —
+[coach-workspace.md](coach-workspace.md).
 
 ## Чьи данные
 
@@ -28,13 +29,16 @@
 { "categories": [ { "id": "…", "code": "squat", "name": "Присед" } ],
   "equipment": [ … ], "muscles": [ … ],
   "exercises": [ { "id": "…", "ownerId": null, "name": "Присед со штангой", "shortName": "Присед",
-                   "movementCategoryId": "…", "resultType": "weight_reps", "isSbd": true, "note": null,
+                   "movementCategoryId": "…", "resultType": "weight_reps", "isSbd": true, "liftClass": "sbd",
+                   "note": null,
                    "muscles": [ { "muscleGroupId": "…", "role": "primary" } ], "equipmentIds": [ "…" ],
                    "revision": null } ] }
 ```
 
 Упражнения: системные (`ownerId: null`), свои упражнения вызывающего и, при `ownerId`, подопечного. У своих
-`revision` — ревизия агрегата `exercise` для `baseRevision` при правке.
+`revision` — ревизия агрегата `exercise` для `baseRevision` при правке. `liftClass` — класс упражнения
+(`sbd`, `basic`, `other`; [coach-workspace.md](coach-workspace.md), раздел 1), `isSbd` — производное
+`liftClass == "sbd"`, остаётся до перехода телефона.
 
 ### `GET /api/v2/web/programs?ownerId=`
 
@@ -54,7 +58,9 @@
 ```
 
 Программа и ревизия читаются из одного снимка (`REPEATABLE READ`). Клиент правит `program` и отправляет его в
-`sync/push` с `baseRevision = revision` (и `ownerId`, если пишет тренер).
+`sync/push` с `baseRevision = revision` (и `ownerId`, если пишет тренер). Плановый подход может нести
+`targetPercentOneRmTenths` (% от ПМ в десятых, `1..1500`) вместе с `targetWeightGrams` или вместо него; вес по
+проценту пересчитывает веб, сервер хранит оба поля как есть.
 
 ### `GET /api/v2/web/one-rep-maxes?ownerId=`
 
@@ -69,6 +75,19 @@
   "entries": [ { "workoutId": "…", "workoutDate": "2026-10-14", "title": "Присед и жим",
                  "sets": [ { "setType": "working", "weightGrams": 120000, "repetitions": 5, "durationMs": null,
                              "distanceM": null, "rpeTenths": 80 } ] } ] }
+```
+
+### `GET /api/v2/web/max-candidates?ownerId=&from=YYYY-MM-DD`
+
+Выполненные подходы для расчётного ПМ ([coach-workspace.md](coach-workspace.md), раздел 3): упражнения классов
+`sbd`/`basic`, тренировки с `workoutDate >= from`, `weightGrams > 0`, `1 ≤ repetitions ≤ 12`, тип результата подхода
+`weight_reps`. Порядок — `workoutDate` по убыванию, внутри тренировки — как в ней. `from` обязателен (иначе `400`);
+права — как у чтения тренировок, без права `404`. ПМ сервер не считает и не хранит.
+
+```json
+{ "from": "2026-09-28",
+  "sets": [ { "exerciseId": "…", "workoutId": "…", "workoutDate": "2026-10-20",
+              "weightGrams": 140000, "repetitions": 5, "rpeTenths": 85 } ] }
 ```
 
 ## Вход: клиент Keycloak `sizylift-web`
@@ -101,7 +120,8 @@ Realm импортируется только при первом старте K
 
 `WebApiTest`: свои программы и ревизия, запись через `sync/push` с этой ревизией, удалённые программы,
 каталог (системные + свои, чужие не видны), тренер читает подопечного до разрыва связи, посторонний получает
-`404`, 1ПМ и история упражнения, CORS для разрешённого и чужого origin.
+`404`, 1ПМ и история упражнения, CORS для разрешённого и чужого origin. `OneRepMaxPlanningApiTest`: класс в каталоге,
+%ПМ в программе и отдельном плане, отбор, порядок и права `max-candidates`.
 
 ## Дневник и профиль
 
@@ -170,7 +190,8 @@ SSRF-ограничения и удаление аккаунта. Все инт�
 ## Отдельные планы тренировок без программы
 
 `GET /api/v2/web/standalone-workouts/{id}?ownerId=…` возвращает `{ownerId, id, revision, workout}`.
-`workout` — вложенная `ProgramPayloadV1.PlannedWorkout` со всеми блоками, упражнениями и подходами.
+`workout` — вложенная `ProgramPayloadV1.PlannedWorkout` со всеми блоками, упражнениями и подходами (включая
+`targetPercentOneRmTenths`).
 В `timeline.planned` у такого плана `programId: null`. Программа и выполненная тренировка не создаются.
 Связанный факт, если он существует, определяется по `workout.plannedWorkoutId` у того же владельца.
 
