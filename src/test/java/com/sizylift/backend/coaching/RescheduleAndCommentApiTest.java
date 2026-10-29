@@ -125,6 +125,33 @@ class RescheduleAndCommentApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void reschedulingBackToTheProgramDateRemovesTheReschedule() throws Exception {
+        var program = coachProgram(PLANNED_DATE);
+        push(athlete, reschedule(1, MOVED_TO, program));
+        var athleteCursor = cursor(athlete);
+        var coachCursor = cursor(coach);
+
+        var result = push(athlete, reschedule(2, PLANNED_DATE, program));
+
+        assertThat(result.get("status").asString()).isEqualTo("accepted");
+        assertThat(result.get("payloadRewritten").asBoolean()).as("клиент берёт delete из ленты").isTrue();
+        assertThat(rescheduleExists()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT deleted FROM sizylift.published_aggregate WHERE user_id = ? "
+                + "AND type = 'workout_reschedule' AND aggregate_id = ?", Boolean.class, athleteId, PLANNED_WORKOUT))
+                .isTrue();
+        for (var feed : List.of(changes(athlete, athleteCursor), changes(coach, coachCursor))) {
+            assertThat(kinds(feed)).containsExactly("workout_reschedule:delete");
+            assertThat(feed.get(0).get("revision").asLong()).isEqualTo(result.get("revision").asLong());
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.coach_event WHERE link_id = ? "
+                + "AND kind = 'workout_rescheduled'", Long.class, linkId)).isZero();
+
+        assertThat(push(athlete, reschedule(3, MOVED_TO, program)).get("payloadRewritten").asBoolean())
+                .as("новый перенос — обычная запись").isFalse();
+        assertThat(rescheduleExists()).isTrue();
+    }
+
+    @Test
     void removingThePlannedWorkoutOrTheProgramRemovesTheReschedule() throws Exception {
         var program = coachProgram(PLANNED_DATE);
         push(athlete, reschedule(1, MOVED_TO, program));
