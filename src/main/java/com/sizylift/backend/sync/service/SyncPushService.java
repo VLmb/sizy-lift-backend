@@ -12,6 +12,7 @@ import com.sizylift.backend.publication.dto.ItemStatus;
 import com.sizylift.backend.publication.dto.RejectionReason;
 import com.sizylift.backend.publication.dto.payload.PayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateArbiter;
 import com.sizylift.backend.publication.service.AggregateChange;
@@ -104,10 +105,24 @@ public class SyncPushService {
         if (payload instanceof ProgramPayloadV1 program && !write.byOwner()) {
             return store(write, () -> replaceCoachProgram(write, publisher, program));
         }
+        if (payload instanceof WorkoutReschedulePayloadV1 reschedule) {
+            return store(write, () -> replaceReschedule(write, publisher, payload, reschedule));
+        }
         return store(write, () -> {
             publisher.replace(write.ownerId(), write.item().id(), payload);
             return Effects.NONE;
         });
+    }
+
+    /** Перенос на исходную дату программы снимает перенос: tombstone, {@code delete} в ленты (docs/coaching.md). */
+    private <P extends PayloadV1> Effects replaceReschedule(Write write, AggregatePublisher<P> publisher, P payload,
+                                                           WorkoutReschedulePayloadV1 reschedule) {
+        if (dependents.returnsToPlan(write.ownerId(), write.item().id(), reschedule)) {
+            publisher.delete(write.ownerId(), write.item().id());
+            return Effects.REMOVED;
+        }
+        publisher.replace(write.ownerId(), write.item().id(), payload);
+        return Effects.NONE;
     }
 
     /** Программа тренера: его упражнения сначала копируются в библиотеку подопечного. */
@@ -161,7 +176,8 @@ public class SyncPushService {
                     : null;
             var before = dependents.capture(ownerId, item.type(), item.id());
             var effects = data.get();
-            var revision = aggregates.storeSynced(ownerId, item.type(), item.id(), item.deleted(), changedAt,
+            var deleted = item.deleted() || effects.removed();
+            var revision = aggregates.storeSynced(ownerId, item.type(), item.id(), deleted, changedAt,
                     item.clientId(), item.clientVersion());
             if (!state.exists() && !write.callerId().equals(ownerId)) {
                 aggregates.assignAuthor(ownerId, item.type(), item.id(), write.callerId());
@@ -173,12 +189,12 @@ public class SyncPushService {
                 feed.changed(AggregateChange.byServer(ownerId, AggregateType.EXERCISE, copy.id(), copy.revision(),
                         false));
             }
-            for (var removed : dependents.reconcile(ownerId, item.type(), item.id(), item.deleted(), before)) {
+            for (var removed : dependents.reconcile(ownerId, item.type(), item.id(), deleted, before)) {
                 feed.changed(AggregateChange.byServer(ownerId, removed.type(), removed.id(), removed.revision(),
                         true));
             }
             feed.changed(new AggregateChange(ownerId, write.callerId(), item.type(), item.id(), revision,
-                    item.deleted(), !state.exists() || state.deleted()));
+                    deleted, !state.exists() || state.deleted()));
             return ItemResult.accepted(item, revision, effects.payloadRewritten());
         });
     }
@@ -191,9 +207,18 @@ public class SyncPushService {
         }
     }
 
-    /** Побочные результаты записи данных: созданные копии упражнений и замена payload. */
-    private record Effects(List<CoachExerciseAdoption.CopiedExercise> copies, boolean payloadRewritten) {
+    /**
+     * Побочные результаты записи данных: созданные копии упражнений, замена payload и {@code removed} — правка
+     * сохранена как удаление (перенос на исходную дату).
+     */
+    private record Effects(List<CoachExerciseAdoption.CopiedExercise> copies, boolean payloadRewritten,
+                           boolean removed) {
 
-        static final Effects NONE = new Effects(List.of(), false);
+        static final Effects NONE = new Effects(List.of(), false, false);
+        static final Effects REMOVED = new Effects(List.of(), true, true);
+
+        Effects(List<CoachExerciseAdoption.CopiedExercise> copies, boolean payloadRewritten) {
+            this(copies, payloadRewritten, false);
+        }
     }
 }

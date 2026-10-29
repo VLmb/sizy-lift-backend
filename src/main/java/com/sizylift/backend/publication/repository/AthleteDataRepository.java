@@ -12,6 +12,7 @@ import com.sizylift.backend.publication.dto.payload.ContraindicationPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.InjuryPayloadV1;
 import com.sizylift.backend.publication.dto.payload.OneRepMaxPayloadV1;
+import com.sizylift.backend.publication.entity.LiftClass;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -27,8 +28,8 @@ import static com.sizylift.backend.publication.repository.Sql.uuid;
 public class AthleteDataRepository {
 
     private static final String INSERT_EXERCISE = """
-            INSERT INTO sizylift.exercise (id, user_id, name, short_name, movement_category_id, result_type, is_sbd,
-                                           note, updated_at)
+            INSERT INTO sizylift.exercise (id, user_id, name, short_name, movement_category_id, result_type,
+                                           lift_class, note, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String INSERT_EXERCISE_MUSCLE =
@@ -55,9 +56,11 @@ public class AthleteDataRepository {
             """;
 
     private static final String SELECT_EXERCISE = """
-            SELECT name, short_name, movement_category_id, result_type, is_sbd, note, updated_at
+            SELECT name, short_name, movement_category_id, result_type, lift_class, note, updated_at
             FROM sizylift.exercise WHERE user_id = ? AND id = ?
             """;
+    private static final String SELECT_EXERCISE_LIFT_CLASS =
+            "SELECT lift_class FROM sizylift.exercise WHERE user_id = ? AND id = ?";
     private static final String SELECT_EXERCISE_MUSCLES = """
             SELECT muscle_group_id, role FROM sizylift.exercise_muscle
             WHERE exercise_id = ? ORDER BY role, muscle_group_id
@@ -102,10 +105,11 @@ public class AthleteDataRepository {
                 exerciseIds.toArray(UUID[]::new));
     }
 
+    /** Класс обычно уже определён publisher'ом; без него — как у нового упражнения. */
     public void insertExercise(UUID userId, UUID exerciseId, ExercisePayloadV1 exercise) {
         jdbc.update(INSERT_EXERCISE, exerciseId, userId, exercise.name(), exercise.shortName(),
-                exercise.movementCategoryId(), exercise.resultType(), exercise.isSbd(), exercise.note(),
-                timestamp(exercise.updatedAt()));
+                exercise.movementCategoryId(), exercise.resultType(), exercise.liftClassToStore(null).code(),
+                exercise.note(), timestamp(exercise.updatedAt()));
         Sql.batch(jdbc, INSERT_EXERCISE_MUSCLE, exercise.muscles().stream()
                 .map(muscle -> new Object[] {exerciseId, muscle.muscleGroupId(), muscle.role()})
                 .toList());
@@ -162,9 +166,15 @@ public class AthleteDataRepository {
         var muscles = jdbc.query(SELECT_EXERCISE_MUSCLES, (row, n) -> new ExercisePayloadV1.Muscle(
                 uuid(row, "muscle_group_id"), row.getString("role")), exerciseId);
         var equipment = jdbc.query(SELECT_EXERCISE_EQUIPMENT, (row, n) -> uuid(row, "equipment_id"), exerciseId);
-        return first(jdbc.query(SELECT_EXERCISE, (row, n) -> new ExercisePayloadV1(row.getString("name"),
+        return first(jdbc.query(SELECT_EXERCISE, (row, n) -> ExercisePayloadV1.stored(row.getString("name"),
                 row.getString("short_name"), uuid(row, "movement_category_id"), row.getString("result_type"),
-                row.getBoolean("is_sbd"), row.getString("note"), instant(row, "updated_at"), muscles, equipment),
+                LiftClass.of(row.getString("lift_class")), row.getString("note"), instant(row, "updated_at"),
+                muscles, equipment), userId, exerciseId));
+    }
+
+    /** Класс собственного упражнения пользователя, если оно уже сохранено. */
+    public Optional<LiftClass> findLiftClass(UUID userId, UUID exerciseId) {
+        return first(jdbc.query(SELECT_EXERCISE_LIFT_CLASS, (row, n) -> LiftClass.of(row.getString("lift_class")),
                 userId, exerciseId));
     }
 

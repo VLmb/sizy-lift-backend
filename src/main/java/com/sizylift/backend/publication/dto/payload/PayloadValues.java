@@ -23,6 +23,10 @@ final class PayloadValues {
     static final int RPE_TENTHS_MIN = 50;
     static final int RPE_TENTHS_MAX = 100;
 
+    /** Процент от ПМ в плановом подходе хранится в десятых долях: 0,1–150 %. */
+    static final int PERCENT_ONE_RM_TENTHS_MIN = 1;
+    static final int PERCENT_ONE_RM_TENTHS_MAX = 1500;
+
     static final int MAX_SPORT_DIRECTIONS = 20;
     static final int MAX_MUSCLES = 30;
     static final int MAX_EQUIPMENT = 30;

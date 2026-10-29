@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
  *   <li>перенос — когда его плановой тренировки больше нет, у неё сменилась дата или удалена программа;</li>
  *   <li>комментарий — когда удалена его тренировка.</li>
  * </ul>
+ * Перенос на исходную дату программы — тоже снятие переноса ({@link #returnsToPlan}).
  * Каскады явные, а не FK: программа и тренировка заменяются целиком, и FK удалял бы зависимые при каждой правке.
  * Вызывается в транзакции записи главного агрегата: {@link #capture} до замены данных, {@link #reconcile} после.
  * Строки зависимых блокируются после строки главного агрегата, в порядке id.
@@ -44,6 +46,16 @@ public class DependentAggregates {
         return AggregateType.PROGRAM.equals(type)
                 ? new Snapshot(between.plannedWorkoutDates(ownerId, aggregateId))
                 : Snapshot.EMPTY;
+    }
+
+    /**
+     * Перенос возвращает тренировку на её дату в программе: переноса больше нет, запись сохраняется как
+     * tombstone. Плановой тренировки нет — обычный перенос.
+     */
+    public boolean returnsToPlan(UUID ownerId, UUID plannedWorkoutId, WorkoutReschedulePayloadV1 reschedule) {
+        return between.plannedWorkoutDate(ownerId, reschedule.programId(), plannedWorkoutId)
+                .filter(reschedule.scheduledDate()::equals)
+                .isPresent();
     }
 
     /** Удаляет ставшие недействительными зависимые агрегаты; возвращает их для рассылки {@code delete}. */

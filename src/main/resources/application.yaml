@@ -24,6 +24,10 @@ sizylift:
   web:
     # CORS для веба на отдельном адресе. В production веб на том же домене, что и API, поэтому пусто.
     allowed-origins: []
+  coach-workspace:
+    # «Сегодня» для «Входящих» и задач тренера; ежедневная задача ищет пропущенные тренировки и конец программ.
+    zone: Europe/Moscow
+    daily-cron: "0 17 4 * * *"
   notifications:
     # Push через Expo (ADR-0009). В dev и тестах выключено: уведомления копятся в outbox без отправки.
     enabled: false

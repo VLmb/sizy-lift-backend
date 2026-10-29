@@ -53,3 +53,18 @@ databaseChangeLog:
   - include:
       file: changes/018-standalone-workouts.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/019-exercise-lift-class.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/020-coach-inbox.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/021-coach-task.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/023-one-rep-max-history.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/024-drop-coach-roster-seen.sql
+      relativeToChangelogFile: true

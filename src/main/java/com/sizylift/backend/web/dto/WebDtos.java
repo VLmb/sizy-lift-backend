@@ -8,6 +8,7 @@ import java.util.UUID;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.dto.payload.PayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
+import com.sizylift.backend.publication.entity.LiftClass;
 
 /** Ответы чтения для веба (docs/web.md). Записывает веб через синхронизацию v2. */
 public final class WebDtos {
@@ -25,11 +26,12 @@ public final class WebDtos {
 
     /**
      * Упражнение каталога ({@code ownerId == null}) или своё. {@code revision} — ревизия агрегата своего
-     * упражнения для {@code baseRevision} при правке; у системных {@code null}.
+     * упражнения для {@code baseRevision} при правке; у системных {@code null}. {@code isSbd} — производное
+     * от {@code liftClass}, до перехода телефона.
      */
     public record CatalogExercise(UUID id, UUID ownerId, String name, String shortName, UUID movementCategoryId,
-                                  String resultType, boolean isSbd, String note, List<MuscleRef> muscles,
-                                  List<UUID> equipmentIds, Long revision) {
+                                  String resultType, boolean isSbd, LiftClass liftClass, String note,
+                                  List<MuscleRef> muscles, List<UUID> equipmentIds, Long revision) {
     }
 
     public record CatalogResponse(List<Reference> categories, List<Reference> equipment, List<Reference> muscles,
@@ -55,6 +57,14 @@ public final class WebDtos {
     }
 
     public record OneRepMaxListResponse(UUID ownerId, List<OneRepMax> oneRepMaxes) {
+    }
+
+    /** Точка истории 1ПМ; {@code recordedAt} — когда сервер принял значение. */
+    public record OneRepMaxHistoryEntry(int weightGrams, LocalDate achievedOn, Instant recordedAt) {
+    }
+
+    /** История 1ПМ упражнения, новые сначала. */
+    public record OneRepMaxHistoryResponse(List<OneRepMaxHistoryEntry> entries) {
     }
 
     /** Выполненный подход в истории упражнения; единицы как в payload v1. */

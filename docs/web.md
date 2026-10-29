@@ -6,6 +6,9 @@
 
 Статус: реализованы чтение программ, календаря, тренировок, профиля, истории упражнений и списка подопечных; архив с восстановлением и получение публичной Google Таблицы.
 
+Класс упражнения, %ПМ в плановом подходе, кандидаты для ПМ, история 1ПМ, «Входящие» и задачи тренера
+реализованы — [coach-workspace.md](coach-workspace.md).
+
 ## Чьи данные
 
 У каждого запроса необязательный `ownerId`:
@@ -26,13 +29,16 @@
 { "categories": [ { "id": "…", "code": "squat", "name": "Присед" } ],
   "equipment": [ … ], "muscles": [ … ],
   "exercises": [ { "id": "…", "ownerId": null, "name": "Присед со штангой", "shortName": "Присед",
-                   "movementCategoryId": "…", "resultType": "weight_reps", "isSbd": true, "note": null,
+                   "movementCategoryId": "…", "resultType": "weight_reps", "isSbd": true, "liftClass": "sbd",
+                   "note": null,
                    "muscles": [ { "muscleGroupId": "…", "role": "primary" } ], "equipmentIds": [ "…" ],
                    "revision": null } ] }
 ```
 
 Упражнения: системные (`ownerId: null`), свои упражнения вызывающего и, при `ownerId`, подопечного. У своих
-`revision` — ревизия агрегата `exercise` для `baseRevision` при правке.
+`revision` — ревизия агрегата `exercise` для `baseRevision` при правке. `liftClass` — класс упражнения
+(`sbd`, `basic`, `other`; [coach-workspace.md](coach-workspace.md), раздел 1), `isSbd` — производное
+`liftClass == "sbd"`, остаётся до перехода телефона.
 
 ### `GET /api/v2/web/programs?ownerId=`
 
@@ -52,11 +58,30 @@
 ```
 
 Программа и ревизия читаются из одного снимка (`REPEATABLE READ`). Клиент правит `program` и отправляет его в
-`sync/push` с `baseRevision = revision` (и `ownerId`, если пишет тренер).
+`sync/push` с `baseRevision = revision` (и `ownerId`, если пишет тренер). Плановый подход может нести
+`targetPercentOneRmTenths` (% от ПМ в десятых, `1..1500`) вместе с `targetWeightGrams` или вместо него; вес по
+проценту пересчитывает веб, сервер хранит оба поля как есть.
 
 ### `GET /api/v2/web/one-rep-maxes?ownerId=`
 
 `{ "ownerId": "…", "oneRepMaxes": [ { "exerciseId": "…", "weightGrams": 160000, "achievedOn": "…", "updatedAt": "…", "revision": … } ] }`
+
+### `GET /api/v2/web/one-rep-maxes/{exerciseId}/history?ownerId=`
+
+История фактического 1ПМ упражнения, новые сначала:
+
+```json
+{ "entries": [ { "weightGrams": 170000, "achievedOn": "2026-10-10", "recordedAt": "2026-10-20T10:00:01Z" } ] }
+```
+
+- Точку добавляет каждая принятая запись агрегата `one_rep_max` (публикация v1 и sync v2), если значение
+  (`weightGrams`, `achievedOn`) отличается от последней точки: повтор того же значения точки не даёт.
+  Проигравшие и устаревшие записи (`superseded`, `stale`) истории не меняют.
+- `recordedAt` — когда сервер принял значение. Значения, сохранённые до changeset `023`, перенесены одной точкой
+  со временем последней записи агрегата.
+- Удаление агрегата (tombstone) или аккаунта удаляет историю; новая запись после удаления начинает её заново.
+- Права — как у `GET /one-rep-maxes`: без права чтения `404`; нет истории — пустой `entries`.
+- Таблица `one_rep_max_history` (changeset `023`). Проверки — `OneRepMaxHistoryApiTest`.
 
 ### `GET /api/v2/web/exercises/{exerciseId}/history?ownerId=&limit=5&offset=0`
 
@@ -67,6 +92,19 @@
   "entries": [ { "workoutId": "…", "workoutDate": "2026-10-14", "title": "Присед и жим",
                  "sets": [ { "setType": "working", "weightGrams": 120000, "repetitions": 5, "durationMs": null,
                              "distanceM": null, "rpeTenths": 80 } ] } ] }
+```
+
+### `GET /api/v2/web/max-candidates?ownerId=&from=YYYY-MM-DD`
+
+Выполненные подходы для расчётного ПМ ([coach-workspace.md](coach-workspace.md), раздел 3): упражнения классов
+`sbd`/`basic`, тренировки с `workoutDate >= from`, `weightGrams > 0`, `1 ≤ repetitions ≤ 12`, тип результата подхода
+`weight_reps`. Порядок — `workoutDate` по убыванию, внутри тренировки — как в ней. `from` обязателен (иначе `400`);
+права — как у чтения тренировок, без права `404`. ПМ сервер не считает и не хранит.
+
+```json
+{ "from": "2026-09-28",
+  "sets": [ { "exerciseId": "…", "workoutId": "…", "workoutDate": "2026-10-20",
+              "weightGrams": 140000, "repetitions": 5, "rpeTenths": 85 } ] }
 ```
 
 ## Вход: клиент Keycloak `sizylift-web`
@@ -99,7 +137,8 @@ Realm импортируется только при первом старте K
 
 `WebApiTest`: свои программы и ревизия, запись через `sync/push` с этой ревизией, удалённые программы,
 каталог (системные + свои, чужие не видны), тренер читает подопечного до разрыва связи, посторонний получает
-`404`, 1ПМ и история упражнения, CORS для разрешённого и чужого origin.
+`404`, 1ПМ и история упражнения, CORS для разрешённого и чужого origin. `OneRepMaxPlanningApiTest`: класс в каталоге,
+%ПМ в программе и отдельном плане, отбор, порядок и права `max-candidates`.
 
 ## Дневник и профиль
 
@@ -118,13 +157,34 @@ Realm импортируется только при первом старте K
   в одном снимке REPEATABLE READ. Если старые клиенты создали несколько идентификаторов синглтона,
   для редактирования возвращается наиболее поздняя ревизия.
 - `GET /api/v2/web/athletes` — только активные подопечные вызывающего тренера: linkId, athleteId,
-  name, workoutDate, workoutTitle, activityAt, hasNew. Порядок — по последней активности.
-- `POST /api/v2/web/athletes/{linkId}/seen` → 204 — отметить просмотр, только действующему тренеру.
-  hasNew относится к новым комментариям спортсмена и переносам после последнего просмотра.
+  name, workoutDate, workoutTitle, activityAt, unseen (счётчики непросмотренных событий
+  «Входящих» по типам), oldestUnseenAt, openTasks, overdueTasks. Порядок: сначала подопечные
+  с непросмотренными событиями по oldestUnseenAt по возрастанию, затем остальные по activityAt по убыванию.
+  Прежние `hasNew` и `POST /api/v2/web/athletes/{linkId}/seen` удалены 29.10.2026 (changeset `024`): их заменили
+  `unseen` и «Входящие» ([coach-workspace.md](coach-workspace.md), раздел 4).
   Локальные неотправленные программы серверу неизвестны.
 
 Каждый запрос с ownerId проверяет AccessPolicy; после разрыва связи — 404. Профиль, упражнения,
 1ПМ и тренировки подопечного тренер не записывает. Запись остаётся в sync/push с теми же проверками.
+
+## «Входящие» и задачи тренера
+
+Контракт — [coach-workspace.md](coach-workspace.md), разделы 4–5. «Сегодня» считается в зоне
+`sizylift.coach-workspace.zone` (`application.yaml`).
+
+- `GET /api/v2/web/inbox?athleteId=&unseenOnly=false&limit=50&before=&beforeId=` — `{unseenCount, events}`,
+  новые сначала (`occurredAt`, затем `id` по убыванию). `limit` 1–200. `before` — `occurredAt` последнего
+  события страницы; необязательный `beforeId` (его `id`) не теряет события с тем же временем.
+  `unseenCount` учитывает `athleteId`, но не `before` и `unseenOnly`.
+- `POST /api/v2/web/inbox/seen` → 204. Тело: `eventIds`, `athleteId`, `subjectId`, `all` — заданные условия
+  сужают выборку вместе; без условий (`{}`, пустой `eventIds`, `all: false`, нет тела) → 400. Чужие и
+  неизвестные id молча пропускаются.
+- `GET /api/v2/web/tasks?athleteId=&status=open|done|all`, `POST /api/v2/web/tasks` → 201,
+  `PATCH /api/v2/web/tasks/{id}` (`dueOn: null` снимает срок, `done: true` повторно время не двигает),
+  `DELETE /api/v2/web/tasks/{id}` → 204. Текст обрезается по краям, 1–500 символов, иначе 400.
+  Чужая задача или подопечный без активной связи → 404. CORS разрешает `PATCH`.
+
+Проверки — `CoachInboxApiTest`, `CoachTaskApiTest`.
 
 ## Архив программ
 
@@ -161,6 +221,8 @@ SSRF-ограничения и удаление аккаунта. Все инт�
 Календарь веба создаёт и правит план через обычный `sync/push` программы, со всеми подходами и её
 серверными проверками авторства. Перед явной записью форма сверяет прочитанную ревизию.
 Перенос спортсмена — `workout_reschedule` (id плановой тренировки, programId, scheduledDate, updatedAt).
+Перенос на исходную дату программы сервер сохраняет как снятие переноса (tombstone, `delete` в ленты,
+`payloadRewritten: true`; [coaching.md](coaching.md#переносы-тренировок)).
 Тренеру этот тип недоступен для записи; он может изменить дату в созданной им программе.
 Завершённый факт и его снимки плана от этих действий не меняются.
 
@@ -168,7 +230,8 @@ SSRF-ограничения и удаление аккаунта. Все инт�
 ## Отдельные планы тренировок без программы
 
 `GET /api/v2/web/standalone-workouts/{id}?ownerId=…` возвращает `{ownerId, id, revision, workout}`.
-`workout` — вложенная `ProgramPayloadV1.PlannedWorkout` со всеми блоками, упражнениями и подходами.
+`workout` — вложенная `ProgramPayloadV1.PlannedWorkout` со всеми блоками, упражнениями и подходами (включая
+`targetPercentOneRmTenths`).
 В `timeline.planned` у такого плана `programId: null`. Программа и выполненная тренировка не создаются.
 Связанный факт, если он существует, определяется по `workout.plannedWorkoutId` у того же владельца.
 

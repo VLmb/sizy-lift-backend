@@ -13,6 +13,7 @@ import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.AthleteDataRepository;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
+import com.sizylift.backend.publication.repository.OneRepMaxHistoryRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.springframework.context.annotation.Bean;
@@ -37,6 +38,7 @@ class AggregatePublishers {
     @Bean
     AggregatePublisher<ExercisePayloadV1> exercisePublisher(AthleteDataRepository athlete) {
         return new AggregatePublisher<>(AggregateType.EXERCISE, ExercisePayloadV1.class,
+                (userId, id, exercise) -> withLiftClass(athlete, userId, id, exercise),
                 (userId, id, exercise) -> insertOwnExercise(athlete, userId, id, exercise),
                 athlete::deleteExercise);
     }
@@ -48,9 +50,14 @@ class AggregatePublishers {
     }
 
     @Bean
-    AggregatePublisher<OneRepMaxPayloadV1> oneRepMaxPublisher(AthleteDataRepository athlete) {
+    AggregatePublisher<OneRepMaxPayloadV1> oneRepMaxPublisher(AthleteDataRepository athlete,
+                                                              OneRepMaxHistoryRepository history) {
         return new AggregatePublisher<>(AggregateType.ONE_REP_MAX, OneRepMaxPayloadV1.class,
-                athlete::insertOneRepMax, athlete::deleteOneRepMax);
+                (userId, id, value) -> {
+                    athlete.insertOneRepMax(userId, id, value);
+                    history.record(userId, id, value);
+                },
+                athlete::deleteOneRepMax, history::delete);
     }
 
     @Bean
@@ -75,6 +82,19 @@ class AggregatePublishers {
     AggregatePublisher<WorkoutCommentPayloadV1> workoutCommentPublisher(BetweenDataRepository between) {
         return new AggregatePublisher<>(AggregateType.WORKOUT_COMMENT, WorkoutCommentPayloadV1.class,
                 between::insertComment, between::deleteComment);
+    }
+
+    /**
+     * Класс упражнения по правилам переходного периода (docs/coach-workspace.md, раздел 1); SBD и «Базовое»
+     * не у «вес × повторения» — некорректный payload.
+     */
+    private static ExercisePayloadV1 withLiftClass(AthleteDataRepository athlete, UUID userId, UUID id,
+                                                   ExercisePayloadV1 exercise) {
+        var liftClass = exercise.liftClassToStore(athlete.findLiftClass(userId, id).orElse(null));
+        if (!liftClass.allows(exercise.resultType())) {
+            throw new PayloadParser.InvalidPayloadException();
+        }
+        return exercise.withLiftClass(liftClass);
     }
 
     /** Своя копия пользователя уже удалена, поэтому оставшаяся строка принадлежит каталогу или другому пользователю. */

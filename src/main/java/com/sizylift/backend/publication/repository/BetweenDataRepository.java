@@ -39,6 +39,9 @@ public class BetweenDataRepository {
     private static final String PLANNED_WORKOUT_DATES = """
             SELECT id, workout_date FROM sizylift.planned_workout WHERE user_id = ? AND program_id = ?
             """;
+    private static final String PLANNED_WORKOUT_DATE = """
+            SELECT workout_date FROM sizylift.planned_workout WHERE user_id = ? AND program_id = ? AND id = ?
+            """;
     private static final String INSERT_COMMENT = """
             INSERT INTO sizylift.workout_comment (user_id, id, workout_id, text, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -81,6 +84,12 @@ public class BetweenDataRepository {
         return jdbc.query(PLANNED_WORKOUT_DATES, (row, n) -> Map.entry(uuid(row, "id"), date(row, "workout_date")),
                         userId, programId).stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /** Дата плановой тренировки в программе (без учёта переноса). */
+    public Optional<LocalDate> plannedWorkoutDate(UUID userId, UUID programId, UUID plannedWorkoutId) {
+        return first(jdbc.query(PLANNED_WORKOUT_DATE, (row, n) -> date(row, "workout_date"), userId, programId,
+                plannedWorkoutId));
     }
 
     public void insertComment(UUID userId, UUID commentId, WorkoutCommentPayloadV1 comment) {

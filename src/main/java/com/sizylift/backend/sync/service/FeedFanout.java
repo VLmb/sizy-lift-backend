@@ -3,6 +3,7 @@ package com.sizylift.backend.sync.service;
 import java.util.UUID;
 
 import com.sizylift.backend.access.service.AccessPolicy;
+import com.sizylift.backend.inbox.service.CoachInboxRecorder;
 import com.sizylift.backend.publication.service.AggregateChange;
 import com.sizylift.backend.publication.service.AggregateChangeListener;
 import com.sizylift.backend.sync.entity.FeedKind;
@@ -20,11 +21,14 @@ class FeedFanout implements AggregateChangeListener {
     private final SyncFeedRepository feed;
     private final AccessPolicy access;
     private final ChangeNotifications notifications;
+    private final CoachInboxRecorder inbox;
 
-    FeedFanout(SyncFeedRepository feed, AccessPolicy access, ChangeNotifications notifications) {
+    FeedFanout(SyncFeedRepository feed, AccessPolicy access, ChangeNotifications notifications,
+               CoachInboxRecorder inbox) {
         this.feed = feed;
         this.access = access;
         this.notifications = notifications;
+        this.inbox = inbox;
     }
 
     @Override
@@ -32,7 +36,7 @@ class FeedFanout implements AggregateChangeListener {
         access.lockOwner(ownerId);
     }
 
-    /** Ленты получателей, затем уведомления — в той же транзакции. */
+    /** Ленты получателей, затем уведомления и «Входящие» тренера — в той же транзакции. */
     @Override
     public void changed(AggregateChange change) {
         var kind = change.deleted() ? FeedKind.DELETE : FeedKind.UPSERT;
@@ -41,5 +45,6 @@ class FeedFanout implements AggregateChangeListener {
                     change.revision(), kind);
         }
         notifications.onChange(change);
+        inbox.onChange(change);
     }
 }

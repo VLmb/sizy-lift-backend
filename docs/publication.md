@@ -73,7 +73,9 @@
   `workout_plan_set_snapshot`, `workout_record_event`.
 - **План**: `program`, `program_cycle`, `training_week`, `planned_workout`,
   `planned_block`, `planned_exercise`, `planned_set`.
-- **Прочее**: `athlete_profile`, `one_rep_max`, `injury`, `contraindication`.
+- **Прочее**: `athlete_profile`, `one_rep_max`, `injury`, `contraindication`; `one_rep_max_history` — история
+  значений 1ПМ, пополняется каждой принятой записью с новым значением, удаляется вместе с агрегатом
+  ([web.md](web.md)).
 - **Служебное**: `published_aggregate` (`user_id`, `type`, `aggregate_id`, `version`,
   `deleted`, `received_at`, а также `revision`, `changed_at`, `author_user_id`, `source_client_id`,
   `source_version` для sync v2) — состояние каждого агрегата; `aggregate_conflict` — журнал
@@ -99,6 +101,21 @@
 
 Приём: Jackson → record `WorkoutPayloadV1` и т.п. → Bean Validation → в одной транзакции на агрегат: `published_aggregate` (сравнение версии) → удалить
 дочерние строки → вставить новые. Логи без содержимого payload.
+
+## Класс упражнения и %ПМ (changeset `019`)
+
+Контракт — [coach-workspace.md](coach-workspace.md), разделы 1–2.
+
+- `exercise`: необязательное `liftClass` (`sbd`, `basic`, `other`) рядом с `isSbd`. В ответах (лента sync,
+  каталог веба) `liftClass` есть всегда, `isSbd` = `liftClass == "sbd"`. При записи `liftClass` важнее `isSbd`;
+  без него `isSbd: true` даёт `sbd`, `isSbd: false` оставляет прежний класс (прежний `sbd` → `other`), новое
+  упражнение — `other`. `sbd`/`basic` у не `weight_reps` → `rejected: invalid_payload`; `isSbd: true` без
+  `liftClass` у такого упражнения не ошибка (старый телефон), класс — `other`. В БД — `exercise.lift_class`,
+  `is_sbd` удалена.
+- `program`: необязательное `targetPercentOneRmTenths` в подходе (`1..1500`, `725` = 72,5 %), колонка
+  `planned_set.target_percent_one_rm_tenths`. Вес по проценту сервер не пересчитывает.
+- Общие фикстуры `*.v1.json` новых полей пока не содержат: приложение их ещё не отправляет. `SyncChangesApiTest`
+  сверяет ленту с фикстурами с учётом этих необязательных полей; фикстуры обновляются вместе с приложением.
 
 ## Outbox в приложении
 
