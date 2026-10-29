@@ -37,6 +37,9 @@ OTLP-экспорт идёт параллельно. В логах и трейс
   `sizylift.notifications.queue.oldest.age` — push-уведомления ([notifications.md](notifications.md)).
 - `sizylift.coaching.events{event}` — приглашения и связи: `invite_created`, `link_created`,
   `link_ended`, `health_granted`, `health_revoked`.
+- `sizylift.coach.inbox.daily.events{kind}` — события «Входящих», созданные ежедневной задачей
+  (`workout_missed`, `program_ending`); `sizylift.coach.inbox.daily.run{outcome}` — таймер запуска
+  (`completed`, `skipped` — работает другой экземпляр, `failed`) ([coach-workspace.md](coach-workspace.md)).
 
 SQL-запросы отдельными span'ами пока не трассируются.
 

@@ -73,7 +73,9 @@
   `workout_plan_set_snapshot`, `workout_record_event`.
 - **План**: `program`, `program_cycle`, `training_week`, `planned_workout`,
   `planned_block`, `planned_exercise`, `planned_set`.
-- **Прочее**: `athlete_profile`, `one_rep_max`, `injury`, `contraindication`.
+- **Прочее**: `athlete_profile`, `one_rep_max`, `injury`, `contraindication`; `one_rep_max_history` — история
+  значений 1ПМ, пополняется каждой принятой записью с новым значением, удаляется вместе с агрегатом
+  ([web.md](web.md)).
 - **Служебное**: `published_aggregate` (`user_id`, `type`, `aggregate_id`, `version`,
   `deleted`, `received_at`, а также `revision`, `changed_at`, `author_user_id`, `source_client_id`,
   `source_version` для sync v2) — состояние каждого агрегата; `aggregate_conflict` — журнал
