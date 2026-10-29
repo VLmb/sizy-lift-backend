@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import com.sizylift.backend.CoachWorkspaceApiSupport;
 import com.sizylift.backend.inbox.service.CoachInboxDailyJob;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
 
     @Autowired
     CoachInboxDailyJob dailyJob;
+
+    @Autowired
+    MeterRegistry meters;
 
     String coach;
     String athlete;
@@ -210,6 +214,25 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void dailyJobCountsCreatedEventsByKindAndTimesTheRun() throws Exception {
+        linkedSince(LINKED_ON);
+        push(coach, item("program", UUID.randomUUID(), athleteId, 0, 1, fixture("program")));
+        var missedBefore = created("workout_missed");
+        var endingBefore = created("program_ending");
+        var runsBefore = runs("completed");
+
+        var first = dailyJob.run(LocalDate.parse("2026-10-16"));
+        var repeated = dailyJob.run(LocalDate.parse("2026-10-16"));
+
+        assertThat(first.missed()).isPositive();
+        assertThat(first.programEnding()).isPositive();
+        assertThat(repeated).isEqualTo(new CoachInboxDailyJob.Result(0, 0));
+        assertThat(created("workout_missed") - missedBefore).isEqualTo(first.missed());
+        assertThat(created("program_ending") - endingBefore).isEqualTo(first.programEnding());
+        assertThat(runs("completed") - runsBefore).isEqualTo(2);
+    }
+
+    @Test
     void otherCoachesAndEndedLinksSeeNothing() throws Exception {
         var stranger = newSubject();
         legacy(athlete, "workout", UUID.randomUUID(), 1, workout());
@@ -315,6 +338,16 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
         roster = roster();
         assertThat(roster.get(0).get("athleteId").asString()).as("затем по свежей активности")
                 .isEqualTo(athleteId.toString());
+    }
+
+    private double created(String kind) {
+        var counter = meters.find("sizylift.coach.inbox.daily.events").tag("kind", kind).counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    private long runs(String outcome) {
+        var timer = meters.find("sizylift.coach.inbox.daily.run").tag("outcome", outcome).timer();
+        return timer == null ? 0 : timer.count();
     }
 
     private void linkedSince(LocalDate date) {
