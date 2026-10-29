@@ -17,8 +17,10 @@ import tools.jackson.databind.JsonNode;
 
 @Service
 public class AdminMetricsService {
-    private static final Map<String, Integer> PERIODS = Map.of("1h", 3600, "24h", 86400, "7d", 604800);
+    private static final Map<String, Integer> PERIODS = Map.of("15m", 900, "1h", 3600, "6h", 21600, "24h", 86400, "7d", 604800);
     private static final int POINTS = 120;
+    private static final int DETAIL_POINTS = 600;
+    private static final int MIN_STEP_SECONDS = 30;
     private static final int CACHE_SECONDS = 20;
     private static final String APP = "{service_name=\"sizy-lift-backend\"}";
     private static final String REQUESTS = "sum(rate(http_server_requests_seconds_count" + APP + "[5m]))"
@@ -35,17 +37,22 @@ public class AdminMetricsService {
         this.url = url;
     }
 
-    public synchronized Metrics metrics(String period) {
+    public Metrics metrics(String period) {
+        return metrics(period, false);
+    }
+
+    public synchronized Metrics metrics(String period, boolean detail) {
         var seconds = PERIODS.get(period);
         if (seconds == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        var previous = cache.get(period);
+        var cacheKey = period + ":" + detail;
+        var previous = cache.get(cacheKey);
         if (previous != null && previous.fetchedAt().plusSeconds(CACHE_SECONDS).isAfter(Instant.now())) return previous;
         var now = Instant.now();
         var series = new ArrayList<Series>();
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var pending = new LinkedHashMap<String, Future<Series>>();
             DEFINITIONS.forEach((id, definition) -> pending.put(id,
-                    executor.submit(() -> series(id, definition, now, seconds))));
+                    executor.submit(() -> series(id, definition, now, seconds, detail ? DETAIL_POINTS : POINTS))));
             for (var future : pending.values()) {
                 try {
                     series.add(future.get());
@@ -56,16 +63,16 @@ public class AdminMetricsService {
             }
         }
         var result = new Metrics(now, period, series);
-        cache.put(period, result);
+        cache.put(cacheKey, result);
         return result;
     }
 
-    private Series series(String id, Definition definition, Instant now, int seconds) {
+    private Series series(String id, Definition definition, Instant now, int seconds, int pointsLimit) {
         if (url.isBlank()) return new Series(id, definition.unit(), List.of(), "unavailable");
         try {
             var response = http.get().uri(url + "/api/v1/query_range?query={query}&start={start}&end={end}&step={step}&timeout=3s",
                     definition.query(), now.minusSeconds(seconds).getEpochSecond(), now.getEpochSecond(),
-                    Math.max(30, seconds / POINTS)).retrieve().body(JsonNode.class);
+                    Math.max(MIN_STEP_SECONDS, seconds / pointsLimit)).retrieve().body(JsonNode.class);
             var results = response == null ? null : response.path("data").path("result");
             if (response == null || !"success".equals(response.path("status").asString()) || !results.isArray())
                 return new Series(id, definition.unit(), List.of(), "unavailable");

@@ -21,8 +21,9 @@ public class AdminMonitoringController {
     }
 
     @GetMapping("/metrics")
-    public AdminMetricsService.Metrics metrics(@RequestParam(defaultValue = "1h") String period) {
-        return metrics.metrics(period);
+    public AdminMetricsService.Metrics metrics(@RequestParam(defaultValue = "1h") String period,
+            @RequestParam(defaultValue = "false") boolean detail) {
+        return metrics.metrics(period, detail);
     }
 
     @GetMapping("/containers")
