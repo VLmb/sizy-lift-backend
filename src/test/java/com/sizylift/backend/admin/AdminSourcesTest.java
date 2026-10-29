@@ -52,6 +52,38 @@ class AdminSourcesTest {
         assertThatThrownBy(() -> metrics.metrics("1y")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
     }
 
+    @Test
+    void detailHasSeparateCacheAndBoundedResolution() throws Exception {
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var steps = java.util.concurrent.ConcurrentHashMap.<String>newKeySet();
+        var calls = new java.util.concurrent.atomic.AtomicInteger();
+        server.createContext("/", exchange -> {
+            calls.incrementAndGet();
+            for (var field : exchange.getRequestURI().getQuery().split("&")) {
+                if (field.startsWith("step=")) steps.add(field.substring(5));
+            }
+            var bytes = "{\"status\":\"success\",\"data\":{\"result\":[]}}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+        try {
+            var metrics = new AdminMetricsService("http://127.0.0.1:" + server.getAddress().getPort());
+            metrics.metrics("24h");
+            var initialCalls = calls.get();
+            metrics.metrics("24h");
+            assertThat(calls.get()).isEqualTo(initialCalls);
+            metrics.metrics("24h", true);
+            assertThat(calls.get()).isGreaterThan(initialCalls);
+            metrics.metrics("15m", true);
+            assertThat(steps).containsExactlyInAnyOrder("720", "144", "30");
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private static String people(int count) {
         var person = "{\"id\":\"identity\",\"firstName\":\"Test\",\"emailVerified\":false,\"enabled\":true,\"createdTimestamp\":1}";
         return "[" + String.join(",", Collections.nCopies(count, person)) + "]";
