@@ -5,10 +5,10 @@
 
 ## Вход и границы доступа
 
-Отдельный public-клиент `sizylift-admin` использует Authorization Code + PKCE S256.
+Отдельный public-клиент `sizy-admin` использует Authorization Code + PKCE S256.
 Его browser flow `sizy-admin-browser` требует пароль и OTP, без обхода через SSO-cookie.
 Новый администратор сначала настраивает TOTP. У обычного сайта остаётся `sizylift-web`.
-Backend требует одновременно `azp=sizylift-admin` и роль `realm_access.roles: sizy-admin`.
+Backend требует одновременно `azp=sizy-admin` и роль `realm_access.roles: sizy-admin`.
 Роль не выдаётся при регистрации и не связана с `coach_enabled`.
 Токены остаются в памяти браузера. Все административные ответы имеют `Cache-Control: no-store`.
 
@@ -94,17 +94,18 @@ Production в рамках разработки не изменяется. Пе�
 2. Создайте browser flow `sizy-admin-browser` (Basic flow). Добавьте
    `Username Password Form` и `OTP Form`, обе REQUIRED в таком порядке. Не добавляйте Cookie
    или альтернативные ветки, пропускающие OTP.
-3. Создайте OIDC public client `sizylift-admin`: Standard flow включён,
+3. Создайте OIDC public client `sizy-admin`: Standard flow включён,
    implicit/direct grants/service accounts выключены, PKCE S256.
    Redirect URI: `https://<WEB_DOMAIN>/auth/admin/callback` и `/auth/admin/silent`;
-   Web Origin — точный адрес сайта; post-logout redirect — главная сайта.
+   Home URL — `https://<WEB_DOMAIN>/`; Web Origin — точный адрес сайта;
+   post-logout redirect — главная сайта.
    В Authentication flow overrides → Browser выберите `sizy-admin-browser`.
 4. У клиента выключите Full scope allowed, добавьте в scope mapping только `sizy-admin`.
    Добавьте audience mapper `sizylift-api` и realm-role mapper `realm_access.roles`
    (multivalued JSON String), оба только в access token. Точные представления —
-   в `keycloak/realm-sizylift.json`, клиент `sizylift-admin`.
+   в `keycloak/realm-sizylift.json`, клиент `sizy-admin`.
 5. У личного пользователя добавьте required action Configure OTP.
-   Создайте confidential client `sizylift-admin-read`: Service accounts включено,
+   Создайте confidential client `sizy-admin-read`: Service accounts включено,
    браузерные потоки/direct grants выключены. Его service account выдайте только
    `realm-management/query-users` и `realm-management/view-users`.
 6. В `deploy/.env` задайте `KEYCLOAK_ADMIN_READ_CLIENT_ID` и
@@ -119,6 +120,14 @@ Production в рамках разработки не изменяется. Пе�
 
 Образы добавленных сборщиков и шлюза не открывают публичные порты. SSH-доступ к Grafana
 и технической консоли Keycloak сохраняется для обслуживания.
+
+## Переименование административных клиентов
+
+Для новой админки используются `sizy-admin` и `sizy-admin-read`. Если клиенты уже
+созданы с прежними именами `sizylift-admin` / `sizylift-admin-read`, измените их
+Client ID в Keycloak и значение `KEYCLOAK_ADMIN_READ_CLIENT_ID` в серверном `.env`.
+Обновите backend и frontend вместе с настройками клиентов. Роль остаётся `sizy-admin`.
+Рабочий realm `sizylift` и существующие клиенты сайта/телефона сохраняют свои идентификаторы.
 
 ## Локальная проверка
 

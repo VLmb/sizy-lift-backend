@@ -36,7 +36,7 @@ class AdminApiTest extends PostgresIntegrationTest {
             mvc.perform(get(ROOT + path).with(jwt())).andExpect(status().isForbidden());
             mvc.perform(get(ROOT + path).with(jwt().jwt(token -> token.claim("azp", "sizylift-web")
                     .claim("realm_access", Map.of("roles", List.of("sizy-admin")))))).andExpect(status().isForbidden());
-            mvc.perform(get(ROOT + path).with(jwt().jwt(token -> token.claim("azp", "sizylift-admin")
+            mvc.perform(get(ROOT + path).with(jwt().jwt(token -> token.claim("azp", "sizy-admin")
                     .claim("roles", List.of("sizy-admin"))))).andExpect(status().isForbidden());
         }
     }
@@ -93,7 +93,7 @@ class AdminApiTest extends PostgresIntegrationTest {
     }
 
     private static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor admin() {
-        return jwt().jwt(token -> token.issuer(ISSUER).subject("admin-owner").claim("azp", "sizylift-admin")
+        return jwt().jwt(token -> token.issuer(ISSUER).subject("admin-owner").claim("azp", "sizy-admin")
                 .claim("realm_access", Map.of("roles", List.of("sizy-admin"))));
     }
 }
