@@ -41,6 +41,7 @@ public class UserAccountService {
         }
         var account = accounts.findByIssuerAndSubject(identity.issuer(), identity.subject())
                 .orElseGet(() -> provision(identity));
+        accounts.touch(account.id());
         if (Objects.equals(account.email(), identity.email())
                 && account.emailVerified() == identity.emailVerified()) {
             return account;

@@ -17,6 +17,12 @@ spring:
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
 
 sizylift:
+  admin:
+    keycloak-url: ${KEYCLOAK_ADMIN_URL}
+    keycloak-client-id: ${KEYCLOAK_ADMIN_READ_CLIENT_ID}
+    keycloak-client-secret: ${KEYCLOAK_ADMIN_READ_CLIENT_SECRET}
+    prometheus-url: ${ADMIN_PROMETHEUS_URL}
+    runtime-url: ${ADMIN_RUNTIME_URL}
   account-deletion:
     enabled: ${ACCOUNT_DELETION_ENABLED}
     admin-url: ${KEYCLOAK_ADMIN_URL}

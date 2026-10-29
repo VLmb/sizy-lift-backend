@@ -17,6 +17,10 @@ public class UserAccountRepository {
     private static final String COLUMNS = "id, issuer, subject, email, email_verified, created_at, updated_at";
     private static final RowMapper<UserAccount> MAPPER = UserAccountRepository::map;
 
+    private static final String TOUCH = """
+            UPDATE sizylift.user_account SET last_seen_at = now()
+            WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at < now() - interval '1 minute')
+            """;
     private final JdbcTemplate jdbc;
 
     public UserAccountRepository(JdbcTemplate jdbc) {
@@ -46,6 +50,10 @@ public class UserAccountRepository {
                 RETURNING %s
                 """.formatted(COLUMNS),
                 MAPPER, email, emailVerified, account.id(), email, emailVerified).stream().findFirst();
+    }
+
+    public void touch(java.util.UUID accountId) {
+        jdbc.update(TOUCH, accountId);
     }
 
     private static UserAccount map(ResultSet row, int rowNumber) throws SQLException {

@@ -31,7 +31,7 @@ class UserAccountServiceTest {
     @ParameterizedTest
     @NullSource
     @ValueSource(strings = EMAIL)
-    void unchangedContactsOnlyReadTheAccount(String email) {
+    void unchangedContactsOnlyReadAndTouchTheAccount(String email) {
         var repository = mock(UserAccountRepository.class);
         var account = account(email, true);
         when(repository.findByIssuerAndSubject(ISSUER, SUBJECT)).thenReturn(Optional.of(account));
@@ -42,6 +42,7 @@ class UserAccountServiceTest {
             assertThat(service.resolve(new ExternalIdentity(ISSUER, SUBJECT, email, true))).isSameAs(account);
 
             verify(repository).findByIssuerAndSubject(ISSUER, SUBJECT);
+            verify(repository).touch(account.id());
             verifyNoMoreInteractions(repository);
         } finally {
             meters.close();
@@ -64,6 +65,7 @@ class UserAccountServiceTest {
             assertThat(service.resolve(new ExternalIdentity(ISSUER, SUBJECT, email, verified))).isSameAs(updated);
 
             verify(repository).findByIssuerAndSubject(ISSUER, SUBJECT);
+            verify(repository).touch(original.id());
             verify(repository).updateContact(original, email, verified);
             verifyNoMoreInteractions(repository);
         } finally {

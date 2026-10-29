@@ -280,6 +280,67 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
         }
     }
 
+    @Test
+    void administrativeClientRequiresOtpAndIssuesOnlyScopedAdministrativeRole() throws Exception {
+        var admin = adminToken();
+        var userEmail = "owner-" + UUID.randomUUID() + "@example.com";
+        send(adminRequest(admin, "/users").POST(json("""
+                {"username":"%s","email":"%s","emailVerified":true,"enabled":true,
+                 "firstName":"Owner","lastName":"Sizy",
+                 "credentials":[{"type":"password","value":"%s","temporary":false},
+                 {"type":"otp","secretData":"{\\"value\\":\\"12345678901234567890\\"}",
+                  "credentialData":"{\\"subType\\":\\"totp\\",\\"digits\\":6,\\"counter\\":0,\\"period\\":30,\\"algorithm\\":\\"HmacSHA1\\"}"}]}
+                """.formatted(userEmail, userEmail, PASSWORD))), 201);
+        var userId = findUsers(admin, userEmail).getFirst().get("id").toString();
+        var role = send(adminRequest(admin, "/roles/sizy-admin").GET(), 200);
+        send(adminRequest(admin, "/users/" + userId + "/role-mappings/realm").POST(json("[" + role + "]")), 204);
+        var verifier = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK";
+        var challenge = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                java.security.MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+        var callback = "http://localhost:5173/auth/admin/callback";
+        var browser = browser();
+        var login = open(browser, realmUrl("localhost") + "/protocol/openid-connect/auth?client_id=sizylift-admin"
+                + "&response_type=code&scope=openid&prompt=login&redirect_uri="
+                + URLEncoder.encode(callback, StandardCharsets.UTF_8) + "&code_challenge_method=S256&code_challenge=" + challenge);
+        var otp = submit(browser, login, "kc-form-login", Map.of("username", userEmail, "password", PASSWORD));
+        assertThat(otp.body()).contains("kc-otp-login-form");
+        assertThat(otp.headers().firstValue("Location")).isEmpty();
+        var accepted = submit(browser, otp, "kc-otp-login-form", Map.of("otp", otpCode()));
+        var location = accepted.headers().firstValue("Location").orElseThrow();
+        assertThat(location).startsWith(callback + "?");
+        var code = java.util.Arrays.stream(URI.create(location).getRawQuery().split("&"))
+                .filter(part -> part.startsWith("code=")).map(part -> java.net.URLDecoder.decode(part.substring(5), StandardCharsets.UTF_8))
+                .findFirst().orElseThrow();
+        var tokens = send(formPost(URI.create(realmUrl("localhost") + "/protocol/openid-connect/token"), Map.of(
+                "grant_type", "authorization_code", "client_id", "sizylift-admin", "redirect_uri", callback,
+                "code", code, "code_verifier", verifier)), 200);
+        var access = JsonPath.<String>read(tokens, "$.access_token");
+        var response = HTTP.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v2/admin/access"))
+                .header("Authorization", "Bearer " + access).GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void administrativeClientRequiresOtpEnrollmentWhenCredentialIsMissing() throws Exception {
+        var browser = browser();
+        var login = open(browser, realmUrl("localhost") + "/protocol/openid-connect/auth?client_id=sizylift-admin"
+                + "&response_type=code&scope=openid&prompt=login&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Fadmin%2Fcallback"
+                + "&code_challenge_method=S256&code_challenge=abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG");
+        var enrollment = submit(browser, login, "kc-form-login", Map.of("username", email, "password", PASSWORD));
+        assertThat(enrollment.body()).contains("kc-totp-settings-form");
+        assertThat(enrollment.headers().firstValue("Location")).isEmpty();
+    }
+
+    private static String otpCode() throws Exception {
+        var mac = javax.crypto.Mac.getInstance("HmacSHA1");
+        mac.init(new javax.crypto.spec.SecretKeySpec("12345678901234567890".getBytes(StandardCharsets.US_ASCII), "HmacSHA1"));
+        var hash = mac.doFinal(java.nio.ByteBuffer.allocate(8).putLong(java.time.Instant.now().getEpochSecond() / 30).array());
+        int offset = hash[hash.length - 1] & 15;
+        int number = ((hash[offset] & 127) << 24) | ((hash[offset + 1] & 255) << 16)
+                | ((hash[offset + 2] & 255) << 8) | (hash[offset + 3] & 255);
+        return "%06d".formatted(number % 1_000_000);
+    }
+
     private static HttpClient browser() {
         var cookies = new CookieManager(null, CookiePolicy.ACCEPT_ALL) {
             @Override
