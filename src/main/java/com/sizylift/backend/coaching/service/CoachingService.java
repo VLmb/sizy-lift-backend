@@ -15,6 +15,7 @@ import com.sizylift.backend.coaching.entity.CoachingInvite;
 import com.sizylift.backend.coaching.entity.CoachingLink;
 import com.sizylift.backend.coaching.repository.CoachingRepository;
 import com.sizylift.backend.coaching.service.CoachingMetrics.Event;
+import com.sizylift.backend.inbox.service.CoachInboxRecorder;
 import com.sizylift.backend.notifications.entity.NotificationKind;
 import com.sizylift.backend.notifications.service.NotificationQueue;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
@@ -44,11 +45,12 @@ public class CoachingService {
     private final NotificationQueue notifications;
     private final Clock clock;
     private final ProgramArchiveRepository archives;
+    private final CoachInboxRecorder inbox;
 
     CoachingService(CoachingRepository coaching, PublishedAggregateRepository aggregates, FeedMaintenance feeds,
                     InviteTokens tokens, TransactionTemplate transactions, CoachingMetrics metrics,
                     NotificationQueue notifications, Clock clock,
-                    ProgramArchiveRepository archives) {
+                    ProgramArchiveRepository archives, CoachInboxRecorder inbox) {
         this.coaching = coaching;
         this.aggregates = aggregates;
         this.feeds = feeds;
@@ -58,6 +60,7 @@ public class CoachingService {
         this.notifications = notifications;
         this.clock = clock;
         this.archives = archives;
+        this.inbox = inbox;
     }
 
     public Overview overview(UUID userId) {
@@ -141,6 +144,7 @@ public class CoachingService {
                 notifications.enqueue(link.coachId(), NotificationKind.INVITE_ACCEPTED, link.id(),
                         Map.of(NotificationQueue.LINK_ID, link.id().toString(),
                                 NotificationQueue.ACTOR_ID, athleteId.toString()));
+                inbox.inviteAccepted(link.id());
                 metrics.count(Event.LINK_CREATED);
                 return link;
             });
