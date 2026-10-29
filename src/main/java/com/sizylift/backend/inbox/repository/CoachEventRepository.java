@@ -59,6 +59,14 @@ public class CoachEventRepository {
             WHERE l.id = e.link_id AND l.athlete_user_id = ? AND e.kind = 'workout_missed'
               AND w.user_id = l.athlete_user_id AND w.id = ? AND e.subject_id = w.planned_workout_id
             """;
+    /** Плановой тренировки больше нет (удалена программа или тренировка из неё) — пропуск не о чем показывать. */
+    private static final String DELETE_ORPHAN_MISSED = """
+            DELETE FROM sizylift.coach_event e
+            USING sizylift.coaching_link l
+            WHERE l.id = e.link_id AND l.athlete_user_id = ? AND e.kind = 'workout_missed'
+              AND NOT EXISTS (SELECT 1 FROM sizylift.planned_workout pw
+                              WHERE pw.user_id = l.athlete_user_id AND pw.id = e.subject_id)
+            """;
     /**
      * Плановые тренировки активных программ с датой (с учётом переноса) в {@code [from, before)}, не раньше
      * создания связи и без завершённой тренировки по ним. Ключ включает дату: перенесённая и снова пропущенная
@@ -164,6 +172,11 @@ public class CoachEventRepository {
     /** Удаляет события подопечного этого типа по объекту, просмотренные тоже. */
     public void deleteBySubject(UUID athleteId, CoachEventKind kind, UUID subjectId) {
         jdbc.update(DELETE_BY_SUBJECT, athleteId, kind.code(), subjectId);
+    }
+
+    /** Удаляет пропуски подопечного по плановым тренировкам, которых больше нет, просмотренные тоже. */
+    public void deleteOrphanMissed(UUID athleteId) {
+        jdbc.update(DELETE_ORPHAN_MISSED, athleteId);
     }
 
     public int insertMissed(LocalDate from, LocalDate before, String zoneId, Instant occurredAt) {

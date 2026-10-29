@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -165,6 +166,47 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
         assertThat(ending.get("subjectId").asString()).isEqualTo(program.toString());
         assertThat(ending.get("subjectDate").asString()).isEqualTo("2026-10-18");
         assertThat(ending.get("title").asString()).isEqualTo("Силовой блок");
+    }
+
+    @Test
+    void removingAPlannedWorkoutFromTheProgramRemovesItsMissedEvent() throws Exception {
+        linkedSince(LINKED_ON);
+        var program = UUID.randomUUID();
+        var created = push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        dailyJob.run(LocalDate.parse("2026-10-16"));
+        markSeen(Map.of("all", true));
+        assertThat(events(inbox(coach, ""), "workout_missed")).hasSize(1);
+        assertThat(events(inbox(coach, ""), "program_ending")).hasSize(1);
+
+        var withoutWorkout = fixture("program");
+        ((ArrayNode) withoutWorkout.get("cycles").get(0).get("weeks").get(0)
+                .get("workouts")).removeAll();
+        push(coach, item("program", program, athleteId, created.get("revision").asLong(), 2, withoutWorkout));
+
+        assertThat(events(inbox(coach, ""), "workout_missed")).as("просмотренное тоже").isEmpty();
+        assertThat(events(inbox(coach, ""), "program_ending")).as("программа осталась").hasSize(1);
+    }
+
+    @Test
+    void deletingTheProgramRemovesItsMissedAndEndingEvents() throws Exception {
+        linkedSince(LINKED_ON);
+        var program = UUID.randomUUID();
+        var created = push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        var other = UUID.randomUUID();
+        var otherProgram = withFreshIds("program");
+        otherProgram.put("name", "Другая");
+        ((ArrayNode) otherProgram.get("cycles").get(0).get("weeks").get(0)
+                .get("workouts")).removeAll();
+        push(coach, item("program", other, athleteId, 0, 1, otherProgram));
+        dailyJob.run(LocalDate.parse("2026-10-16"));
+        assertThat(events(inbox(coach, ""), "workout_missed")).hasSize(1);
+        assertThat(events(inbox(coach, ""), "program_ending")).hasSize(2);
+
+        push(coach, item("program", program, athleteId, created.get("revision").asLong(), 2, null));
+
+        assertThat(events(inbox(coach, ""), "workout_missed")).isEmpty();
+        assertThat(only(events(inbox(coach, ""), "program_ending")).get("subjectId").asString())
+                .as("событие другой программы остаётся").isEqualTo(other.toString());
     }
 
     @Test

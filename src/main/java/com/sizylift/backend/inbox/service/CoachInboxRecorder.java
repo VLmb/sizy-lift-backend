@@ -16,7 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
  * приглашения). Нет коммита — нет события. Событие получает только активная связь подопечного.
  * <ul>
  *   <li>новая тренировка подопечного — {@code workout_completed}; её удаление убирает событие;</li>
- *   <li>перенос подопечного — {@code workout_rescheduled}; отмена переноса убирает событие.</li>
+ *   <li>перенос подопечного — {@code workout_rescheduled}; отмена переноса убирает событие;</li>
+ *   <li>любая запись программы (и тренером, и сервером) убирает пропуски по исчезнувшим плановым тренировкам,
+ *       удаление программы — ещё и её {@code program_ending}.</li>
  * </ul>
  */
 @Service
@@ -40,6 +42,7 @@ public class CoachInboxRecorder {
         switch (change.type()) {
             case AggregateType.WORKOUT -> onWorkout(change);
             case AggregateType.WORKOUT_RESCHEDULE -> onReschedule(change);
+            case AggregateType.PROGRAM -> onProgram(change);
             default -> {
             }
         }
@@ -51,6 +54,13 @@ public class CoachInboxRecorder {
         } else if (change.byOwner() && change.created()) {
             events.workoutCompleted(change.ownerId(), change.aggregateId(), calendar.now());
         }
+    }
+
+    private void onProgram(AggregateChange change) {
+        if (change.deleted()) {
+            events.deleteBySubject(change.ownerId(), CoachEventKind.PROGRAM_ENDING, change.aggregateId());
+        }
+        events.deleteOrphanMissed(change.ownerId());
     }
 
     private void onReschedule(AggregateChange change) {

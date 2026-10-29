@@ -100,7 +100,12 @@ public abstract class CoachWorkspaceApiSupport extends PostgresIntegrationTest {
 
     /** Фикстура тренировки с новыми id блоков, упражнений и подходов: дочерние строки уникальны у владельца. */
     protected ObjectNode workout() throws Exception {
-        var text = fixture("workout").toString();
+        return withFreshIds("workout");
+    }
+
+    /** Фикстура с новыми id всех вложенных строк, чтобы у одного владельца было несколько её копий. */
+    protected ObjectNode withFreshIds(String name) throws Exception {
+        var text = fixture(name).toString();
         var ids = new java.util.LinkedHashSet<String>();
         var matcher = java.util.regex.Pattern.compile("\"id\":\"([0-9a-f-]{36})\"").matcher(text);
         while (matcher.find()) {
