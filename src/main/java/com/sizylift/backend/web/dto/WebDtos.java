@@ -8,6 +8,7 @@ import java.util.UUID;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.dto.payload.PayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
+import com.sizylift.backend.publication.entity.LiftClass;
 
 /** Ответы чтения для веба (docs/web.md). Записывает веб через синхронизацию v2. */
 public final class WebDtos {
@@ -25,11 +26,12 @@ public final class WebDtos {
 
     /**
      * Упражнение каталога ({@code ownerId == null}) или своё. {@code revision} — ревизия агрегата своего
-     * упражнения для {@code baseRevision} при правке; у системных {@code null}.
+     * упражнения для {@code baseRevision} при правке; у системных {@code null}. {@code isSbd} — производное
+     * от {@code liftClass}, до перехода телефона.
      */
     public record CatalogExercise(UUID id, UUID ownerId, String name, String shortName, UUID movementCategoryId,
-                                  String resultType, boolean isSbd, String note, List<MuscleRef> muscles,
-                                  List<UUID> equipmentIds, Long revision) {
+                                  String resultType, boolean isSbd, LiftClass liftClass, String note,
+                                  List<MuscleRef> muscles, List<UUID> equipmentIds, Long revision) {
     }
 
     public record CatalogResponse(List<Reference> categories, List<Reference> equipment, List<Reference> muscles,

@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.sizylift.backend.publication.entity.LiftClass;
 import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.web.dto.WebDtos.CatalogExercise;
 import com.sizylift.backend.web.dto.WebDtos.HistoryEntry;
@@ -33,7 +34,7 @@ public class WebReadRepository {
     /** Системные упражнения и собственные упражнения указанных владельцев (вызывающего и, для тренера, подопечного). */
     private static final String VISIBLE_EXERCISES = "e.user_id IS NULL OR e.user_id = ? OR e.user_id = ?";
     private static final String SELECT_EXERCISES = """
-            SELECT e.id, e.user_id, e.name, e.short_name, e.movement_category_id, e.result_type, e.is_sbd, e.note,
+            SELECT e.id, e.user_id, e.name, e.short_name, e.movement_category_id, e.result_type, e.lift_class, e.note,
                    a.revision
             FROM sizylift.exercise e
             LEFT JOIN sizylift.published_aggregate a
@@ -170,10 +171,11 @@ public class WebReadRepository {
     private static CatalogExercise exercise(ResultSet row, Map<UUID, List<MuscleRef>> muscles,
                                             Map<UUID, List<UUID>> equipment) throws SQLException {
         var id = uuid(row, "id");
+        var liftClass = LiftClass.of(row.getString("lift_class"));
         return new CatalogExercise(id, uuid(row, "user_id"), row.getString("name"), row.getString("short_name"),
-                uuid(row, "movement_category_id"), row.getString("result_type"), row.getBoolean("is_sbd"),
-                row.getString("note"), muscles.getOrDefault(id, List.of()), equipment.getOrDefault(id, List.of()),
-                row.getObject("revision", Long.class));
+                uuid(row, "movement_category_id"), row.getString("result_type"), liftClass == LiftClass.SBD,
+                liftClass, row.getString("note"), muscles.getOrDefault(id, List.of()),
+                equipment.getOrDefault(id, List.of()), row.getObject("revision", Long.class));
     }
 
     private static ProgramSummary programSummary(ResultSet row) throws SQLException {

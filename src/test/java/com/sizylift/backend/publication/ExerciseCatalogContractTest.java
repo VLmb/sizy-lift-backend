@@ -40,7 +40,7 @@ class ExerciseCatalogContractTest extends PostgresIntegrationTest {
 
         var exercises = jdbc.queryForList("""
                 SELECT e.id::text AS id, e.name, e.short_name, e.movement_category_id::text AS category,
-                       e.result_type, e.is_sbd, e.note,
+                       e.result_type, e.lift_class = 'sbd' AS is_sbd, e.note,
                        (SELECT string_agg(m.muscle_group_id::text || ':' || m.role, ',' ORDER BY m.role, m.muscle_group_id)
                         FROM sizylift.exercise_muscle m WHERE m.exercise_id = e.id) AS muscles,
                        (SELECT string_agg(q.equipment_id::text, ',' ORDER BY q.equipment_id)

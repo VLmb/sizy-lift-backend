@@ -37,6 +37,7 @@ class AggregatePublishers {
     @Bean
     AggregatePublisher<ExercisePayloadV1> exercisePublisher(AthleteDataRepository athlete) {
         return new AggregatePublisher<>(AggregateType.EXERCISE, ExercisePayloadV1.class,
+                (userId, id, exercise) -> withLiftClass(athlete, userId, id, exercise),
                 (userId, id, exercise) -> insertOwnExercise(athlete, userId, id, exercise),
                 athlete::deleteExercise);
     }
@@ -75,6 +76,19 @@ class AggregatePublishers {
     AggregatePublisher<WorkoutCommentPayloadV1> workoutCommentPublisher(BetweenDataRepository between) {
         return new AggregatePublisher<>(AggregateType.WORKOUT_COMMENT, WorkoutCommentPayloadV1.class,
                 between::insertComment, between::deleteComment);
+    }
+
+    /**
+     * Класс упражнения по правилам переходного периода (docs/coach-workspace.md, раздел 1); SBD и «Базовое»
+     * не у «вес × повторения» — некорректный payload.
+     */
+    private static ExercisePayloadV1 withLiftClass(AthleteDataRepository athlete, UUID userId, UUID id,
+                                                   ExercisePayloadV1 exercise) {
+        var liftClass = exercise.liftClassToStore(athlete.findLiftClass(userId, id).orElse(null));
+        if (!liftClass.allows(exercise.resultType())) {
+            throw new PayloadParser.InvalidPayloadException();
+        }
+        return exercise.withLiftClass(liftClass);
     }
 
     /** Своя копия пользователя уже удалена, поэтому оставшаяся строка принадлежит каталогу или другому пользователю. */

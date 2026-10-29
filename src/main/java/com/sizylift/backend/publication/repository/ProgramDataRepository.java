@@ -60,8 +60,8 @@ public class ProgramDataRepository {
     private static final String INSERT_SET = """
             INSERT INTO sizylift.planned_set (user_id, id, program_id, planned_exercise_id, position, result_type,
                 set_type, target_weight_grams, repetitions, duration_ms, target_distance_m, target_rpe_tenths,
-                rest_ms, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                target_percent_one_rm_tenths, rest_ms, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_PROGRAM = """
@@ -90,7 +90,7 @@ public class ProgramDataRepository {
             """;
     private static final String SELECT_SETS = """
             SELECT id, planned_exercise_id, position, set_type, target_weight_grams, repetitions, duration_ms,
-                target_distance_m, target_rpe_tenths, rest_ms, note
+                target_distance_m, target_rpe_tenths, target_percent_one_rm_tenths, rest_ms, note
             FROM sizylift.planned_set WHERE user_id = ? AND program_id = ? ORDER BY position, id
             """;
 
@@ -171,7 +171,7 @@ public class ProgramDataRepository {
                 .flatMap(exercise -> exercise.sets().stream().map(set -> new Object[] {userId, set.id(), programId,
                         exercise.id(), set.position(), exercise.resultType(), set.setType(),
                         set.targetWeightGrams(), set.repetitions(), set.durationMs(), set.targetDistanceM(),
-                        set.targetRpeTenths(), set.restMs(), set.note()}))
+                        set.targetRpeTenths(), set.targetPercentOneRmTenths(), set.restMs(), set.note()}))
                 .toList();
     }
 
@@ -228,6 +228,6 @@ public class ProgramDataRepository {
         return new Child<>(uuid(row, "planned_exercise_id"), new Set(uuid(row, "id"), row.getInt("position"),
                 row.getString("set_type"), integer(row, "target_weight_grams"), integer(row, "repetitions"),
                 integer(row, "duration_ms"), integer(row, "target_distance_m"), integer(row, "target_rpe_tenths"),
-                integer(row, "rest_ms"), row.getString("note")));
+                integer(row, "target_percent_one_rm_tenths"), integer(row, "rest_ms"), row.getString("note")));
     }
 }

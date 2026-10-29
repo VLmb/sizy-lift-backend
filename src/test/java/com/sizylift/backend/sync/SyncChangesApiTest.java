@@ -13,6 +13,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 import com.sizylift.backend.PostgresIntegrationTest;
 import com.sizylift.backend.publication.dto.payload.AthleteProfilePayloadV1;
@@ -63,6 +64,14 @@ class SyncChangesApiTest extends PostgresIntegrationTest {
             "one_rep_max", OneRepMaxPayloadV1.class,
             "injury", InjuryPayloadV1.class,
             "contraindication", ContraindicationPayloadV1.class);
+    /**
+     * Необязательные поля, которые сервер уже отдаёт, а общие фикстуры приложения ещё не содержат
+     * (docs/coach-workspace.md, разделы 1–2).
+     */
+    static final Map<String, List<String>> SERVER_ADDED_FIELDS = Map.of(
+            "exercise", List.of("liftClass"),
+            "program", List.of("cycles.[].weeks.[].workouts.[].blocks.[].exercises.[].sets.[]."
+                    + "targetPercentOneRmTenths"));
 
     @Autowired
     MockMvc mvc;
@@ -106,7 +115,8 @@ class SyncChangesApiTest extends PostgresIntegrationTest {
         assertThat(change.get("schemaVersion").asInt()).isEqualTo(1);
         assertThat(change.get("ownerId").asString()).isEqualTo(userId().toString());
         assertThat(normalized(type, change.get("payload"))).isEqualTo(normalized(type, fixture));
-        assertThat(fieldNames(change.get("payload"))).isEqualTo(fieldNames(fixture));
+        assertThat(fieldNames(change.get("payload")))
+                .isEqualTo(withServerAddedFields(type, fieldNames(fixture)));
         assertThat(change.get("payload").get("updatedAt").isString()).isTrue();
     }
 
@@ -329,13 +339,18 @@ class SyncChangesApiTest extends PostgresIntegrationTest {
             }
             case "exercise" -> {
                 var exercise = json.treeToValue(payload, ExercisePayloadV1.class);
-                yield new ExercisePayloadV1(exercise.name(), exercise.shortName(), exercise.movementCategoryId(),
-                        exercise.resultType(), exercise.isSbd(), exercise.note(), exercise.updatedAt(),
+                yield ExercisePayloadV1.stored(exercise.name(), exercise.shortName(), exercise.movementCategoryId(),
+                        exercise.resultType(), exercise.liftClassToStore(null), exercise.note(), exercise.updatedAt(),
                         sorted(exercise.muscles(), Comparator.comparing(m -> m.muscleGroupId().toString())),
                         sorted(exercise.equipmentIds(), Comparator.comparing(UUID::toString)));
             }
             default -> json.treeToValue(payload, PAYLOAD_TYPES.get(type));
         };
+    }
+
+    private static List<String> withServerAddedFields(String type, List<String> names) {
+        return Stream.concat(names.stream(), SERVER_ADDED_FIELDS.getOrDefault(type, List.of()).stream())
+                .distinct().sorted().toList();
     }
 
     private static <T> List<T> sorted(List<T> values, Comparator<T> order) {

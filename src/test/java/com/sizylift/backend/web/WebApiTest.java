@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.sizylift.backend.PostgresIntegrationTest;
+import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -320,7 +321,8 @@ class WebApiTest extends PostgresIntegrationTest {
         call(owner, post("/api/v2/web/programs/" + id + "/restore")).andExpect(status().isNoContent());
         var restored = body(call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk()));
         assertThat(restored.get("revision").asLong()).isGreaterThan(revision);
-        assertThat(restored.get("program").get("cycles")).isEqualTo(fixture("program").get("cycles"));
+        assertThat(json.treeToValue(restored.get("program"), ProgramPayloadV1.class).cycles())
+                .isEqualTo(json.treeToValue(fixture("program"), ProgramPayloadV1.class).cycles());
         assertThat(body(call(owner, get("/api/v2/web/programs/archive")).andExpect(status().isOk())).size()).isZero();
         call(owner, delete("/api/v2/coaching/links/" + link)).andExpect(status().isNoContent());
     }
