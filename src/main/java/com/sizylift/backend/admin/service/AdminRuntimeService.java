@@ -11,7 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AdminRuntimeService {
-    private static final List<String> PERIODS = List.of("1h", "24h", "7d");
+    private static final List<String> PERIODS = List.of("1h", "24h");
     private final RestClient http = AdminHttp.client();
     private final String url;
 

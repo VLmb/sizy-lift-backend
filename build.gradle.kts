@@ -63,6 +63,9 @@ tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
 tasks.withType<Test> {
     useJUnitPlatform()
     // KeycloakAuthenticationIntegrationTest imports the realm file into a real Keycloak.
+    inputs.file("deploy/compose.prod.yaml")
+    inputs.file("deploy/prometheus.yaml")
+    inputs.dir("deploy/telemetry")
     inputs.file("keycloak/realm-sizylift.json")
     inputs.dir("keycloak/themes")
     inputs.file("keycloak-provider/build/libs/sizy-keycloak-provider.jar")

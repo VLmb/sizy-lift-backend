@@ -77,6 +77,7 @@ class AdminApiTest extends PostgresIntegrationTest {
         }
         mvc.perform(get(ROOT + "/users").param("sort", "email; DROP TABLE").with(admin())).andExpect(status().isBadRequest());
         mvc.perform(get(ROOT + "/metrics").param("period", "100d").with(admin())).andExpect(status().isBadRequest());
+        mvc.perform(get(ROOT + "/metrics").param("period", "7d").with(admin())).andExpect(status().isBadRequest());
         mvc.perform(get(ROOT + "/containers/not-a-container/logs").with(admin())).andExpect(status().isBadRequest());
         mvc.perform(post(ROOT + "/users").with(admin())).andExpect(status().isMethodNotAllowed());
     }

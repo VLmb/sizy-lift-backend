@@ -17,7 +17,7 @@ import tools.jackson.databind.JsonNode;
 
 @Service
 public class AdminMetricsService {
-    private static final Map<String, Integer> PERIODS = Map.of("15m", 900, "1h", 3600, "6h", 21600, "24h", 86400, "7d", 604800);
+    private static final Map<String, Integer> PERIODS = Map.of("15m", 900, "1h", 3600, "6h", 21600, "24h", 86400);
     private static final int POINTS = 120;
     private static final int DETAIL_POINTS = 600;
     private static final int MIN_STEP_SECONDS = 30;
