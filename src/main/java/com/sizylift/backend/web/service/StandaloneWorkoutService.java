@@ -1,71 +1,113 @@
 package com.sizylift.backend.web.service;
 
-import java.util.HashSet;
+import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 import com.sizylift.backend.access.service.AccessPolicy;
+import com.sizylift.backend.publication.dto.ItemStatus;
+import com.sizylift.backend.publication.dto.RejectionReason;
+import com.sizylift.backend.publication.dto.payload.StandaloneWorkoutPayloadV1;
+import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateType;
+import com.sizylift.backend.sync.dto.SyncPushRequest.Item;
+import com.sizylift.backend.sync.dto.SyncPushResponse.ItemResult;
+import com.sizylift.backend.sync.service.SyncPushService;
 import com.sizylift.backend.web.dto.StandaloneWorkoutDtos.Response;
 import com.sizylift.backend.web.dto.StandaloneWorkoutDtos.SaveRequest;
 import com.sizylift.backend.web.repository.StandaloneWorkoutRepository;
+import com.sizylift.backend.web.repository.StandaloneWorkoutRepository.State;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.ResponseStatus;
+import tools.jackson.databind.ObjectMapper;
 
+/**
+ * Веб-ресурс разовой тренировки поверх sync v2 (ADR-0011): та же запись, права, ленты и уведомления, что у
+ * телефона. Ревизия — серверная ревизия агрегата; запись не от текущей ревизии — 409, кроме точного повтора.
+ */
 @Service
 public class StandaloneWorkoutService {
+    private static final String CLIENT_PREFIX = "web-rest:";
+    private static final int SCHEMA_VERSION = 1;
+
     private final StandaloneWorkoutRepository repository;
     private final AccessPolicy access;
+    private final SyncPushService push;
+    private final ObjectMapper json;
+    private final Clock clock;
+    private final PublishedAggregateRepository aggregates;
 
-    public StandaloneWorkoutService(StandaloneWorkoutRepository repository, AccessPolicy access) { this.repository = repository; this.access = access; }
+    public StandaloneWorkoutService(StandaloneWorkoutRepository repository, AccessPolicy access,
+                                    SyncPushService push, ObjectMapper json, Clock clock,
+                                    PublishedAggregateRepository aggregates) {
+        this.repository = repository;
+        this.access = access;
+        this.push = push;
+        this.json = json;
+        this.clock = clock;
+        this.aggregates = aggregates;
+    }
 
     @Transactional(readOnly = true)
     public Response read(UUID caller, UUID owner, UUID id) {
         var target = owner == null ? caller : owner;
-        if (!access.canRead(caller, target, AggregateType.WORKOUT)) throw new WebReadService.NotFound();
+        if (!access.canRead(caller, target, AggregateType.STANDALONE_WORKOUT)) throw new WebReadService.NotFound();
         return repository.find(target, id).orElseThrow(WebReadService.NotFound::new);
     }
 
-    @Transactional
     public Response save(UUID caller, UUID owner, UUID id, SaveRequest request) {
-        var target = writable(caller, owner);
-        if (!id.equals(request.workout().id()) || repository.programIdExists(target, id)) throw new InvalidWorkout();
-        validateIds(request);
-        if (!repository.save(target, id, request.revision(), request.workout())) {
-            var current = repository.find(target, id);
-            // Повтор после потери ответа безопасен, но не перезаписывает другую правку.
-            if (current.isPresent() && current.get().revision() == request.revision() + 1 && current.get().workout().equals(request.workout())) return current.get();
-            throw new Conflict();
-        }
-        return repository.find(target, id).orElseThrow(WebReadService.NotFound::new);
-    }
-
-    @Transactional
-    public void delete(UUID caller, UUID owner, UUID id, long revision) {
-        var target = writable(caller, owner);
-        if (!repository.delete(target, id, revision)) {
-            if (repository.find(target, id).isEmpty()) throw new WebReadService.NotFound();
-            throw new Conflict();
-        }
-    }
-
-    private UUID writable(UUID caller, UUID owner) {
+        if (!id.equals(request.workout().id())) throw new InvalidWorkout();
         var target = owner == null ? caller : owner;
-        access.lockOwner(target);
-        if (!access.canWriteFor(caller, target, AggregateType.WORKOUT)) throw new Forbidden();
-        return target;
+        var state = repository.state(target, id);
+        checkWrite(caller, target, state);
+        long current = state.map(State::revision).orElse(0L);
+        if (request.revision().longValue() != current) {
+            // Повтор после потери ответа безопасен, но не перезаписывает другую правку.
+            var replay = repository.find(target, id)
+                    .filter(saved -> saved.workout().equals(request.workout()));
+            return replay.orElseThrow(Conflict::new);
+        }
+        var payload = new StandaloneWorkoutPayloadV1(request.workout(), clock.instant());
+        outcome(write(caller, owner, id, current, false, payload));
+        return repository.find(target, id).orElseThrow(Conflict::new);
     }
 
-    private static void validateIds(SaveRequest request) {
-        var ids = new HashSet<UUID>();
-        ids.add(request.workout().id());
-        for (var block : request.workout().blocks()) {
-            if (!ids.add(block.id())) throw new InvalidWorkout();
-            for (var exercise : block.exercises()) {
-                if (!ids.add(exercise.id())) throw new InvalidWorkout();
-                for (var set : exercise.sets()) if (!ids.add(set.id())) throw new InvalidWorkout();
-            }
+    public void delete(UUID caller, UUID owner, UUID id, long revision) {
+        var target = owner == null ? caller : owner;
+        var state = repository.state(target, id);
+        checkWrite(caller, target, state);
+        if (state.isEmpty() || state.get().deleted()) throw new WebReadService.NotFound();
+        if (state.get().revision() != revision) throw new Conflict();
+        outcome(write(caller, owner, id, revision, true, null));
+    }
+
+    private void checkWrite(UUID caller, UUID target, java.util.Optional<State> state) {
+        var type = AggregateType.STANDALONE_WORKOUT;
+        if (!access.canWriteFor(caller, target, type)
+                || state.isPresent() && !access.canWrite(caller, target, type, state.get().authorId(), true)) {
+            throw new Forbidden();
         }
+    }
+
+    private ItemResult write(UUID caller, UUID owner, UUID id, long baseRevision, boolean deleted,
+                             StandaloneWorkoutPayloadV1 payload) {
+        var target = owner == null ? caller : owner;
+        var clientId = CLIENT_PREFIX + caller;
+        // Следующая версия этого веб-клиента по агрегату: гонка двух вкладок даст stale → 409.
+        var version = aggregates.clientVersion(target, AggregateType.STANDALONE_WORKOUT, id, clientId) + 1;
+        var item = new Item(AggregateType.STANDALONE_WORKOUT, id, owner, baseRevision, clock.instant(), clientId,
+                version, SCHEMA_VERSION, deleted, payload == null ? null : json.valueToTree(payload));
+        return push.push(caller, List.of(item)).results().getFirst();
+    }
+
+    private static void outcome(ItemResult result) {
+        if (result.status() == ItemStatus.ACCEPTED) return;
+        if (result.status() == ItemStatus.REJECTED) {
+            if (result.error() == RejectionReason.FORBIDDEN) throw new Forbidden();
+            throw new InvalidWorkout();
+        }
+        throw new Conflict();
     }
 
     @ResponseStatus(HttpStatus.CONFLICT) public static class Conflict extends RuntimeException { }

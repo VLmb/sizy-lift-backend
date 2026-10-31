@@ -6,12 +6,14 @@ import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.InjuryPayloadV1;
 import com.sizylift.backend.publication.dto.payload.OneRepMaxPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.dto.payload.StandaloneWorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutCommentPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.AthleteDataRepository;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
+import com.sizylift.backend.publication.repository.StandaloneDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -58,6 +60,11 @@ class AggregateReaders {
     @Bean
     AggregateReader<WorkoutReschedulePayloadV1> workoutRescheduleReader(BetweenDataRepository between) {
         return new AggregateReader<>(AggregateType.WORKOUT_RESCHEDULE, between::findReschedule);
+    }
+
+    @Bean
+    AggregateReader<StandaloneWorkoutPayloadV1> standaloneWorkoutReader(StandaloneDataRepository standalone) {
+        return new AggregateReader<>(AggregateType.STANDALONE_WORKOUT, standalone::find);
     }
 
     @Bean

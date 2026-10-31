@@ -39,6 +39,11 @@ class ChangeNotifications {
                     notifyOwner(change, NotificationKind.PROGRAM_UPDATED);
                 }
             }
+            case AggregateType.STANDALONE_WORKOUT -> {
+                if (!change.byOwner()) {
+                    notifyOwner(change, NotificationKind.WORKOUT_PLANNED);
+                }
+            }
             case AggregateType.WORKOUT -> {
                 if (change.byOwner() && change.created()) {
                     notifyCoach(change, NotificationKind.WORKOUT_COMPLETED);

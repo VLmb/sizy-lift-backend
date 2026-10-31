@@ -27,14 +27,15 @@ public class AccessPolicy {
      */
     public static final Set<String> COACH_VISIBLE = Set.of(AggregateType.WORKOUT, AggregateType.PROGRAM,
             AggregateType.EXERCISE, AggregateType.ATHLETE_PROFILE, AggregateType.ONE_REP_MAX,
-            AggregateType.WORKOUT_RESCHEDULE, AggregateType.WORKOUT_COMMENT);
+            AggregateType.WORKOUT_RESCHEDULE, AggregateType.WORKOUT_COMMENT, AggregateType.STANDALONE_WORKOUT);
     /** Травмы и противопоказания — только с разрешения подопечного. */
     public static final Set<String> HEALTH = Set.of(AggregateType.INJURY, AggregateType.CONTRAINDICATION);
     /**
-     * Что тренер пишет за подопечного: свои программы и свои комментарии к его тренировкам. Переносы пишет
-     * только подопечный.
+     * Что тренер пишет за подопечного: свои программы, свои разовые тренировки (ADR-0011) и свои комментарии к
+     * его тренировкам. Переносы пишет только подопечный.
      */
-    public static final Set<String> COACH_WRITABLE = Set.of(AggregateType.PROGRAM, AggregateType.WORKOUT_COMMENT);
+    public static final Set<String> COACH_WRITABLE = Set.of(AggregateType.PROGRAM, AggregateType.WORKOUT_COMMENT,
+            AggregateType.STANDALONE_WORKOUT);
     /** Порядок блокировок по пользователю: строковое представление совпадает с порядком uuid в PostgreSQL. */
     public static final Comparator<UUID> LOCK_ORDER = Comparator.comparing(UUID::toString);
 

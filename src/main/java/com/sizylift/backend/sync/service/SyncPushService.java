@@ -12,6 +12,7 @@ import com.sizylift.backend.publication.dto.ItemStatus;
 import com.sizylift.backend.publication.dto.RejectionReason;
 import com.sizylift.backend.publication.dto.payload.PayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.dto.payload.StandaloneWorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateArbiter;
@@ -105,6 +106,9 @@ public class SyncPushService {
         if (payload instanceof ProgramPayloadV1 program && !write.byOwner()) {
             return store(write, () -> replaceCoachProgram(write, publisher, program));
         }
+        if (payload instanceof StandaloneWorkoutPayloadV1 standalone && !write.byOwner()) {
+            return store(write, () -> replaceCoachStandalone(write, publisher, standalone));
+        }
         if (payload instanceof WorkoutReschedulePayloadV1 reschedule) {
             return store(write, () -> replaceReschedule(write, publisher, payload, reschedule));
         }
@@ -131,6 +135,14 @@ public class SyncPushService {
         var adoption = coachExercises.adopt(write.callerId(), write.ownerId(), program);
         publisher.replace(write.ownerId(), write.item().id(), publisher.payloadType().cast(adoption.program()));
         return new Effects(adoption.copies(), adoption.rewritten(program));
+    }
+
+    /** Разовая тренировка тренера: как программа, упражнения тренера копируются подопечному (ADR-0011). */
+    private <P extends PayloadV1> Effects replaceCoachStandalone(Write write, AggregatePublisher<P> publisher,
+                                                                 StandaloneWorkoutPayloadV1 standalone) {
+        var adoption = coachExercises.adopt(write.callerId(), write.ownerId(), standalone);
+        publisher.replace(write.ownerId(), write.item().id(), publisher.payloadType().cast(adoption.standalone()));
+        return new Effects(adoption.copies(), adoption.rewritten(standalone));
     }
 
     /** Удаление — та же запись с tombstone: конкурирует с правкой по {@code changedAt}. */

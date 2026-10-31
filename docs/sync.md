@@ -21,7 +21,7 @@
 
 | Поле | Смысл |
 | --- | --- |
-| `type`, `id`, `schemaVersion`, `deleted`, `payload` | как в v1: те же типы агрегатов и те же payload v1, плюс `workout_reschedule` и `workout_comment` ([coaching.md](coaching.md)) |
+| `type`, `id`, `schemaVersion`, `deleted`, `payload` | как в v1: те же типы агрегатов и те же payload v1, плюс `workout_reschedule`, `workout_comment` ([coaching.md](coaching.md)) и `standalone_workout` (разовая тренировка, ниже) |
 | `ownerId` | только при записи чужих данных: тренер пишет программу подопечного. Права — `AccessPolicy` ([coaching.md](coaching.md)), без права — `rejected: forbidden` |
 | `baseRevision` | ревизия, от которой клиент правил; `0` — новый агрегат |
 | `changedAt` | время последней локальной правки по часам клиента |
@@ -122,6 +122,26 @@ tombstone.
   записи ленты соответствует отданным данным.
 - Миграция засеяла ленты владельцев всеми уже опубликованными агрегатами, так что первое чтение с
   `after=0` возвращает всё.
+
+## Разовая тренировка `standalone_workout`
+
+ADR-0011. Плановая тренировка без программы; id агрегата равен `workout.id`.
+
+```json
+{ "workout": { "id": "…", "title": "Верх", "workoutDate": "2026-11-14", "position": 0, "blocks": [ … ] },
+  "updatedAt": "2026-11-12T09:14:02Z" }
+```
+
+- `workout` — та же `PlannedWorkout`, что в программе (подходы с `targetPercentOneRmTenths`, `targetRpeAuto`).
+- `workout.id` не совпадает с id агрегата или вложенные id повторяются — `rejected: invalid_payload`; тот же
+  id у плановой тренировки программы владельца — `rejected: id_conflict`.
+- Права как у программы: тренер создаёт разовые подопечному (`ownerId`), правит и удаляет только свои;
+  подопечный тренерскую только читает. Упражнения тренера копируются подопечному так же, как для программы.
+- Хранится JSON-ом в `standalone_workout`; `original_date` — дата при создании, по ней веб показывает
+  «перенесена», когда владелец сдвинул дату.
+- Подопечный переносит разовую тренера `workout_reschedule` с `programId: null`; перенос на её дату — снятие
+  переноса. Смена даты автором и удаление разовой снимают перенос.
+- Публикация v1 этот тип не принимает (`unsupported_type`).
 
 ## Совместимость с публикацией v1
 

@@ -5,70 +5,67 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1.PlannedWorkout;
+import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.web.dto.StandaloneWorkoutDtos.Response;
 import com.sizylift.backend.web.dto.WebDtos.PlannedSummary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.ObjectMapper;
 
+/** Чтение разовых тренировок для веба; запись идёт через sync v2 (ADR-0011). */
 @Repository
 public class StandaloneWorkoutRepository {
-    private static final String READ = """
-            SELECT revision, payload::text FROM sizylift.standalone_workout
-            WHERE user_id = ? AND id = ? AND NOT deleted
+    private static final String STATE = """
+            SELECT pa.revision, pa.deleted, pa.author_user_id, s.payload::text AS payload
+            FROM sizylift.published_aggregate pa
+            LEFT JOIN sizylift.standalone_workout s ON s.user_id = pa.user_id AND s.id = pa.aggregate_id
+            WHERE pa.user_id = ? AND pa.type = ? AND pa.aggregate_id = ? AND pa.revision > 0
             """;
-    private static final String CREATE = """
-            INSERT INTO sizylift.standalone_workout (user_id, id, revision, original_date, workout_date, payload)
-            VALUES (?, ?, 1, ?, ?, ?::jsonb) ON CONFLICT (user_id, id) DO NOTHING
-            """;
-    private static final String UPDATE = """
-            UPDATE sizylift.standalone_workout SET revision = revision + 1, workout_date = ?,
-                payload = ?::jsonb, updated_at = now() WHERE user_id = ? AND id = ? AND revision = ? AND NOT deleted
-            """;
-    private static final String DELETE = """
-            UPDATE sizylift.standalone_workout SET revision = revision + 1, deleted = true, payload = NULL,
-                updated_at = now() WHERE user_id = ? AND id = ? AND revision = ? AND NOT deleted
-            """;
+    /** Дата с учётом переноса подопечного; «перенесена» — и сдвиг даты владельцем, как раньше. */
     private static final String PLANNED = """
-            SELECT s.id, s.original_date, s.workout_date, s.payload->>'title' AS title,
-                CASE WHEN s.original_date <> s.workout_date THEN s.updated_at END AS rescheduled_at,
+            SELECT s.id, s.original_date, coalesce(r.scheduled_date, s.workout_date) AS scheduled_date,
+                s.payload->>'title' AS title,
+                CASE WHEN r.planned_workout_id IS NOT NULL THEN r.updated_at
+                     WHEN s.original_date <> s.workout_date THEN s.updated_at END AS rescheduled_at,
                 w.id AS workout_id, w.workout_date AS linked_workout_date
-            FROM sizylift.standalone_workout s LEFT JOIN LATERAL (
+            FROM sizylift.standalone_workout s
+            LEFT JOIN sizylift.workout_reschedule r ON r.user_id = s.user_id AND r.planned_workout_id = s.id
+            LEFT JOIN LATERAL (
                 SELECT id, workout_date FROM sizylift.workout WHERE user_id = s.user_id AND planned_workout_id = s.id
                 ORDER BY completed_at DESC, id LIMIT 1
             ) w ON true
-            WHERE s.user_id = ? AND NOT s.deleted AND s.workout_date BETWEEN ? AND ?
-            ORDER BY s.workout_date, s.id
+            WHERE s.user_id = ? AND coalesce(r.scheduled_date, s.workout_date) BETWEEN ? AND ?
+            ORDER BY 3, s.id
             """;
-    private static final String PROGRAM_ID_EXISTS = "SELECT EXISTS (SELECT 1 FROM sizylift.planned_workout WHERE user_id = ? AND id = ?)";
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
 
     public StandaloneWorkoutRepository(JdbcTemplate jdbc, ObjectMapper json) { this.jdbc = jdbc; this.json = json; }
 
+    /** Состояние агрегата: ревизия, tombstone, автор и тренировка (у tombstone — пусто). */
+    public Optional<State> state(UUID owner, UUID id) {
+        return jdbc.query(STATE, (row, n) -> {
+            var payload = row.getString("payload");
+            return new State(row.getLong("revision"), row.getBoolean("deleted"),
+                    row.getObject("author_user_id", UUID.class),
+                    payload == null ? null : json.readValue(payload, PlannedWorkout.class));
+        }, owner, AggregateType.STANDALONE_WORKOUT, id).stream().findFirst();
+    }
+
     public Optional<Response> find(UUID owner, UUID id) {
-        return jdbc.query(READ, (row, n) -> new Response(owner, id, row.getLong("revision"),
-                json.readValue(row.getString("payload"), PlannedWorkout.class)), owner, id).stream().findFirst();
+        return state(owner, id).filter(state -> !state.deleted() && state.workout() != null)
+                .map(state -> new Response(owner, id, state.revision(), state.workout()));
     }
-
-    public boolean save(UUID owner, UUID id, long revision, PlannedWorkout workout) {
-        var payload = json.writeValueAsString(workout);
-        if (revision == 0) {
-            return jdbc.update(CREATE, owner, id, workout.workoutDate(), workout.workoutDate(), payload) == 1;
-        }
-        return jdbc.update(UPDATE, workout.workoutDate(), payload, owner, id, revision) == 1;
-    }
-
-    public boolean delete(UUID owner, UUID id, long revision) { return jdbc.update(DELETE, owner, id, revision) == 1; }
-    public boolean programIdExists(UUID owner, UUID id) { return Boolean.TRUE.equals(jdbc.queryForObject(PROGRAM_ID_EXISTS, Boolean.class, owner, id)); }
 
     public List<PlannedSummary> planned(UUID owner, LocalDate from, LocalDate to) {
         return jdbc.query(PLANNED, (row, n) -> {
             var changed = row.getObject("rescheduled_at", java.time.OffsetDateTime.class);
             return new PlannedSummary(row.getObject("id", UUID.class), null, row.getString("title"),
-                    row.getObject("original_date", LocalDate.class), row.getObject("workout_date", LocalDate.class),
+                    row.getObject("original_date", LocalDate.class), row.getObject("scheduled_date", LocalDate.class),
                     changed == null ? null : changed.toInstant(), row.getObject("workout_id", UUID.class),
                     row.getObject("linked_workout_date", LocalDate.class));
         }, owner, from, to);
     }
+
+    public record State(long revision, boolean deleted, UUID authorId, PlannedWorkout workout) { }
 }

@@ -6,9 +6,12 @@ import java.util.UUID;
 
 import jakarta.validation.constraints.NotNull;
 
-/** Перенос плановой тренировки подопечным; id агрегата — id плановой тренировки. Программу не меняет. */
+/**
+ * Перенос плановой тренировки подопечным; id агрегата — id плановой тренировки. Программу не меняет.
+ * {@code programId} пуст у разовой тренировки (ADR-0011).
+ */
 public record WorkoutReschedulePayloadV1(
-        @NotNull UUID programId,
+        UUID programId,
         @NotNull LocalDate scheduledDate,
         @NotNull Instant updatedAt) implements PayloadV1 {
 }

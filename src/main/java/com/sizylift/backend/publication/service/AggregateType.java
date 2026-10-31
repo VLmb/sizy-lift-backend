@@ -16,6 +16,8 @@ public final class AggregateType {
     public static final String WORKOUT_RESCHEDULE = "workout_reschedule";
     /** Комментарий к тренировке; только sync v2. */
     public static final String WORKOUT_COMMENT = "workout_comment";
+    /** Разовая тренировка без программы; только sync v2 (ADR-0011). */
+    public static final String STANDALONE_WORKOUT = "standalone_workout";
 
     /** Типы публикации v1: старое приложение других не шлёт, а правила новых типов есть только в sync v2. */
     public static final Set<String> V1 = Set.of(WORKOUT, PROGRAM, EXERCISE, ATHLETE_PROFILE, ONE_REP_MAX, INJURY,

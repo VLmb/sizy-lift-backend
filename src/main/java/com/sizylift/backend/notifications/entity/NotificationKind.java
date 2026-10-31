@@ -9,6 +9,7 @@ import java.util.Arrays;
 public enum NotificationKind {
 
     PROGRAM_UPDATED("program_updated", "Тренер обновил программу"),
+    WORKOUT_PLANNED("workout_planned", "Тренер запланировал тренировку"),
     COMMENT_ADDED("comment_added", "Новый комментарий к тренировке"),
     WORKOUT_COMPLETED("workout_completed", "Подопечный завершил тренировку"),
     WORKOUT_RESCHEDULED("workout_rescheduled", "Подопечный перенёс тренировку"),

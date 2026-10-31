@@ -8,6 +8,7 @@ import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.InjuryPayloadV1;
 import com.sizylift.backend.publication.dto.payload.OneRepMaxPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.dto.payload.StandaloneWorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutCommentPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
@@ -15,6 +16,7 @@ import com.sizylift.backend.publication.repository.AthleteDataRepository;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.repository.OneRepMaxHistoryRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
+import com.sizylift.backend.publication.repository.StandaloneDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -76,6 +78,17 @@ class AggregatePublishers {
     AggregatePublisher<WorkoutReschedulePayloadV1> workoutReschedulePublisher(BetweenDataRepository between) {
         return new AggregatePublisher<>(AggregateType.WORKOUT_RESCHEDULE, WorkoutReschedulePayloadV1.class,
                 between::insertReschedule, between::deleteReschedule);
+    }
+
+    /**
+     * Разовая тренировка: замена — upsert без удаления (сохраняется дата создания), строку удаляет только
+     * tombstone.
+     */
+    @Bean
+    AggregatePublisher<StandaloneWorkoutPayloadV1> standaloneWorkoutPublisher(StandaloneDataRepository standalone) {
+        return new AggregatePublisher<>(AggregateType.STANDALONE_WORKOUT, StandaloneWorkoutPayloadV1.class,
+                standalone::insert, (userId, id) -> {
+                }, standalone::delete);
     }
 
     @Bean
