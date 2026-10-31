@@ -1,11 +1,17 @@
 name: CI
 
+# PR проверяются событием pull_request, main — после влития. Push в ветки PR не дублирует прогон.
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
