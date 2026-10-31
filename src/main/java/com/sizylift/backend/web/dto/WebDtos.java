@@ -85,7 +85,7 @@ public final class WebDtos {
                                  Instant completedAt, String quality, UUID plannedWorkoutId, int recordCount) {
     }
 
-    public record PlannedSummary(UUID id, UUID programId, String title, LocalDate originalDate,
+    public record PlannedSummary(UUID id, UUID programId, UUID authorId, String title, LocalDate originalDate,
                                  LocalDate scheduledDate, Instant rescheduledAt, UUID workoutId, LocalDate linkedWorkoutDate) {
     }
 

@@ -57,7 +57,7 @@ public class DiaryReadRepository {
     }
 
     public List<PlannedSummary> planned(UUID owner, LocalDate from, LocalDate to) {
-        return jdbc.query(PLANNED, (row, n) -> new PlannedSummary(uuid(row, "id"), uuid(row, "program_id"),
+        return jdbc.query(PLANNED, (row, n) -> new PlannedSummary(uuid(row, "id"), uuid(row, "program_id"), null,
                 row.getString("title"), date(row, "original_date"), date(row, "scheduled_date"),
                 instant(row, "rescheduled_at"), uuid(row, "workout_id"), date(row, "linked_workout_date")), owner, from, to);
     }
