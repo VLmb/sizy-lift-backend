@@ -72,7 +72,7 @@ public class SyncPushService {
 
     public SyncPushResponse push(UUID userId, List<Item> items) {
         return metrics.observePush(() -> {
-            var results = items.stream().map(item -> push(userId, item)).toList();
+            var results = items.stream().map(item -> push(userId, item, false)).toList();
             results.forEach(metrics::count);
             if (log.isDebugEnabled()) {
                 log.debug("Sync push: {}", results.stream()
@@ -82,7 +82,24 @@ public class SyncPushService {
         });
     }
 
-    private ItemResult push(UUID callerId, Item item) {
+    /** Серверное наполнение: штатные ревизии и ленты, без push о якобы реальных действиях пользователя. */
+    @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public SyncPushResponse pushGeneratedForOwner(UUID owner, List<Item> items) {
+        if (items.stream().anyMatch(item -> item.ownerId() != null || item.baseRevision() != 0 || item.deleted()))
+            throw new IllegalArgumentException("Допустимо только создание собственных тестовых агрегатов");
+        var results = new java.util.ArrayList<ItemResult>();
+        for (var item : items) {
+            var result = push(owner, item, true);
+            if (result.status() != ItemStatus.ACCEPTED) throw new GeneratedDataRejectedException();
+            results.add(result);
+        }
+        return new SyncPushResponse(List.copyOf(results));
+    }
+
+    public static class GeneratedDataRejectedException extends RuntimeException { }
+
+    private ItemResult push(UUID callerId, Item item, boolean generated) {
         var publisher = publishers.get(item.type());
         if (publisher == null) {
             return ItemResult.rejected(item, RejectionReason.UNSUPPORTED_TYPE);
@@ -90,7 +107,7 @@ public class SyncPushService {
         if (item.schemaVersion() != SCHEMA_VERSION) {
             return ItemResult.rejected(item, RejectionReason.UNSUPPORTED_SCHEMA);
         }
-        var write = new Write(callerId, item.ownerId() == null ? callerId : item.ownerId(), item);
+        var write = new Write(callerId, item.ownerId() == null ? callerId : item.ownerId(), item, generated);
         try {
             return item.deleted() ? delete(write, publisher) : replace(write, publisher);
         } catch (PayloadParser.InvalidPayloadException | DataIntegrityViolationException e) {
@@ -205,14 +222,14 @@ public class SyncPushService {
                 feed.changed(AggregateChange.byServer(ownerId, removed.type(), removed.id(), removed.revision(),
                         true));
             }
-            feed.changed(new AggregateChange(ownerId, write.callerId(), item.type(), item.id(), revision,
+            feed.changed(new AggregateChange(ownerId, write.generated() ? null : write.callerId(), item.type(), item.id(), revision,
                     deleted, !state.exists() || state.deleted()));
             return ItemResult.accepted(item, revision, effects.payloadRewritten());
         });
     }
 
     /** Кто пишет, чьи данные и что. */
-    private record Write(UUID callerId, UUID ownerId, Item item) {
+    private record Write(UUID callerId, UUID ownerId, Item item, boolean generated) {
 
         boolean byOwner() {
             return callerId.equals(ownerId);
