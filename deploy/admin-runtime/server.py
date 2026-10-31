@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 PROJECT = os.environ.get("COMPOSE_PROJECT", "sizylift")
 MAX_BYTES = 1024 * 1024
 MAX_LINES = 500
-PERIODS = {"1h": 3600, "24h": 86400, "7d": 604800}
+PERIODS = {"1h": 3600, "24h": 86400}
 SECRET = re.compile(r'(?i)((?:password|passwd|secret|access[_-]?token|refresh[_-]?token|authorization|cookie)\s*["\']?\s*[:=]\s*["\']?)([^\s,"\'}]+)')
 BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*")
 JWT = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")

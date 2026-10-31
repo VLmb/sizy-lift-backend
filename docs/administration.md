@@ -37,7 +37,7 @@ Sizy присоединяется по `issuer + subject`, предметные 
 ## Метрики и контейнеры
 
 Backend выполняет только фиксированные PromQL-запросы во внутреннем Prometheus.
-Разрешены периоды `15m`, `1h`, `6h`, `24h`, `7d`; обычный ответ — около 120 точек,
+Разрешены периоды `15m`, `1h`, `6h`, `24h`; обычный ответ — около 120 точек,
 `detail=true` — до 601 точки с включёнными границами. Шаг не меньше 30 секунд.
 Режимы имеют раздельный кеш 20 секунд и ограниченные таймауты. CPU и HTTP-rate
 по-прежнему усредняются за 5 минут; детализация не меняет исходную частоту сбора.
@@ -140,3 +140,7 @@ Frontend: `npm run verify`; API/реальный PostgreSQL/Keycloak: `./gradlew
 адреса источников можно задать через `SIZYLIFT_ADMIN_KEYCLOAK_URL`,
 `SIZYLIFT_ADMIN_KEYCLOAK_CLIENT_ID`, `SIZYLIFT_ADMIN_KEYCLOAK_CLIENT_SECRET`,
 `SIZYLIFT_ADMIN_PROMETHEUS_URL`, `SIZYLIFT_ADMIN_RUNTIME_URL`.
+
+В production срок хранения телеметрии — 24 часа; недельный период API не принимает.
+Журналы контейнеров ограничены ротацией Docker (3 файла по 10 МиБ), поэтому могут
+содержать меньше суток. Параметры и обновление — [observability.md](observability.md#хранение-в-production).

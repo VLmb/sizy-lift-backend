@@ -18,6 +18,8 @@ class RuntimeTest(unittest.TestCase):
                 runtime.logs("../other", "1h", 100)
             with self.assertRaises(ValueError):
                 runtime.logs("a" * 64, "1h", 501)
+            with self.assertRaises(ValueError):
+                runtime.logs("a" * 64, "7d", 100)
             docker.assert_not_called()
 
     def test_decodes_both_streams_and_redacts_credentials(self):

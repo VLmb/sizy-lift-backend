@@ -6,10 +6,18 @@
 # The web app is built from a clone of sizy-lift-frontend at WEB_SOURCE.
 name: sizylift
 
+# Ограничивает stdout/stderr каждого сервиса; OTLP-история хранится отдельно.
+x-logging: &bounded-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   caddy:
     image: caddy:2.11.7@sha256:685ae3d7c34d9b5f8caeddc5d14051db7bbd88ff1f5a2fa0c16bd8ca328fb7af
     restart: unless-stopped
+    logging: *bounded-logging
     environment:
       ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
       API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
@@ -40,6 +48,7 @@ services:
         VITE_AUTH_ISSUER: https://${AUTH_DOMAIN}/realms/sizylift
     image: sizy-web:${WEB_VERSION:-latest}
     restart: unless-stopped
+    logging: *bounded-logging
 
   backend:
     build:
@@ -47,6 +56,7 @@ services:
       dockerfile: Dockerfile
     image: sizylift-backend:${BACKEND_VERSION:-latest}
     restart: unless-stopped
+    logging: *bounded-logging
     environment:
       SPRING_PROFILES_ACTIVE: prod
       DB_URL: jdbc:postgresql://postgres:5432/sizylift
@@ -77,6 +87,7 @@ services:
   postgres:
     image: postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     restart: unless-stopped
+    logging: *bounded-logging
     environment:
       POSTGRES_DB: sizylift
       POSTGRES_USER: sizylift
@@ -92,6 +103,7 @@ services:
   keycloak-postgres:
     image: postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     restart: unless-stopped
+    logging: *bounded-logging
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
@@ -110,6 +122,7 @@ services:
       dockerfile: deploy/keycloak/Dockerfile
     image: sizylift-keycloak:${BACKEND_VERSION:-latest}
     restart: unless-stopped
+    logging: *bounded-logging
     environment:
       KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
@@ -167,7 +180,16 @@ services:
   otel-lgtm:
     image: grafana/otel-lgtm:0.36.0@sha256:57c04cbd8e7022f32bb84c4ac005d79baf8b08e2c5be44facf11f5f1f9944ba2
     restart: unless-stopped
+    logging: *bounded-logging
     environment:
+      # Нативное удаление блоков; очереди и маркеры очистки остаются в /data.
+      PROMETHEUS_EXTRA_ARGS: --storage.tsdb.retention.time=24h
+      TEMPO_EXTRA_ARGS: >-
+        -backend-scheduler.provider.work.compaction.block-retention=24h
+        -backend-worker.compaction.block-retention=24h
+      PYROSCOPE_EXTRA_ARGS: -retention-period=24h
+      ENABLE_LOGS_ALL: "true"
+      LGTM_SHUTDOWN_TIMEOUT_SECONDS: "30"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
     ports:
@@ -175,11 +197,21 @@ services:
     volumes:
       - otel-lgtm-data:/data
       - ./prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
+      - ./telemetry/loki.yaml:/otel-lgtm/loki-config.yaml:ro
+      - ./telemetry/healthcheck.sh:/otel-lgtm/retention-healthcheck.sh:ro
+    stop_grace_period: 45s
+    healthcheck:
+      test: ["CMD", "bash", "/otel-lgtm/retention-healthcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      start_period: 90s
+      retries: 4
 
   # Только метрики хоста; порты наружу не публикуются.
   node-exporter:
     image: prom/node-exporter:v1.9.1@sha256:d00a542e409ee618a4edc67da14dd48c5da66726bbd5537ab2af9c1dfc442c8a
     restart: unless-stopped
+    logging: *bounded-logging
     pid: host
     command:
       - --path.rootfs=/host
@@ -197,6 +229,7 @@ services:
     build: ./admin-runtime
     image: sizy-admin-runtime:${BACKEND_VERSION:-latest}
     restart: unless-stopped
+    logging: *bounded-logging
     environment:
       COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-sizylift}
     volumes:
