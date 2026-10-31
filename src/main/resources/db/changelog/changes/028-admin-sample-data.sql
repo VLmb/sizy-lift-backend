@@ -9,3 +9,5 @@ CREATE TABLE sizylift.admin_sample_data (
     summary jsonb NOT NULL
 );
 COMMENT ON TABLE sizylift.admin_sample_data IS 'Однократное административное заполнение тестовой историей';
+
+--rollback DROP TABLE sizylift.admin_sample_data;
