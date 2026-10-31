@@ -91,7 +91,7 @@ class CoachingApiTest extends PostgresIntegrationTest {
 
         assertThat(preview.get("coachName").asString()).isEqualTo("Тренер Иван");
         assertThat(texts(preview.get("coachSees"))).containsExactlyInAnyOrder("workout", "program", "exercise",
-                "athlete_profile", "one_rep_max", "workout_reschedule", "workout_comment");
+                "athlete_profile", "one_rep_max", "workout_reschedule", "workout_comment", "standalone_workout");
         assertThat(texts(preview.get("coachSeesWithHealthAccess"))).contains("injury", "contraindication");
     }
 

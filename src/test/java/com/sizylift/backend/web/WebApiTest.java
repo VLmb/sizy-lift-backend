@@ -504,36 +504,40 @@ class WebApiTest extends PostgresIntegrationTest {
                 .andExpect(status().isUnauthorized());
         var created = body(call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first)))
                 .andExpect(status().isOk()));
-        assertThat(created.get("revision").asLong()).isEqualTo(1);
-        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first)))
-                .andExpect(status().isOk());
+        var createdRevision = created.get("revision").asLong();
+        assertThat(createdRevision).isPositive();
+        assertThat(body(call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first)))
+                .andExpect(status().isOk())).get("revision").asLong()).as("точный повтор").isEqualTo(createdRevision);
         assertThat(body(call(owner, get("/api/v2/web/programs")).andExpect(status().isOk())).get("programs")).isEmpty();
         var timeline = body(call(owner, get("/api/v2/web/timeline").param("from", "2026-10-01").param("to", "2026-10-31"))
                 .andExpect(status().isOk()));
         assertThat(timeline.get("planned").get(0).get("programId").isNull()).isTrue();
         assertThat(timeline.get("workouts")).isEmpty();
         workout.put("workoutDate", "2026-10-22");
-        var changed = Map.of("revision", 1, "workout", workout);
-        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(changed))).andExpect(status().isOk());
+        var changed = Map.of("revision", createdRevision, "workout", workout);
+        var changedRevision = body(call(owner, put(path).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(changed))).andExpect(status().isOk())).get("revision").asLong();
+        assertThat(changedRevision).isGreaterThan(createdRevision);
         var stale = workout.deepCopy().put("title", "Устаревшая правка");
-        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("revision", 1, "workout", stale))))
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("revision", createdRevision, "workout", stale))))
                 .andExpect(status().isConflict());
-        call(owner, delete(path).param("revision", "1")).andExpect(status().isConflict());
+        call(owner, delete(path).param("revision", String.valueOf(createdRevision))).andExpect(status().isConflict());
         var after = body(call(owner, get("/api/v2/web/timeline").param("from", "2026-10-22").param("to", "2026-10-22"))
                 .andExpect(status().isOk())).get("planned").get(0);
         assertThat(after.get("scheduledDate").asString()).isEqualTo("2026-10-22");
         assertThat(after.get("rescheduledAt").isNull()).isFalse();
-        call(owner, delete(path).param("revision", "2")).andExpect(status().isNoContent());
+        call(owner, delete(path).param("revision", String.valueOf(changedRevision))).andExpect(status().isNoContent());
         call(owner, get(path)).andExpect(status().isNotFound());
         call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first))).andExpect(status().isConflict());
     }
 
     @Test
-    void standalonePlanIsReadOnlyToActiveCoachAndUnavailableToStrangersOrFormerCoach() throws Exception {
+    void ownerStandalonePlanIsReadOnlyToActiveCoachAndUnavailableToStrangersOrFormerCoach() throws Exception {
         var workout = fixture("program").get("cycles").get(0).get("weeks").get(0).get("workouts").get(0);
         var path = "/api/v2/web/standalone-workouts/" + workout.get("id").asString();
         var request = json.writeValueAsString(Map.of("revision", 0, "workout", workout));
-        call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(request)).andExpect(status().isOk());
+        var revision = body(call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isOk())).get("revision").asLong();
         var ownerId = userId(owner).toString();
         var linkId = accept(owner, invite(coach));
         call(coach, get(path).param("ownerId", ownerId)).andExpect(status().isOk());
@@ -545,7 +549,27 @@ class WebApiTest extends PostgresIntegrationTest {
         }
         call(owner, delete("/api/v2/coaching/links/" + linkId)).andExpect(status().isNoContent());
         call(coach, get(path).param("ownerId", ownerId)).andExpect(status().isNotFound());
-        assertThat(body(call(owner, get(path)).andExpect(status().isOk())).get("revision").asLong()).isEqualTo(1);
+        assertThat(body(call(owner, get(path)).andExpect(status().isOk())).get("revision").asLong()).isEqualTo(revision);
+    }
+
+    @Test
+    void activeCoachPlansAStandaloneWorkoutForTheAthlete() throws Exception {
+        var workout = (ObjectNode) fixture("program").get("cycles").get(0).get("weeks").get(0).get("workouts").get(0).deepCopy();
+        var id = UUID.randomUUID();
+        workout.put("id", id.toString());
+        var path = "/api/v2/web/standalone-workouts/" + id;
+        var ownerId = userId(owner).toString();
+        accept(owner, invite(coach));
+        var request = json.writeValueAsString(Map.of("revision", 0, "workout", workout));
+        var created = body(call(coach, put(path).param("ownerId", ownerId).contentType(MediaType.APPLICATION_JSON)
+                .content(request)).andExpect(status().isOk()));
+        assertThat(created.get("ownerId").asString()).isEqualTo(ownerId);
+        var revision = created.get("revision").asLong();
+        call(owner, put(path).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("revision", revision, "workout", workout))))
+                .andExpect(status().isForbidden());
+        call(coach, delete(path).param("ownerId", ownerId).param("revision", String.valueOf(revision)))
+                .andExpect(status().isNoContent());
     }
 
     @Test

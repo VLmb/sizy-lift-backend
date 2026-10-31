@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 
 import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.dto.payload.StandaloneWorkoutPayloadV1;
 import com.sizylift.backend.publication.repository.AthleteDataRepository;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateArbiter;
@@ -63,9 +64,27 @@ class CoachExerciseAdoption {
      * Вызывается внутри транзакции записи программы; строки агрегатов копий блокируются в порядке id.
      */
     Adoption adopt(UUID coachId, UUID athleteId, ProgramPayloadV1 program) {
-        var referenced = program.cycles().stream()
+        var copied = copyReferenced(coachId, athleteId, program.cycles().stream()
                 .flatMap(cycle -> cycle.weeks().stream())
                 .flatMap(week -> week.workouts().stream())
+                .toList());
+        return copied.copies().isEmpty()
+                ? new Adoption(program, copied.changes())
+                : new Adoption(rewrite(program, copied.copies()), copied.changes());
+    }
+
+    /** То же для разовой тренировки тренера (ADR-0011). */
+    StandaloneAdoption adopt(UUID coachId, UUID athleteId, StandaloneWorkoutPayloadV1 standalone) {
+        var copied = copyReferenced(coachId, athleteId, List.of(standalone.workout()));
+        return copied.copies().isEmpty()
+                ? new StandaloneAdoption(standalone, copied.changes())
+                : new StandaloneAdoption(new StandaloneWorkoutPayloadV1(
+                        rewrite(standalone.workout(), copied.copies()), standalone.updatedAt()), copied.changes());
+    }
+
+    /** Копирует упражнения тренера, на которые ссылаются тренировки; возвращает замену id и созданные копии. */
+    private Copied copyReferenced(UUID coachId, UUID athleteId, List<ProgramPayloadV1.PlannedWorkout> workouts) {
+        var referenced = workouts.stream()
                 .flatMap(workout -> workout.blocks().stream())
                 .flatMap(block -> block.exercises().stream())
                 .map(ProgramPayloadV1.Exercise::exerciseId)
@@ -73,7 +92,7 @@ class CoachExerciseAdoption {
                 .toList();
         var coachOwned = referenced.isEmpty() ? List.<UUID>of() : exercises.ownedExercises(coachId, referenced);
         if (coachOwned.isEmpty()) {
-            return new Adoption(program, List.of());
+            return new Copied(Map.of(), List.of());
         }
         var copies = coachOwned.stream()
                 .collect(Collectors.toMap(Function.identity(), id -> copyId(athleteId, id)));
@@ -82,7 +101,10 @@ class CoachExerciseAdoption {
                 .sorted(Map.Entry.comparingByValue(Comparator.comparing(UUID::toString)))
                 .forEach(copy -> copyIfMissing(coachId, athleteId, copy.getKey(), copy.getValue())
                         .ifPresent(changes::add));
-        return new Adoption(rewrite(program, copies), changes);
+        return new Copied(copies, changes);
+    }
+
+    private record Copied(Map<UUID, UUID> copies, List<CopiedExercise> changes) {
     }
 
     private Optional<CopiedExercise> copyIfMissing(UUID coachId, UUID athleteId, UUID original, UUID copyId) {
@@ -130,6 +152,14 @@ class CoachExerciseAdoption {
 
         boolean rewritten(ProgramPayloadV1 original) {
             return !program.equals(original);
+        }
+    }
+
+    /** Разовая тренировка после замены ссылок и созданные копии. */
+    record StandaloneAdoption(StandaloneWorkoutPayloadV1 standalone, List<CopiedExercise> copies) {
+
+        boolean rewritten(StandaloneWorkoutPayloadV1 original) {
+            return !standalone.equals(original);
         }
     }
 

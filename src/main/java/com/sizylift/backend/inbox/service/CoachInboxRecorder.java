@@ -43,6 +43,12 @@ public class CoachInboxRecorder {
             case AggregateType.WORKOUT -> onWorkout(change);
             case AggregateType.WORKOUT_RESCHEDULE -> onReschedule(change);
             case AggregateType.PROGRAM -> onProgram(change);
+            // Удалённая разовая тренировка (ADR-0011) — пропуск не о чем показывать.
+            case AggregateType.STANDALONE_WORKOUT -> {
+                if (change.deleted()) {
+                    events.deleteOrphanMissed(change.ownerId());
+                }
+            }
             default -> {
             }
         }

@@ -10,12 +10,14 @@ import java.util.UUID;
 import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
+import com.sizylift.backend.publication.repository.StandaloneDataRepository;
 import org.springframework.stereotype.Component;
 
 /**
  * Агрегаты, которые зависят от других и удаляются сервером (ADR-0007, разделы 7–8):
  * <ul>
- *   <li>перенос — когда его плановой тренировки больше нет, у неё сменилась дата или удалена программа;</li>
+ *   <li>перенос — когда его плановой тренировки больше нет, у неё сменилась дата или удалена программа; так же
+ *   у разовой тренировки (ADR-0011);</li>
  *   <li>комментарий — когда удалена его тренировка.</li>
  * </ul>
  * Перенос на исходную дату программы — тоже снятие переноса ({@link #returnsToPlan}).
@@ -31,21 +33,26 @@ public class DependentAggregates {
     static final long SERVER_CLIENT_VERSION = 1;
 
     private final BetweenDataRepository between;
+    private final StandaloneDataRepository standalone;
     private final PublishedAggregateRepository aggregates;
     private final AggregateArbiter arbiter;
 
-    DependentAggregates(BetweenDataRepository between, PublishedAggregateRepository aggregates,
-                        AggregateArbiter arbiter) {
+    DependentAggregates(BetweenDataRepository between, StandaloneDataRepository standalone,
+                        PublishedAggregateRepository aggregates, AggregateArbiter arbiter) {
         this.between = between;
+        this.standalone = standalone;
         this.aggregates = aggregates;
         this.arbiter = arbiter;
     }
 
     /** Состояние, нужное для каскада: даты плановых тренировок программы до её замены. */
     public Snapshot capture(UUID ownerId, String type, UUID aggregateId) {
-        return AggregateType.PROGRAM.equals(type)
-                ? new Snapshot(between.plannedWorkoutDates(ownerId, aggregateId))
-                : Snapshot.EMPTY;
+        return switch (type) {
+            case AggregateType.PROGRAM -> new Snapshot(between.plannedWorkoutDates(ownerId, aggregateId));
+            case AggregateType.STANDALONE_WORKOUT -> new Snapshot(standalone.workoutDate(ownerId, aggregateId)
+                    .map(date -> Map.of(aggregateId, date)).orElse(Map.of()));
+            default -> Snapshot.EMPTY;
+        };
     }
 
     /**
@@ -53,9 +60,10 @@ public class DependentAggregates {
      * tombstone. Плановой тренировки нет — обычный перенос.
      */
     public boolean returnsToPlan(UUID ownerId, UUID plannedWorkoutId, WorkoutReschedulePayloadV1 reschedule) {
-        return between.plannedWorkoutDate(ownerId, reschedule.programId(), plannedWorkoutId)
-                .filter(reschedule.scheduledDate()::equals)
-                .isPresent();
+        var planned = reschedule.programId() == null
+                ? standalone.workoutDate(ownerId, plannedWorkoutId)
+                : between.plannedWorkoutDate(ownerId, reschedule.programId(), plannedWorkoutId);
+        return planned.filter(reschedule.scheduledDate()::equals).isPresent();
     }
 
     /** Удаляет ставшие недействительными зависимые агрегаты; возвращает их для рассылки {@code delete}. */
@@ -66,6 +74,8 @@ public class DependentAggregates {
             case AggregateType.WORKOUT -> deleted
                     ? remove(ownerId, AggregateType.WORKOUT_COMMENT, between.commentsOf(ownerId, aggregateId))
                     : List.of();
+            case AggregateType.STANDALONE_WORKOUT -> remove(ownerId, AggregateType.WORKOUT_RESCHEDULE,
+                    staleStandaloneReschedule(ownerId, aggregateId, deleted, before));
             default -> List.of();
         };
     }
@@ -84,6 +94,17 @@ public class DependentAggregates {
                 .filter(id -> !after.containsKey(id)
                         || before.dates().containsKey(id) && !before.dates().get(id).equals(after.get(id)))
                 .toList();
+    }
+
+    /** Перенос разовой снимается, когда её удалили или автор сменил её дату. */
+    private List<UUID> staleStandaloneReschedule(UUID ownerId, UUID workoutId, boolean deleted, Snapshot before) {
+        if (between.findReschedule(ownerId, workoutId).isEmpty()) {
+            return List.of();
+        }
+        var after = standalone.workoutDate(ownerId, workoutId);
+        var moved = before.dates().containsKey(workoutId) && after.isPresent()
+                && !before.dates().get(workoutId).equals(after.get());
+        return deleted || after.isEmpty() || moved ? List.of(workoutId) : List.of();
     }
 
     private List<Removed> remove(UUID ownerId, String type, List<UUID> ids) {

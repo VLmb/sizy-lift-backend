@@ -66,6 +66,8 @@ public class CoachEventRepository {
             WHERE l.id = e.link_id AND l.athlete_user_id = ? AND e.kind = 'workout_missed'
               AND NOT EXISTS (SELECT 1 FROM sizylift.planned_workout pw
                               WHERE pw.user_id = l.athlete_user_id AND pw.id = e.subject_id)
+              AND NOT EXISTS (SELECT 1 FROM sizylift.standalone_workout s
+                              WHERE s.user_id = l.athlete_user_id AND s.id = e.subject_id)
             """;
     /**
      * Плановые тренировки активных программ с датой (с учётом переноса) в {@code [from, before)}, не раньше
@@ -86,6 +88,22 @@ public class CoachEventRepository {
               AND d.effective_date >= (l.created_at AT TIME ZONE ?)::date
               AND NOT EXISTS (SELECT 1 FROM sizylift.workout w
                               WHERE w.user_id = pw.user_id AND w.planned_workout_id = pw.id)
+            ON CONFLICT (link_id, dedup_key) DO NOTHING
+            """;
+    /** То же для разовых тренировок (ADR-0011): программы и её статуса у них нет. */
+    private static final String INSERT_MISSED_STANDALONE = """
+            INSERT INTO sizylift.coach_event (link_id, kind, subject_id, subject_date, occurred_at, dedup_key)
+            SELECT l.id, 'workout_missed', s.id, d.effective_date, ?,
+                   'workout_missed' || ? || s.id || ? || d.effective_date
+            FROM sizylift.coaching_link l
+            JOIN sizylift.standalone_workout s ON s.user_id = l.athlete_user_id
+            LEFT JOIN sizylift.workout_reschedule r ON r.user_id = s.user_id AND r.planned_workout_id = s.id
+            CROSS JOIN LATERAL (SELECT coalesce(r.scheduled_date, s.workout_date) AS effective_date) d
+            WHERE l.ended_at IS NULL
+              AND d.effective_date >= ? AND d.effective_date < ?
+              AND d.effective_date >= (l.created_at AT TIME ZONE ?)::date
+              AND NOT EXISTS (SELECT 1 FROM sizylift.workout w
+                              WHERE w.user_id = s.user_id AND w.planned_workout_id = s.id)
             ON CONFLICT (link_id, dedup_key) DO NOTHING
             """;
     /** Конец программы — последний день её последней недели. Продлённая программа даст новое событие. */
@@ -110,8 +128,11 @@ public class CoachEventRepository {
                        WHEN 'program_ending' THEN (SELECT p.name FROM sizylift.program p
                                                    WHERE p.user_id = l.athlete_user_id AND p.id = e.subject_id)
                        WHEN 'invite_accepted' THEN NULL
-                       ELSE (SELECT pw.title FROM sizylift.planned_workout pw
-                             WHERE pw.user_id = l.athlete_user_id AND pw.id = e.subject_id)
+                       ELSE coalesce(
+                               (SELECT pw.title FROM sizylift.planned_workout pw
+                                WHERE pw.user_id = l.athlete_user_id AND pw.id = e.subject_id),
+                               (SELECT s.payload->>'title' FROM sizylift.standalone_workout s
+                                WHERE s.user_id = l.athlete_user_id AND s.id = e.subject_id))
                    END AS title
             FROM sizylift.coach_event e
             JOIN sizylift.coaching_link l ON l.id = e.link_id
@@ -181,7 +202,9 @@ public class CoachEventRepository {
 
     public int insertMissed(LocalDate from, LocalDate before, String zoneId, Instant occurredAt) {
         return jdbc.update(INSERT_MISSED, Timestamp.from(occurredAt), KEY_SEPARATOR, KEY_SEPARATOR, from, before,
-                zoneId);
+                zoneId)
+                + jdbc.update(INSERT_MISSED_STANDALONE, Timestamp.from(occurredAt), KEY_SEPARATOR, KEY_SEPARATOR,
+                        from, before, zoneId);
     }
 
     public int insertProgramEnding(LocalDate from, LocalDate to, Instant occurredAt) {
