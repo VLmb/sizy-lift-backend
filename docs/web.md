@@ -229,11 +229,16 @@ SSRF-ограничения и удаление аккаунта. Все инт�
 
 ## Отдельные планы тренировок без программы
 
+Ответ GET/PUT дополнительно содержит `authorId`: id тренера-автора или `null`, если пишет владелец.
+В `timeline.planned` у разовых (`programId: null`) возвращается тот же `authorId`; у тренировок программы
+поле `null` (автора программы клиент читает в программе). Тренер показывает правку, перенос и удаление
+разовой только при `authorId`, равном id его аккаунта; сервер по-прежнему проверяет права каждой записи.
+
 Разовая тренировка — агрегат sync v2 `standalone_workout` (ADR-0011, [sync.md](sync.md)). Этот ресурс — веб-обёртка
 над той же записью: те же права, ревизии, ленты и уведомления, что у телефона. Веб может писать и сразу через
 `POST /api/v2/sync/push`.
 
-`GET /api/v2/web/standalone-workouts/{id}?ownerId=…` возвращает `{ownerId, id, revision, workout}`; `revision` —
+`GET /api/v2/web/standalone-workouts/{id}?ownerId=…` возвращает `{ownerId, id, revision, authorId, workout}`; `revision` —
 серверная ревизия агрегата. `workout` — `ProgramPayloadV1.PlannedWorkout` со всеми блоками, упражнениями и
 подходами (включая `targetPercentOneRmTenths` и `targetRpeAuto`). В `timeline.planned` у такого плана
 `programId: null`, дата — с учётом переноса подопечного, `rescheduledAt` — у переноса подопечного или когда

@@ -11,5 +11,5 @@ public final class StandaloneWorkoutDtos {
     private StandaloneWorkoutDtos() { }
 
     public record SaveRequest(@NotNull @Min(0) Long revision, @NotNull @Valid PlannedWorkout workout) { }
-    public record Response(UUID ownerId, UUID id, long revision, PlannedWorkout workout) { }
+    public record Response(UUID ownerId, UUID id, long revision, UUID authorId, PlannedWorkout workout) { }
 }

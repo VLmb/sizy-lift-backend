@@ -506,12 +506,14 @@ class WebApiTest extends PostgresIntegrationTest {
                 .andExpect(status().isOk()));
         var createdRevision = created.get("revision").asLong();
         assertThat(createdRevision).isPositive();
+        assertThat(created.get("authorId").isNull()).isTrue();
         assertThat(body(call(owner, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(first)))
                 .andExpect(status().isOk())).get("revision").asLong()).as("точный повтор").isEqualTo(createdRevision);
         assertThat(body(call(owner, get("/api/v2/web/programs")).andExpect(status().isOk())).get("programs")).isEmpty();
         var timeline = body(call(owner, get("/api/v2/web/timeline").param("from", "2026-10-01").param("to", "2026-10-31"))
                 .andExpect(status().isOk()));
         assertThat(timeline.get("planned").get(0).get("programId").isNull()).isTrue();
+        assertThat(timeline.get("planned").get(0).get("authorId").isNull()).isTrue();
         assertThat(timeline.get("workouts")).isEmpty();
         workout.put("workoutDate", "2026-10-22");
         var changed = Map.of("revision", createdRevision, "workout", workout);
@@ -564,6 +566,15 @@ class WebApiTest extends PostgresIntegrationTest {
         var created = body(call(coach, put(path).param("ownerId", ownerId).contentType(MediaType.APPLICATION_JSON)
                 .content(request)).andExpect(status().isOk()));
         assertThat(created.get("ownerId").asString()).isEqualTo(ownerId);
+        var coachId = userId(coach).toString();
+        assertThat(created.get("authorId").asString()).isEqualTo(coachId);
+        assertThat(body(call(coach, get(path).param("ownerId", ownerId)).andExpect(status().isOk()))
+                .get("authorId").asString()).isEqualTo(coachId);
+        var planned = body(call(coach, get("/api/v2/web/timeline").param("ownerId", ownerId)
+                .param("from", "2026-10-01").param("to", "2026-10-31")).andExpect(status().isOk()))
+                .get("planned").get(0);
+        assertThat(planned.get("authorId").asString()).isEqualTo(coachId);
+        assertThat(planned.get("programId").isNull()).isTrue();
         var revision = created.get("revision").asLong();
         call(owner, put(path).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("revision", revision, "workout", workout))))
