@@ -70,7 +70,10 @@ public record ProgramPayloadV1(
             @NotNull @Size(max = MAX_SETS_PER_EXERCISE) List<@NotNull @Valid Set> sets) {
     }
 
-    /** {@code targetPercentOneRmTenths} — % от ПМ в десятых ({@code 725} = 72,5 %); вес по нему сервер не считает. */
+    /**
+     * {@code targetPercentOneRmTenths} — % от ПМ в десятых ({@code 725} = 72,5 %); вес по нему сервер не считает.
+     * {@code targetRpeAuto} — RPE посчитан клиентом из веса, повторов и e1RM (ADR-0011); без поля — {@code false}.
+     */
     public record Set(
             @NotNull UUID id,
             @Min(0) int position,
@@ -80,6 +83,7 @@ public record ProgramPayloadV1(
             @Min(0) Integer durationMs,
             @Min(0) Integer targetDistanceM,
             @Min(RPE_TENTHS_MIN) @Max(RPE_TENTHS_MAX) Integer targetRpeTenths,
+            boolean targetRpeAuto,
             @Min(PERCENT_ONE_RM_TENTHS_MIN) @Max(PERCENT_ONE_RM_TENTHS_MAX) Integer targetPercentOneRmTenths,
             @Min(0) Integer restMs,
             @Size(max = LONG_TEXT) String note) {

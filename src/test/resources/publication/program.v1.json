@@ -50,6 +50,7 @@
                           "durationMs": null,
                           "targetDistanceM": null,
                           "targetRpeTenths": 80,
+                          "targetRpeAuto": true,
                           "restMs": 180000,
                           "note": null
                         }
