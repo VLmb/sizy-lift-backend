@@ -113,6 +113,23 @@ class CoachingApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void linkedAccountsMayHaveProfilesWithoutDisplayNames() throws Exception {
+        accept(athlete, invite(coach));
+        var profile = fixture("athlete_profile");
+        profile.putNull("displayName");
+        publish(coach, "athlete_profile", UUID.randomUUID(), 1, profile);
+        publish(athlete, "athlete_profile", UUID.randomUUID(), 1, profile);
+        var coachView = body(call(coach, get("/api/v2/coaching")).andExpect(status().isOk()));
+        assertThat(coachView.get("athletes").get(0).get("counterpartName").isNull()).isTrue();
+        var athleteView = body(call(athlete, get("/api/v2/coaching")).andExpect(status().isOk()));
+        assertThat(athleteView.get("coach").get("counterpartName").isNull()).isTrue();
+        call(coach, put("/api/v2/coaching/coach-mode").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":false}")).andExpect(status().isOk());
+        call(coach, put("/api/v2/coaching/coach-mode").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true}")).andExpect(status().isOk());
+    }
+
+    @Test
     void athleteHasOnlyOneActiveCoach() throws Exception {
         accept(athlete, invite(coach));
 

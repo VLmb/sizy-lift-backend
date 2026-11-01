@@ -48,7 +48,7 @@ public class CoachingRepository {
             SELECT %s FROM sizylift.coaching_link WHERE athlete_user_id = ? AND ended_at IS NULL
             """.formatted(LINK_COLUMNS);
     private static final String DISPLAY_NAME =
-            "SELECT display_name FROM sizylift.athlete_profile WHERE user_id = ?";
+            "SELECT display_name FROM sizylift.athlete_profile WHERE user_id = ? AND display_name IS NOT NULL";
 
     private static final String PENDING_INVITES = """
             SELECT id, created_at, expires_at FROM sizylift.coaching_invite
