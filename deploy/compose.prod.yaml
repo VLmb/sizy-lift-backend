@@ -178,7 +178,7 @@ services:
   # Telemetry: OpenTelemetry collector, Prometheus, Tempo, Loki and Grafana in one container.
   # Grafana is not published; open it through an SSH tunnel: ssh -L 3000:127.0.0.1:3000 <host>
   otel-lgtm:
-    image: grafana/otel-lgtm:0.36.0@sha256:57c04cbd8e7022f32bb84c4ac005d79baf8b08e2c5be44facf11f5f1f9944ba2
+    image: grafana/otel-lgtm:0.39.0@sha256:4c8056c9c05fcb3c8fd93800e85334bfd79b4d0271b47a54a121a64af41fe1fe
     restart: unless-stopped
     logging: *bounded-logging
     environment:
@@ -202,9 +202,9 @@ services:
     stop_grace_period: 45s
     healthcheck:
       test: ["CMD", "bash", "/otel-lgtm/retention-healthcheck.sh"]
-      interval: 15s
-      timeout: 10s
-      start_period: 90s
+      interval: 30s
+      timeout: 40s
+      start_period: 120s
       retries: 4
 
   # Только метрики хоста; порты наружу не публикуются.

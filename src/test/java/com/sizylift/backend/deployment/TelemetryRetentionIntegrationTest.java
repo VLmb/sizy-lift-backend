@@ -11,8 +11,11 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.model.Volume;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
@@ -27,7 +30,10 @@ import static org.awaitility.Awaitility.await;
 /** Закреплённый стек с production-конфигурацией принимает OTLP и применяет политику хранения. */
 class TelemetryRetentionIntegrationTest {
     private static final Duration TIMEOUT = Duration.ofMinutes(3);
-    private static final String TRACE_ID = "aabbccddeeff00112233445566778899";
+    private static final String PREVIOUS_IMAGE = "grafana/otel-lgtm:0.36.0@sha256:57c04cbd8e7022f32bb84c4ac005d79baf8b08e2c5be44facf11f5f1f9944ba2";
+    private record Probe(String key, String traceId) {}
+    private static final Probe BEFORE = new Probe("before", "aabbccddeeff00112233445566778899");
+    private static final Probe AFTER = new Probe("after", "bbccddeeff00112233445566778899aa");
     private static final ObjectMapper JSON = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     @TempDir Path temporary;
@@ -44,21 +50,44 @@ class TelemetryRetentionIntegrationTest {
         var config = services.get("otel-lgtm");
         assertThat(config.get("volumes").valueStream().anyMatch(volume ->
                 volume.get("type").asString().equals("volume") && volume.get("target").asString().equals("/data"))).isTrue();
-        try (var stack = new GenericContainer<>(DockerImageName.parse(config.get("image").asString()))) {
-            config.get("environment").properties().forEach(e -> stack.withEnv(e.getKey(), e.getValue().asString()));
-            for (var volume : config.get("volumes")) {
-                if (volume.get("type").asString().equals("bind")) {
-                    stack.withCopyFileToContainer(MountableFile.forHostPath(volume.get("source").asString()),
-                            volume.get("target").asString());
-                }
+        var docker = DockerClientFactory.instance().client();
+        var volume = docker.createVolumeCmd().withName("sizy-telemetry-upgrade-" + java.util.UUID.randomUUID()).exec().getName();
+        try {
+            // Настоящие данные прежнего образа: обновление не должно требовать пустого тома.
+            try (var previous = stack(config, PREVIOUS_IMAGE, volume)) {
+                previous.start();
+                verifySignals(previous, BEFORE);
+                // Дожидаемся записи исторического блока: свежий trace ещё может быть только в памяти.
+                await().atMost(TIMEOUT).pollInterval(Duration.ofSeconds(2)).untilAsserted(() ->
+                        assertThat(previous.execInContainer("sh", "-c",
+                                "test -n \"$(find /data/tempo/blocks -name meta.json -print -quit)\"").getExitCode()).isZero());
+                docker.stopContainerCmd(previous.getContainerId()).withTimeout(45).exec();
             }
-            stack.withExposedPorts(4318, 9090, 3100, 3200, 4040)
-                    .waitingFor(Wait.forSuccessfulCommand("bash /otel-lgtm/retention-healthcheck.sh").withStartupTimeout(TIMEOUT));
-            stack.start();
-            verifyRetention(stack);
-            verifySignals(stack);
-            verifyFailedComponent(stack);
+            try (var current = stack(config, config.get("image").asString(), volume)) {
+                current.start();
+                verifyRetention(current);
+                verifyStoredSignals(current, BEFORE);
+                verifySignals(current, AFTER);
+                verifyFailedComponent(current);
+            }
+        } finally {
+            docker.removeVolumeCmd(volume).exec();
         }
+    }
+
+    private GenericContainer<?> stack(JsonNode config, String image, String volumeName) {
+        var stack = new GenericContainer<>(DockerImageName.parse(image));
+        config.get("environment").properties().forEach(e -> stack.withEnv(e.getKey(), e.getValue().asString()));
+        for (var volume : config.get("volumes")) {
+            if (volume.get("type").asString().equals("bind")) {
+                stack.withCopyFileToContainer(MountableFile.forHostPath(volume.get("source").asString()),
+                        volume.get("target").asString());
+            }
+        }
+        stack.withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withBinds(new Bind(volumeName, new Volume("/data"))));
+        stack.withExposedPorts(4318, 9090, 3100, 3200, 4040)
+                .waitingFor(Wait.forSuccessfulCommand("bash /otel-lgtm/retention-healthcheck.sh").withStartupTimeout(TIMEOUT));
+        return stack;
     }
 
     private void verifyRetention(GenericContainer<?> stack) throws Exception {
@@ -83,32 +112,36 @@ class TelemetryRetentionIntegrationTest {
         assertThat(nested(profiles, "limits", "retention_period").toString()).isIn("1d", "24h", "24h0m0s");
     }
 
-    private void verifySignals(GenericContainer<?> stack) throws Exception {
+    private void verifySignals(GenericContainer<?> stack, Probe probe) throws Exception {
         var now = Instant.now();
         long nanos = now.getEpochSecond() * 1_000_000_000L;
         post(stack, 4318, "/v1/metrics", """
-                {"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"sizy_retention_probe",
+                {"resourceMetrics":[{"scopeMetrics":[{"metrics":[{"name":"sizy_retention_probe_%s",
                 "gauge":{"dataPoints":[{"timeUnixNano":"%d","asDouble":42}]}}]}]}]}
-                """.formatted(nanos), 200);
+                """.formatted(probe.key(), nanos), 200);
         post(stack, 4318, "/v1/logs", """
                 {"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"retention-probe"}}]},
-                "scopeLogs":[{"logRecords":[{"timeUnixNano":"%d","body":{"stringValue":"retention probe"}}]}]}]}
-                """.formatted(nanos), 200);
+                "scopeLogs":[{"logRecords":[{"timeUnixNano":"%d","body":{"stringValue":"retention probe %s"}}]}]}]}
+                """.formatted(nanos, probe.key()), 200);
         post(stack, 4318, "/v1/traces", """
                 {"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"retention-probe"}}]},
                 "scopeSpans":[{"spans":[{"traceId":"%s","spanId":"1122334455667788","name":"retention-probe",
                 "kind":2,"startTimeUnixNano":"%d","endTimeUnixNano":"%d"}]}]}]}
-                """.formatted(TRACE_ID, nanos, nanos + 1_000_000), 200);
-        await().atMost(TIMEOUT).pollInterval(Duration.ofSeconds(2)).untilAsserted(() -> {
-            assertThat(JSON.readTree(get(stack, 9090, "/api/v1/query?query=sizy_retention_probe").body())
-                    .at("/data/result/0/value/1").asString()).isEqualTo("42");
-            assertThat(get(stack, 3100, "/loki/api/v1/query_range?query=%7Bservice_name%3D%22retention-probe%22%7D").body())
-                    .contains("retention probe");
-            assertThat(get(stack, 3200, "/api/traces/" + TRACE_ID).statusCode()).isEqualTo(200);
-        });
+                """.formatted(probe.traceId(), nanos, nanos + 1_000_000), 200);
+        verifyStoredSignals(stack, probe);
         assertThat(post(stack, 3100, "/loki/api/v1/push", """
                 {"streams":[{"stream":{"service_name":"retention-probe"},"values":[["%d","expired probe"]]}]}
                 """.formatted(nanos - Duration.ofHours(25).toNanos()), 400)).contains("too old");
+    }
+
+    private void verifyStoredSignals(GenericContainer<?> stack, Probe probe) {
+        await().atMost(TIMEOUT).pollInterval(Duration.ofSeconds(2)).untilAsserted(() -> {
+            assertThat(JSON.readTree(get(stack, 9090, "/api/v1/query?query=sizy_retention_probe_" + probe.key()).body())
+                    .at("/data/result/0/value/1").asString()).isEqualTo("42");
+            assertThat(get(stack, 3100, "/loki/api/v1/query_range?query=%7Bservice_name%3D%22retention-probe%22%7D").body())
+                    .contains("retention probe " + probe.key());
+            assertThat(get(stack, 3200, "/api/traces/" + probe.traceId()).statusCode()).isEqualTo(200);
+        });
     }
 
     private void verifyFailedComponent(GenericContainer<?> stack) throws Exception {
@@ -125,8 +158,11 @@ class TelemetryRetentionIntegrationTest {
                 exit 1
                 """);
         assertThat(stopped.getExitCode()).as(stopped.getStderr()).isZero();
-        await().atMost(Duration.ofSeconds(15)).untilAsserted(() ->
-                assertThat(stack.execInContainer("bash", "/otel-lgtm/retention-healthcheck.sh").getExitCode()).isNotZero());
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+            var result = stack.execInContainer("bash", "/otel-lgtm/retention-healthcheck.sh");
+            assertThat(result.getExitCode()).isNotZero();
+            assertThat(result.getStderr()).contains("Loki (http://127.0.0.1:3100/ready)");
+        });
     }
 
     private JsonNode composeModel() throws Exception {
