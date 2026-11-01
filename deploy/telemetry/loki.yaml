@@ -1,4 +1,4 @@
-# Основа — конфигурация закреплённого grafana/otel-lgtm 0.36.0. Пути и schema сохранены.
+# Основа — конфигурация закреплённого grafana/otel-lgtm 0.36.0. Пути и schema сохранены при обновлении LGTM до 0.39.0.
 auth_enabled: false
 
 server:

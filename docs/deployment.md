@@ -218,3 +218,33 @@ Compose-файлом. Для уже работающих контейнеров 
 `BACKEND_VERSION` и `WEB_VERSION`, что у текущего выпуска: не подменяйте версии
 образов случайным `latest`. Пересоздание меняет доступную историю `docker logs`.
 Планируйте обновление с учётом перезапуска backend, Keycloak и баз.
+
+## Обновление LGTM с исправлением Raft
+
+Обновление 0.36.0 → 0.39.0 исправляет известный сбой Pyroscope 2.3.1 при записи
+Raft-журнала. Диагностика и ограничения —
+[observability.md](observability.md#восстановление-pyroscope-после-зацикливания-raft).
+Backend, frontend и Keycloak для этого изменения собирать не нужно.
+
+1. Сохраните текущий вывод healthcheck и логи. Проверьте свободное место (`df -h /`):
+   при загрузке нового образа прежний остаётся на диске. Перед обновлением сделайте
+   резервную копию **остановленного** тома `otel-lgtm-data` во внешнем хранилище,
+   если нужно сохранить возможность отката вместе с данными. Имя фактического тома:
+   `docker inspect sizylift-otel-lgtm-1 --format '{{json .Mounts}}'`.
+2. Получите изменения и обновите только мониторинг:
+
+   ```bash
+   git pull --ff-only
+   docker compose --env-file deploy/.env -f deploy/compose.prod.yaml pull otel-lgtm
+   docker compose --env-file deploy/.env -f deploy/compose.prod.yaml \
+     up -d --no-deps --wait --wait-timeout 300 otel-lgtm
+   ```
+
+3. Проверьте `ps otel-lgtm`, Docker health log и свежие данные в Grafana/админке.
+   Появление `non-monotonic log entries` или повторяющегося `node is not the leader`
+   после запуска означает, что требуется дальнейший разбор; увеличение таймаутов
+   не является восстановлением Raft.
+
+Пересоздаётся только контейнер мониторинга. Существующий том используется повторно,
+суточный retention и ротация журналов сохраняются. Не выполняйте `down -v`.
+Изменение backend/frontend образов и пересборка JAR в этот порядок не входят.
