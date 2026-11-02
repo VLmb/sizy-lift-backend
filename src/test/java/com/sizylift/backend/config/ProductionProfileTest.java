@@ -51,6 +51,13 @@ class ProductionProfileTest {
         }
     }
 
+    @Test
+    void importCredentialsAndProviderAddressHaveNoProductionDefaults() throws Exception {
+        var source = prodProfile();
+        for (var key : List.of("sizylift.imports.deepseek.api-key", "sizylift.imports.deepseek.url"))
+            assertThat(String.valueOf(source.getProperty(key))).as(key).matches(PLACEHOLDER_WITHOUT_DEFAULT);
+    }
+
     private static EnumerablePropertySource<?> prodProfile() throws Exception {
         return (EnumerablePropertySource<?>) new YamlPropertySourceLoader()
                 .load("prod", new ClassPathResource("application-prod.yaml")).getFirst();

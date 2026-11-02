@@ -21,6 +21,7 @@ public class SyncFeedRepository {
     private static final String NEXT_SEQ = """
             UPDATE sizylift.sync_cursor SET last_seq = last_seq + 1 WHERE user_id = ? RETURNING last_seq
             """;
+    private static final String LOCK_CURSOR = "SELECT last_seq FROM sizylift.sync_cursor WHERE user_id = ? FOR UPDATE";
     private static final String UPSERT_ENTRY = """
             INSERT INTO sizylift.sync_feed (user_id, seq, owner_user_id, type, aggregate_id, revision, kind)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -78,6 +79,14 @@ public class SyncFeedRepository {
     public long nextSeq(UUID recipientId) {
         jdbc.update(ENSURE_CURSOR, recipientId);
         return jdbc.queryForObject(NEXT_SEQ, Long.class, recipientId);
+    }
+
+    /** Все курсоры атомарной пачки блокируются в том же порядке, что и при обычной записи. */
+    public void lockRecipients(List<UUID> recipients) {
+        for (var recipient : recipients.stream().distinct().sorted(com.sizylift.backend.access.service.AccessPolicy.LOCK_ORDER).toList()) {
+            jdbc.update(ENSURE_CURSOR, recipient);
+            jdbc.queryForObject(LOCK_CURSOR, Long.class, recipient);
+        }
     }
 
     /** Строка ленты на агрегат одна: новая запись переносит её на новую позицию. */
