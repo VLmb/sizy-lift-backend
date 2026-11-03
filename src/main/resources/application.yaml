@@ -1,6 +1,10 @@
 # Settings shared by every environment. Environment-specific values live in
 # application-dev.yaml and application-prod.yaml; activate one with SPRING_PROFILES_ACTIVE.
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   application:
     name: sizy-lift-backend
   liquibase:
@@ -16,6 +20,13 @@ spring:
           audiences: sizylift-api
 
 sizylift:
+  imports:
+    enabled: false
+    deepseek:
+      api-key: ""
+      url: https://api.deepseek.com
+      model: deepseek-flash
+      timeout: 5m
   admin:
     keycloak-url: ""
     keycloak-client-id: ""

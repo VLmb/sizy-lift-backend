@@ -34,6 +34,13 @@ final class ApiBodyLimitFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
             return;
         }
+        // Multipart читает servlet container с отдельными max-file-size/max-request-size.
+        // Предварительное чтение здесь лишает getParts() исходного потока.
+        if (request.getContentType() != null && request.getContentType().toLowerCase(java.util.Locale.ROOT)
+                .startsWith("multipart/form-data")) {
+            chain.doFilter(request, response);
+            return;
+        }
         var body = request.getInputStream().readNBytes(limit + 1);
         if (body.length > limit) {
             response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);

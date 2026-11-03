@@ -8,6 +8,10 @@ import java.util.UUID;
  * порядке: владелец, агрегат, ленты (ADR-0007, разделы 4–5).
  */
 public interface AggregateChangeListener {
+    /** Собирает события атомарной пачки до завершения записей всех агрегатов. */
+    default <T> T deferChanges(java.util.function.Supplier<T> work) {
+        return work.get();
+    }
 
     /** Перед блокировкой агрегата: связи владельца не должны меняться до коммита записи. */
     void beforeWrite(UUID ownerId);

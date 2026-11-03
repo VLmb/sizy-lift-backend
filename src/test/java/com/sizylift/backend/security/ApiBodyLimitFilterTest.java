@@ -33,6 +33,17 @@ class ApiBodyLimitFilterTest {
         assertThat(response.getStatus()).isEqualTo(200);
     }
 
+    @Test
+    void leavesTheMultipartStreamForTheServletContainerToRead() throws Exception {
+        var request = new MockHttpServletRequest("POST", "/api/v2/imports");
+        request.setContentType("multipart/form-data; boundary=example");
+        request.setContent(new byte[] {1, 2, 3});
+        new ApiBodyLimitFilter().doFilter(request, new MockHttpServletResponse(), (original, response) -> {
+            assertThat(original).isSameAs(request);
+            assertThat(original.getInputStream().readAllBytes()).containsExactly(1, 2, 3);
+        });
+    }
+
     private static HttpServletRequest chunked(byte[] body) {
         var base = new MockHttpServletRequest("POST", "/api/v1/publication/batch");
         base.setContent(body);

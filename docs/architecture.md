@@ -71,6 +71,13 @@ Feature `web`: чтение для веба (`/api/v2/web`) — каталог �
 1ПМ, история упражнения. Права — `AccessPolicy`, как у ленты; запись — `sync/push`. Вход — клиент Keycloak
 `sizylift-web`, CORS — `sizylift.web.allowed-origins`. Подробности — [web.md](web.md).
 
+## AI-импорт программ
+
+Feature `imports`: асинхронные сессии импорта, DeepSeek с каталогом id/название, текстовые
+уточнения и выбор/создание упражнений. Финальный commit атомарно использует существующую
+sync-логику. По умолчанию функция выключена. Контракт и настройка — [imports.md](imports.md),
+решение — [ADR-0008](adr/0008-ai-program-import.md). Веб-интерфейс — в `sizy-lift-frontend`.
+
 ## Конфигурация и развёртывание
 
 Настройки разделены на профили Spring `dev` и `prod` (YAML). Production работает на

@@ -7,6 +7,9 @@
 [публикация данных](docs/publication.md), [синхронизация v2](docs/sync.md), [тренер и подопечный](docs/coaching.md), [push-уведомления](docs/notifications.md), [веб-версия](docs/web.md), [рабочее место тренера](docs/coach-workspace.md), [наблюдаемость](docs/observability.md),
 [администрирование](docs/administration.md), [бэклог](docs/backlog.md).
 
+AI-импорт текста, XLS/XLSX/CSV и публичных Google Sheets — [контракт и настройка](docs/imports.md).
+По умолчанию выключен; для включения нужны настройки DeepSeek на backend.
+
 ## Требования
 
 - JDK 25 (`JAVA_HOME` должен указывать на JDK).

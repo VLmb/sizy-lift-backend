@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 class FeedFanout implements AggregateChangeListener {
+    private final ThreadLocal<java.util.List<AggregateChange>> deferred = new ThreadLocal<>();
 
     private final SyncFeedRepository feed;
     private final AccessPolicy access;
@@ -39,6 +40,30 @@ class FeedFanout implements AggregateChangeListener {
     /** Ленты получателей, затем уведомления и «Входящие» тренера — в той же транзакции. */
     @Override
     public void changed(AggregateChange change) {
+        var pending = deferred.get();
+        if (pending != null) {
+            pending.add(change);
+            return;
+        }
+        publish(change);
+    }
+
+    @Override
+    public <T> T deferChanges(java.util.function.Supplier<T> work) {
+        if (deferred.get() != null) return work.get();
+        var pending = new java.util.ArrayList<AggregateChange>();
+        deferred.set(pending);
+        try {
+            var result = work.get();
+            feed.lockRecipients(pending.stream().flatMap(change -> access.recipients(change.ownerId(), change.type()).stream()).toList());
+            pending.forEach(this::publish);
+            return result;
+        } finally {
+            deferred.remove();
+        }
+    }
+
+    private void publish(AggregateChange change) {
         var kind = change.deleted() ? FeedKind.DELETE : FeedKind.UPSERT;
         for (var recipient : access.recipients(change.ownerId(), change.type())) {
             feed.upsert(recipient, feed.nextSeq(recipient), change.ownerId(), change.type(), change.aggregateId(),

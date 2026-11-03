@@ -17,6 +17,12 @@ spring:
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
 
 sizylift:
+  imports:
+    enabled: ${AI_IMPORT_ENABLED:false}
+    deepseek:
+      # Связывается только при включённом импорте; ключ без значения по умолчанию.
+      api-key: ${DEEPSEEK_API_KEY}
+      url: ${DEEPSEEK_API_URL}
   admin:
     keycloak-url: ${KEYCLOAK_ADMIN_URL}
     keycloak-client-id: ${KEYCLOAK_ADMIN_READ_CLIENT_ID}

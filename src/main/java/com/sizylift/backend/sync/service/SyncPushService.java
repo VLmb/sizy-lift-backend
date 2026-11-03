@@ -82,6 +82,43 @@ public class SyncPushService {
         });
     }
 
+    /**
+     * Импорт создаёт только новые агрегаты. Внешняя транзакция включает квитанцию импорта;
+     * отказ любой записи откатывает упражнения, программу, ленты и уведомления вместе.
+     */
+    @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public SyncPushResponse createImportedProgram(UUID caller, List<Item> items) {
+        if (items.isEmpty() || items.size() > SyncPushRequestLimit.MAX_IMPORT_ITEMS
+                || items.stream().filter(item -> item.type().equals(AggregateType.PROGRAM)).count() != 1
+                || items.stream().anyMatch(item -> item.deleted() || item.baseRevision() != 0
+                    || !java.util.Set.of(AggregateType.PROGRAM, AggregateType.EXERCISE).contains(item.type())
+                    || item.type().equals(AggregateType.EXERCISE) && item.ownerId() != null && !item.ownerId().equals(caller)))
+            throw new AtomicCreateRejected();
+        var owners = items.stream().map(item -> item.ownerId() == null ? caller : item.ownerId())
+                .distinct().sorted(AccessPolicy.LOCK_ORDER).toList();
+        owners.forEach(access::lockOwner);
+        for (var item : items) {
+            var owner = item.ownerId() == null ? caller : item.ownerId();
+            if (!access.canWriteFor(caller, owner, item.type()) || aggregates.lock(owner, item.type(), item.id()).exists())
+                throw new AtomicCreateRejected();
+        }
+        return feed.deferChanges(() -> {
+            var results = new java.util.ArrayList<ItemResult>();
+            for (var item : items) {
+                var result = push(caller, item, false);
+                if (result.status() != ItemStatus.ACCEPTED) throw new AtomicCreateRejected();
+                results.add(result);
+            }
+            return new SyncPushResponse(List.copyOf(results));
+        });
+    }
+
+    public static class AtomicCreateRejected extends RuntimeException { }
+    private static final class SyncPushRequestLimit {
+        private static final int MAX_IMPORT_ITEMS = 2001;
+    }
+
     /** Серверное наполнение: штатные ревизии и ленты, без push о якобы реальных действиях пользователя. */
     @org.springframework.transaction.annotation.Transactional(
             propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)

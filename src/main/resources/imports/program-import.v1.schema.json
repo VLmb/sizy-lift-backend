@@ -1,0 +1,343 @@
+{
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "needsClarification": {
+      "type": "boolean"
+    },
+    "clarificationMessage": {
+      "type": "string"
+    },
+    "programDraft": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "cycles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_:-]{1,100}$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "weeks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_:-]{1,100}$"
+                    },
+                    "number": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 104
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "workouts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z0-9_:-]{1,100}$"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "dayOffset": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 727
+                          },
+                          "blocks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z0-9_:-]{1,100}$"
+                                },
+                                "blockType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "single",
+                                    "group",
+                                    "circuit",
+                                    "interval",
+                                    "free"
+                                  ]
+                                },
+                                "groupLabel": {
+                                  "type": "string",
+                                  "enum": [
+                                    "",
+                                    "superset",
+                                    "triset",
+                                    "giant_set"
+                                  ]
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "exercises": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "key": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_:-]{1,100}$"
+                                      },
+                                      "resolutionKey": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z0-9_:-]{1,100}$"
+                                      },
+                                      "comment": {
+                                        "type": "string"
+                                      },
+                                      "sourceRefs": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "sets": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "key": {
+                                              "type": "string",
+                                              "pattern": "^[A-Za-z0-9_:-]{1,100}$"
+                                            },
+                                            "count": {
+                                              "type": "string",
+                                              "pattern": "^$|^[1-9]\\d{0,2}$"
+                                            },
+                                            "repetitions": {
+                                              "type": "string",
+                                              "pattern": "^$|^AMRAP$|^[1-9]\\d{0,3}(?:-[1-9]\\d{0,3})?$"
+                                            },
+                                            "weightKg": {
+                                              "type": "string",
+                                              "pattern": "^$|^\\d+(?:[.,]\\d+)?$"
+                                            },
+                                            "percentOneRm": {
+                                              "type": "string",
+                                              "pattern": "^$|^\\d+(?:[.,]\\d+)?$"
+                                            },
+                                            "durationSeconds": {
+                                              "type": "string",
+                                              "pattern": "^$|^\\d+(?:[.,]\\d+)?$"
+                                            },
+                                            "distanceMeters": {
+                                              "type": "string",
+                                              "pattern": "^$|^\\d+(?:[.,]\\d+)?$"
+                                            },
+                                            "rpe": {
+                                              "type": "string",
+                                              "pattern": "^$|^\\d+(?:[.,]\\d+)?$"
+                                            },
+                                            "rir": {
+                                              "type": "string",
+                                              "pattern": "^$|^\\d+(?:[.,]\\d+)?(?:-\\d+(?:[.,]\\d+)?)?$"
+                                            },
+                                            "restSeconds": {
+                                              "type": "string",
+                                              "pattern": "^$|^\\d+(?:[.,]\\d+)?$"
+                                            },
+                                            "setType": {
+                                              "type": "string",
+                                              "enum": [
+                                                "",
+                                                "warmup",
+                                                "working",
+                                                "top",
+                                                "backoff",
+                                                "drop"
+                                              ]
+                                            },
+                                            "note": {
+                                              "type": "string"
+                                            },
+                                            "sourceRefs": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              }
+                                            }
+                                          },
+                                          "required": [
+                                            "key",
+                                            "count",
+                                            "repetitions",
+                                            "weightKg",
+                                            "percentOneRm",
+                                            "durationSeconds",
+                                            "distanceMeters",
+                                            "rpe",
+                                            "rir",
+                                            "restSeconds",
+                                            "setType",
+                                            "note",
+                                            "sourceRefs"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "key",
+                                      "resolutionKey",
+                                      "comment",
+                                      "sourceRefs",
+                                      "sets"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "blockType",
+                                "groupLabel",
+                                "title",
+                                "description",
+                                "exercises"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "title",
+                          "dayOffset",
+                          "blocks"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "number",
+                    "name",
+                    "workouts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "weeks"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "cycles"
+      ],
+      "additionalProperties": false
+    },
+    "exerciseResolutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_:-]{1,100}$"
+          },
+          "originalName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "ambiguous",
+              "new"
+            ]
+          },
+          "exerciseId": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "proposedName": {
+            "type": "string"
+          },
+          "proposedResultType": {
+            "type": "string",
+            "enum": [
+              "",
+              "weight_reps",
+              "added_weight_reps",
+              "duration",
+              "distance_time",
+              "free"
+            ]
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "originalName",
+          "status",
+          "exerciseId",
+          "candidates",
+          "proposedName",
+          "proposedResultType",
+          "sourceRefs"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "needsClarification",
+    "clarificationMessage",
+    "programDraft",
+    "exerciseResolutions"
+  ],
+  "additionalProperties": false
+}
