@@ -55,23 +55,42 @@ class TelemetryRetentionIntegrationTest {
         try {
             // Настоящие данные прежнего образа: обновление не должно требовать пустого тома.
             try (var previous = stack(config, PREVIOUS_IMAGE, volume)) {
-                previous.start();
-                verifySignals(previous, BEFORE);
-                // Дожидаемся записи исторического блока: свежий trace ещё может быть только в памяти.
-                await().atMost(TIMEOUT).pollInterval(Duration.ofSeconds(2)).untilAsserted(() ->
-                        assertThat(previous.execInContainer("sh", "-c",
-                                "test -n \"$(find /data/tempo/blocks -name meta.json -print -quit)\"").getExitCode()).isZero());
-                docker.stopContainerCmd(previous.getContainerId()).withTimeout(45).exec();
+                try {
+                    previous.start();
+                    verifySignals(previous, BEFORE);
+                    // Дожидаемся записи исторического блока: свежий trace ещё может быть только в памяти.
+                    await().atMost(TIMEOUT).pollInterval(Duration.ofSeconds(2)).untilAsserted(() ->
+                            assertThat(previous.execInContainer("sh", "-c",
+                                    "test -n \"$(find /data/tempo/blocks -name meta.json -print -quit)\"").getExitCode()).isZero());
+                    docker.stopContainerCmd(previous.getContainerId()).withTimeout(45).exec();
+                } catch (Exception | AssertionError failure) {
+                    captureFailure(previous, failure);
+                    throw failure;
+                }
             }
             try (var current = stack(config, config.get("image").asString(), volume)) {
-                current.start();
-                verifyRetention(current);
-                verifyStoredSignals(current, BEFORE);
-                verifySignals(current, AFTER);
-                verifyFailedComponent(current);
+                try {
+                    current.start();
+                    verifyRetention(current);
+                    verifyStoredSignals(current, BEFORE);
+                    verifySignals(current, AFTER);
+                    verifyFailedComponent(current);
+                } catch (Exception | AssertionError failure) {
+                    captureFailure(current, failure);
+                    throw failure;
+                }
             }
         } finally {
             docker.removeVolumeCmd(volume).exec();
+        }
+    }
+
+    private void captureFailure(GenericContainer<?> stack, Throwable failure) {
+        try {
+            System.err.printf("Telemetry stack %s (%s)%n%s%n", stack.getDockerImageName(),
+                    stack.getContainerId(), stack.getLogs());
+        } catch (RuntimeException diagnosticFailure) {
+            failure.addSuppressed(diagnosticFailure);
         }
     }
 
@@ -135,11 +154,13 @@ class TelemetryRetentionIntegrationTest {
     }
 
     private void verifyStoredSignals(GenericContainer<?> stack, Probe probe) {
-        await().atMost(TIMEOUT).pollInterval(Duration.ofSeconds(2)).untilAsserted(() -> {
+        await().alias("stored signals: " + probe.key() + " in " + stack.getDockerImageName())
+                .atMost(TIMEOUT).pollInterval(Duration.ofSeconds(2)).untilAsserted(() -> {
             assertThat(JSON.readTree(get(stack, 9090, "/api/v1/query?query=sizy_retention_probe_" + probe.key()).body())
                     .at("/data/result/0/value/1").asString()).isEqualTo("42");
-            assertThat(get(stack, 3100, "/loki/api/v1/query_range?query=%7Bservice_name%3D%22retention-probe%22%7D").body())
-                    .contains("retention probe " + probe.key());
+            var logs = get(stack, 3100, "/loki/api/v1/query_range?query=%7Bservice_name%3D%22retention-probe%22%7D");
+            assertThat(logs.statusCode()).as("Loki response: %s", logs.body()).isEqualTo(200);
+            assertThat(logs.body()).as("Loki probe %s", probe.key()).contains("retention probe " + probe.key());
             assertThat(get(stack, 3200, "/api/traces/" + probe.traceId()).statusCode()).isEqualTo(200);
         });
     }
@@ -194,6 +215,12 @@ class TelemetryRetentionIntegrationTest {
                 .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).as(response.body()).isEqualTo(status);
+        if (path.startsWith("/v1/") && status == 200) {
+            var partial = JSON.readTree(response.body()).path("partialSuccess");
+            for (var field : new String[]{"rejectedDataPoints", "rejectedLogRecords", "rejectedSpans"}) {
+                assertThat(partial.path(field).asLong(0)).as("OTLP %s: %s", path, response.body()).isZero();
+            }
+        }
         return response.body();
     }
 
