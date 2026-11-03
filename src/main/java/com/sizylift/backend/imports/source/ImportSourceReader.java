@@ -33,6 +33,7 @@ public class ImportSourceReader {
     private static final int MAX_CELL_CHARS = 4000;
     private static final int MAX_ZIP_ENTRIES = 2048;
     private static final int BUFFER_BYTES = 8192;
+    private static final int DIALECT_SAMPLE_ROWS = 20;
     private final ImportProperties limits;
     private final SheetImportService sheets;
 
@@ -120,9 +121,8 @@ public class ImportSourceReader {
 
     private Source csv(String text) {
         if (text.length() > limits.maxSourceChars()) throw ImportFailure.invalid("Источник слишком большой.");
-        var first = text.lines().findFirst().orElse("");
-        char delimiter = first.contains("\t") ? '\t' : first.contains(";") ? ';' : ',';
-        var format = CSVFormat.RFC4180.builder().setDelimiter(delimiter).setIgnoreEmptyLines(true).get();
+        char delimiter = delimiter(text);
+        var format = CSVFormat.RFC4180.builder().setDelimiter(delimiter).setIgnoreEmptyLines(false).get();
         var result = new ArrayList<SourceItem>();
         try (var parser = format.parse(new StringReader(text.replace("\uFEFF", "")))) {
             for (var row : parser) {
@@ -139,6 +139,38 @@ public class ImportSourceReader {
             throw ImportFailure.invalid("Не удалось прочитать CSV.");
         }
         return bounded(result);
+    }
+
+    /** Разделители внутри кавычек и переносы внутри ячейки не влияют на выбор CSV-диалекта. */
+    private char delimiter(String text) {
+        var candidates = new char[] {',', ';', '\t'};
+        var counts = new int[candidates.length];
+        var rows = new int[candidates.length];
+        var current = new int[candidates.length];
+        boolean quoted = false;
+        int sampled = 0;
+        for (int i = 0; i <= text.length() && sampled < DIALECT_SAMPLE_ROWS; i++) {
+            char value = i == text.length() ? '\n' : text.charAt(i);
+            if (value == '"') {
+                if (quoted && i + 1 < text.length() && text.charAt(i + 1) == '"') i++;
+                else quoted = !quoted;
+            } else if (!quoted) {
+                if (value == '\n') {
+                    for (int c = 0; c < candidates.length; c++) {
+                        counts[c] += current[c];
+                        if (current[c] > 0) rows[c]++;
+                        current[c] = 0;
+                    }
+                    sampled++;
+                } else {
+                    for (int c = 0; c < candidates.length; c++) if (value == candidates[c]) current[c]++;
+                }
+            }
+        }
+        int best = 0;
+        for (int c = 1; c < candidates.length; c++)
+            if (rows[c] > rows[best] || rows[c] == rows[best] && counts[c] > counts[best]) best = c;
+        return candidates[best];
     }
 
     private void checkZip(byte[] bytes) throws IOException {

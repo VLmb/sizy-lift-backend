@@ -396,6 +396,88 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0/targetWeightGrams").asInt()).isEqualTo(100000);
     }
 
+    @Test
+    void parallelWorkersRespectTheGlobalCapacityAndDoNotClaimAnImportTwice() throws Exception {
+        var entered = new CountDownLatch(limits.concurrentRequests());
+        var release = new CountDownLatch(1);
+        when(parser.parse(any())).thenAnswer(call -> {
+            entered.countDown();
+            assertThat(release.await(15, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            return result(draft(matched("text:1")));
+        });
+        for (int i = 0; i <= limits.concurrentRequests(); i++) create(newSubject(), TEXT, null, UUID.randomUUID());
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures = new java.util.ArrayList<java.util.concurrent.Future<Boolean>>();
+            try {
+                for (int i = 0; i < limits.concurrentRequests(); i++) futures.add(pool.submit(worker::processOne));
+                assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                assertThat(worker.processOne()).isFalse();
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.import_session WHERE status='processing'", Integer.class))
+                        .isEqualTo(limits.concurrentRequests());
+                verify(parser, times(limits.concurrentRequests())).parse(any());
+            } finally { release.countDown(); }
+            for (var future : futures) assertThat(future.get(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(worker.processOne()).isTrue();
+        assertThat(worker.processOne()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.import_session WHERE status='review'", Integer.class))
+                .isEqualTo(limits.concurrentRequests() + 1);
+    }
+
+    @Test
+    void xlsxTranscriptionReachesTheModelAndTheCommittedPayloadWithoutLosingValues() throws Exception {
+        byte[] bytes;
+        try (var book = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            var sheet = book.createSheet("Неделя 1");
+            var row = sheet.createRow(2);
+            row.createCell(0).setCellValue("Присед");
+            row.createCell(1).setCellValue("3×5");
+            row.createCell(2).setCellValue(100.5);
+            row.createCell(3).setCellValue(0.75);
+            var style = book.createCellStyle();
+            style.setDataFormat(book.createDataFormat().getFormat("0%"));
+            row.getCell(3).setCellStyle(style);
+            var output = new java.io.ByteArrayOutputStream();
+            book.write(output); bytes = output.toByteArray();
+        }
+        var metadata = new java.util.HashMap<>(input(null, null, UUID.randomUUID()));
+        metadata.put("source", "file"); metadata.remove("text");
+        var created = body(mvc.perform(multipart(BASE)
+                .file(new MockMultipartFile("file", "plan.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes))
+                .file(new MockMultipartFile("metadata", "", "application/json", json.writeValueAsBytes(metadata)))
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt()
+                        .jwt(token -> token.issuer(ISSUER).subject(owner).claim("email", owner + "@example.com"))))
+                .andExpect(status().isAccepted()));
+        when(parser.parse(any())).thenAnswer(call -> {
+            var source = call.getArgument(0, ProgramParserModel.Input.class).source();
+            assertThat(source.items()).containsExactly(
+                    new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0", "Неделя 1"),
+                    new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!A3", "Присед"),
+                    new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!B3", "3×5"),
+                    new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!C3", "100,5"),
+                    new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!D3", "75%"));
+            var output = (ObjectNode) json.valueToTree(draft(matched("sheet:0!A3")));
+            var set = (ObjectNode) output.at("/programDraft/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0");
+            set.put("weightKg", "100.5").put("percentOneRm", "75");
+            set.putArray("sourceRefs").add("sheet:0!B3").add("sheet:0!C3").add("sheet:0!D3");
+            return new ProgramParserModel.Result(json.writeValueAsString(output), 1000, 300, 0);
+        });
+        var id = UUID.fromString(created.get("id").asString());
+        worker.processOne();
+        var view = view(owner, id);
+        assertThat(view.get("canCommit").asBoolean()).isTrue();
+        var receipt = body(postJson(owner, BASE + "/" + id + "/commit", Map.of("version", view.get("version").asLong()))
+                .andExpect(status().isOk()));
+        var program = body(call(owner, get("/api/v2/web/programs/" + receipt.get("programId").asString())).andExpect(status().isOk()));
+        var sets = program.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets");
+        assertThat(sets.size()).isEqualTo(3);
+        for (var set : sets) {
+            assertThat(set.get("targetWeightGrams").asInt()).isEqualTo(100500);
+            assertThat(set.get("targetPercentOneRmTenths").asInt()).isEqualTo(750);
+            assertThat(set.get("repetitions").asInt()).isEqualTo(5);
+        }
+    }
+
     private UUID create(String subject, String text, UUID target, UUID request) throws Exception {
         var created = body(postJson(subject, BASE, input(text, target, request)).andExpect(status().isAccepted()));
         return UUID.fromString(created.get("id").asString());

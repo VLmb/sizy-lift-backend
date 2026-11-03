@@ -15,6 +15,7 @@ import java.util.concurrent.Flow;
 import java.util.regex.Pattern;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
@@ -29,8 +30,14 @@ public class SheetImportService {
     private static final Pattern EXPORT_HOST = Pattern.compile("doc-[a-z0-9-]+-sheets\\.googleusercontent\\.com");
     private static final Pattern GID = Pattern.compile("(?:[?#&])gid=(\\d{1,12})(?:&|$)");
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(TIMEOUT)
-            .followRedirects(HttpClient.Redirect.NEVER).build();
+    private final HttpClient http;
+
+    @Autowired
+    public SheetImportService() {
+        this(HttpClient.newBuilder().connectTimeout(TIMEOUT).followRedirects(HttpClient.Redirect.NEVER).build());
+    }
+
+    SheetImportService(HttpClient http) { this.http = http; }
 
     public String fetch(String url) {
         var match = SHEET.matcher(url);

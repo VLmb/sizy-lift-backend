@@ -56,12 +56,18 @@ public class ImportWorker {
     public void tick() {
         if (!limits.enabled() || !limits.workerEnabled()) return;
         while (capacity.tryAcquire()) {
-            var next = transactions.execute(status -> sessions.claim(clock.instant(), limits));
-            if (next == null || next.isEmpty()) { capacity.release(); return; }
-            executor.submit(() -> {
-                try { process(next.get()); }
-                finally { capacity.release(); }
-            });
+            boolean submitted = false;
+            try {
+                var next = transactions.execute(status -> sessions.claim(clock.instant(), limits));
+                if (next == null || next.isEmpty()) return;
+                executor.submit(() -> {
+                    try { process(next.get()); }
+                    finally { capacity.release(); }
+                });
+                submitted = true;
+            } finally {
+                if (!submitted) capacity.release();
+            }
         }
     }
 
