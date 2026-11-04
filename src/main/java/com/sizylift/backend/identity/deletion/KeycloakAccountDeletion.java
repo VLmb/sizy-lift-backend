@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import tools.jackson.databind.JsonNode;
 
 /** Удаляет только sub текущего аккаунта через отдельный сервисный клиент Keycloak. */
@@ -42,10 +41,13 @@ public class KeycloakAccountDeletion {
         client = RestClient.builder().requestFactory(factory).build();
     }
 
+    /** Функция включена и для неё заданы адрес и сервисный клиент Keycloak. */
+    public boolean configured() {
+        return enabled && adminUrl != null && !clientId.isBlank() && !secret.isBlank();
+    }
+
     public void requireConfigured() {
-        if (!enabled || adminUrl == null || clientId.isBlank() || secret.isBlank()) {
-            throw new Unavailable();
-        }
+        if (!configured()) throw new Disabled();
     }
 
     public void delete(AccountDeletionRepository.Pending job) {
@@ -90,7 +92,11 @@ public class KeycloakAccountDeletion {
         return token.get("access_token").asString();
     }
 
-    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    /** Удаление выключено настройкой сервера: повтор не поможет. */
+    public static class Disabled extends RuntimeException {
+    }
+
+    /** Keycloak не ответил или отказал сервисному клиенту: временный сбой или ошибка его настройки. */
     public static class Unavailable extends RuntimeException {
     }
 }

@@ -34,6 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Чтение для веба (docs/web.md): свои данные, данные подопечного у тренера, 404 для чужих, CORS. */
@@ -400,10 +401,29 @@ class WebApiTest extends PostgresIntegrationTest {
         var id = UUID.randomUUID();
         publish(owner, "program", id, 1, fixture("program"));
         org.mockito.Mockito.doThrow(new com.sizylift.backend.identity.deletion.KeycloakAccountDeletion.Unavailable())
+                .when(accountDeletion).preflight(org.mockito.ArgumentMatchers.any());
+        mvc.perform(delete("/api/v1/me").with(jwt().jwt(jwt -> jwt.issuer(ISSUER).subject(owner)
+                .claim("auth_time", Instant.now().getEpochSecond())))).andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("account_deletion_unavailable"));
+        call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk());
+        org.mockito.Mockito.reset(accountDeletion);
+    }
+
+    @Test
+    void disabledDeletionIsReportedSeparatelyAndAdvertisedInTheCurrentUser() throws Exception {
+        var id = UUID.randomUUID();
+        publish(owner, "program", id, 1, fixture("program"));
+        org.mockito.Mockito.doThrow(new com.sizylift.backend.identity.deletion.KeycloakAccountDeletion.Disabled())
                 .when(accountDeletion).requireConfigured();
         mvc.perform(delete("/api/v1/me").with(jwt().jwt(jwt -> jwt.issuer(ISSUER).subject(owner)
-                .claim("auth_time", Instant.now().getEpochSecond())))).andExpect(status().isServiceUnavailable());
+                .claim("auth_time", Instant.now().getEpochSecond())))).andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("account_deletion_disabled"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("не включено")));
         call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk());
+        call(owner, get("/api/v1/me")).andExpect(jsonPath("$.accountDeletionAvailable").value(false));
+        org.mockito.Mockito.when(accountDeletion.configured()).thenReturn(true);
+        call(owner, get("/api/v1/me")).andExpect(jsonPath("$.accountDeletionAvailable").value(true));
+        org.mockito.Mockito.reset(accountDeletion);
     }
 
     @Test
