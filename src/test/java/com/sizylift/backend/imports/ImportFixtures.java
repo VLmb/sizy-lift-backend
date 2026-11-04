@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Ответы модели в компактном формате (схема program-import.compact.v1). */
+/** Ответы модели в компактном формате (схемы program-import.plan.v1 и program-import.weeks.v1). */
 final class ImportFixtures {
     static final UUID SQUAT = UUID.fromString("14000000-0000-4000-8000-000000000001");
     /** Заменяется alias приседа из каталога, переданного модели. */
@@ -35,11 +35,40 @@ final class ImportFixtures {
     static Map<String, Object> clarification(String question) {
         var result = new LinkedHashMap<String, Object>();
         result.put("question", question); result.put("name", ""); result.put("description", "");
-        result.put("exercises", new ArrayList<>()); result.put("weeks", new ArrayList<>());
+        result.put("exercises", new ArrayList<>()); result.put("plan", new ArrayList<>()); result.put("weeks", new ArrayList<>());
+        return result;
+    }
+    /** Небольшая программа целиком в ответе плана: одна неделя, одна тренировка. */
+    @SafeVarargs
+    static Map<String, Object> draft(Map<String, Object>... exercises) {
+        var result = plan(List.of(exercises), 1, 1);
+        result.put("weeks", new ArrayList<>(List.of(week(1, exercises))));
+        return result;
+    }
+    /** План большой программы без подробных недель: weeks недель по workouts тренировок, циклы по две недели. */
+    static Map<String, Object> plan(List<Map<String, Object>> exercises, int weeks, int workouts) {
+        var plan = new ArrayList<Object>();
+        for (int week = 1; week <= weeks; week++) {
+            var row = new LinkedHashMap<String, Object>();
+            row.put("week", week); row.put("cycle", "Цикл " + ((week + 1) / 2)); row.put("name", ""); row.put("workouts", workouts);
+            plan.add(row);
+        }
+        var result = new LinkedHashMap<String, Object>();
+        result.put("question", ""); result.put("name", "Программа"); result.put("description", "");
+        result.put("exercises", new ArrayList<>(exercises)); result.put("plan", plan); result.put("weeks", new ArrayList<>());
+        return result;
+    }
+    /** Ответ emit_program_weeks: по тренировке с каждым упражнением в каждой неделе. */
+    @SafeVarargs
+    static Map<String, Object> weeks(List<Integer> numbers, List<Map<String, Object>> extras, Map<String, Object>... exercises) {
+        var weeks = new ArrayList<Object>();
+        for (var number : numbers) weeks.add(week(number, exercises));
+        var result = new LinkedHashMap<String, Object>();
+        result.put("exercises", new ArrayList<>(extras)); result.put("weeks", weeks);
         return result;
     }
     @SafeVarargs
-    static Map<String, Object> draft(Map<String, Object>... exercises) {
+    static Map<String, Object> week(int number, Map<String, Object>... exercises) {
         var blocks = new ArrayList<Object>();
         for (var exercise : exercises) {
             var item = new LinkedHashMap<String, Object>();
@@ -53,11 +82,8 @@ final class ImportFixtures {
         var day = new LinkedHashMap<String, Object>();
         day.put("day", 0); day.put("title", "Тренировка"); day.put("blocks", blocks);
         var week = new LinkedHashMap<String, Object>();
-        week.put("week", 1); week.put("cycle", "Цикл"); week.put("name", ""); week.put("days", new ArrayList<>(List.of(day)));
-        var result = new LinkedHashMap<String, Object>();
-        result.put("question", ""); result.put("name", "Программа"); result.put("description", "");
-        result.put("exercises", new ArrayList<>(List.of(exercises))); result.put("weeks", new ArrayList<>(List.of(week)));
-        return result;
+        week.put("week", number); week.put("days", new ArrayList<>(List.of(day)));
+        return week;
     }
     /** Первое упражнение первой тренировки: refs, note, sets. */
     @SuppressWarnings("unchecked")

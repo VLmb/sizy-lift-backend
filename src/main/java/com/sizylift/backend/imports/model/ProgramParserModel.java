@@ -6,12 +6,21 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
+import com.sizylift.backend.imports.dto.ImportDraftV1;
+import com.sizylift.backend.imports.dto.ImportPlan;
 import com.sizylift.backend.imports.entity.ImportSession.Clarification;
 import com.sizylift.backend.imports.entity.ImportSession.Source;
 import com.sizylift.backend.web.dto.WebDtos.CatalogExercise;
 
 public interface ProgramParserModel {
-    Result parse(Input input);
+    /** Один вызов модели; listener получает фрагменты аргументов инструмента по мере генерации. */
+    Result parse(Input input, Listener listener);
+
+    @FunctionalInterface
+    interface Listener {
+        Listener NONE = delta -> { };
+        void onArguments(String delta);
+    }
 
     /** Модель видит только короткий alias и название; UUID восстанавливает сервер. */
     record CatalogEntry(String alias, UUID id, String name) {
@@ -35,6 +44,25 @@ public interface ProgramParserModel {
      * а вопрос и ответ уже есть в history.
      */
     record Input(Source source, List<CatalogEntry> catalog, LocalDate startDate,
-                 List<Clarification> history, String repairMessage) { }
+                 List<Clarification> history, Task task, String repairMessage) { }
+
+    /**
+     * Что сделать этим вызовом. Всё, кроме задачи и ошибок повтора, одинаково для всех вызовов сессии,
+     * поэтому общий префикс запроса попадает в кэш провайдера.
+     */
+    record Task(Kind kind, int singleCallWorkouts, List<Integer> weeks, List<ImportPlan.Week> plan,
+                List<ImportDraftV1.Resolution> exercises) {
+        public enum Kind { PLAN, PLAN_ONLY, WEEKS }
+
+        /** План; программу до singleCallWorkouts тренировок модель разбирает целиком в том же вызове. */
+        public static Task plan(int singleCallWorkouts) { return new Task(Kind.PLAN, singleCallWorkouts, List.of(), List.of(), List.of()); }
+        /** Только план: целиком программа не поместилась в один ответ. */
+        public static Task planOnly() { return new Task(Kind.PLAN_ONLY, 0, List.of(), List.of(), List.of()); }
+        /** Подробный разбор недель weeks большой программы по её плану. */
+        public static Task weeks(ImportPlan plan, List<Integer> weeks) {
+            var selected = plan.weeks().stream().filter(week -> weeks.contains(week.week())).toList();
+            return new Task(Kind.WEEKS, 0, List.copyOf(weeks), selected, plan.exercises());
+        }
+    }
     record Result(String json, int inputTokens, int outputTokens, int cachedTokens) { }
 }

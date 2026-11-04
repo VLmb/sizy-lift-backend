@@ -29,11 +29,16 @@ public final class ImportDtos {
     public record Created(UUID id, String status, long version) { }
     public record Receipt(UUID id, UUID ownerId, UUID programId, long programRevision) { }
     public record Failure(String code, String message) { }
+    /**
+     * Прогресс текущего разбора: stage — plan или weeks; exercises — найдено упражнений;
+     * weeksDone из weeksTotal — недели, полностью выписанные моделью. weeksTotal неизвестен, пока нет плана.
+     */
+    public record Progress(String stage, int exercises, int weeksDone, Integer weeksTotal) { }
     public record View(UUID id, UUID ownerId, String status, long version, int round, String name,
                        LocalDate startDate, Instant expiresAt, boolean needsClarification,
                        String clarificationMessage, ImportDraftV1 draft, com.sizylift.backend.imports.entity.ImportSession.Source source,
                        Map<String, Decision> decisions,
                        boolean canCommit, ProgramPayloadV1 program, List<String> warnings,
                        Failure error, long inputTokens, long outputTokens, long reservedCostMicros,
-                       Receipt receipt) { }
+                       Receipt receipt, Progress progress) { }
 }

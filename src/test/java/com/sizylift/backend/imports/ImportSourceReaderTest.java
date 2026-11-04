@@ -83,7 +83,7 @@ class ImportSourceReaderTest {
 
     static ImportProperties limits(int file, int expanded) {
         return new ImportProperties(false, false, Duration.ofHours(24), Duration.ofMinutes(10), 20, 2, 4, 3, 2,
-                file, expanded, 10, 20000, 200000, 1000000, 32768, 300000, 1200000);
+                file, expanded, 10, 20000, 200000, 1000000, 32768, 300000, 1200000, 8, 12, 8, 8);
     }
     private byte[] bytes(Workbook book) throws Exception {
         var output = new ByteArrayOutputStream();

@@ -23,7 +23,7 @@ class ImportConfigurationTest {
     void disabledImportDoesNotRequireAKeyOrProviderSettings() {
         context.run(application -> {
             assertThat(application).hasNotFailed().hasSingleBean(ProgramParserModel.class);
-            assertThatThrownBy(() -> application.getBean(ProgramParserModel.class).parse(null))
+            assertThatThrownBy(() -> application.getBean(ProgramParserModel.class).parse(null, ProgramParserModel.Listener.NONE))
                     .isInstanceOf(ImportFailure.class);
         });
     }

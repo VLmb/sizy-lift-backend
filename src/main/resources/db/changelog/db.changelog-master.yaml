@@ -86,3 +86,9 @@ databaseChangeLog:
   - include:
       file: changes/030-import-repair-hint.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/031-import-outline.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/032-import-progress.sql
+      relativeToChangelogFile: true
