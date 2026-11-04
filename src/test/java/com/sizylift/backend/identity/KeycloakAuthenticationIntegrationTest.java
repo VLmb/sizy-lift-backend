@@ -156,7 +156,7 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
             var browser = browser();
             var login = open(browser, authorizationUrl("auth", locale));
             assertThat(login.statusCode()).isEqualTo(200);
-            assertThat(login.body()).contains("css/sizy.css", "SIZY", "id=\"kc-form-login\"")
+            assertThat(login.body()).contains("css/sizy-brand-v2.css", "SIZY", "id=\"kc-form-login\"")
                     .doesNotContain("id=\"termsAccepted\"");
             assertThat(login.body()).contains(locale.equals("ru") ? "С возвращением" : "Welcome back");
             var recovery = Pattern.compile("href=\"([^\"]*reset-credentials[^\"]*)\"").matcher(login.body());
