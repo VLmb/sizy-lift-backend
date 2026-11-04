@@ -73,7 +73,7 @@
         "additionalProperties": false
       }
     },
-    "weeks": {
+    "plan": {
       "type": "array",
       "items": {
         "type": "object",
@@ -88,6 +88,31 @@
           },
           "name": {
             "type": "string"
+          },
+          "workouts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 14
+          }
+        },
+        "required": [
+          "week",
+          "cycle",
+          "name",
+          "workouts"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "weeks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "week": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 104
           },
           "days": {
             "type": "array",
@@ -189,8 +214,6 @@
         },
         "required": [
           "week",
-          "cycle",
-          "name",
           "days"
         ],
         "additionalProperties": false
@@ -202,6 +225,7 @@
     "name",
     "description",
     "exercises",
+    "plan",
     "weeks"
   ],
   "additionalProperties": false

@@ -34,6 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {"sizylift.imports.enabled=true", "sizylift.imports.worker-enabled=false",
+        "sizylift.imports.workouts-per-chunk=2",
         "sizylift.imports.deepseek.api-key=test-only", "sizylift.imports.deepseek.url=http://127.0.0.1"})
 @AutoConfigureMockMvc
 class ImportApiTest extends CoachWorkspaceApiSupport {
@@ -259,16 +260,19 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
-    void aTruncatedAnswerFailsAtOnceWithoutAPaidRepeat() throws Exception {
+    void aPlanThatDoesNotFitEvenWithoutWeeksFailsWithoutFurtherPaidRepeats() throws Exception {
         when(parser.parse(any())).thenThrow(com.sizylift.backend.imports.model.ModelFailure.truncated(5000, 32768));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
         assertThat(view.get("status").asString()).isEqualTo("failed");
         assertThat(view.at("/error/code").asString()).isEqualTo("input_too_large");
-        assertThat(view.get("outputTokens").asLong()).isEqualTo(32768);
+        assertThat(view.get("outputTokens").asLong()).isEqualTo(2 * 32768);
         assertThat(worker.processOne()).isFalse();
-        verify(parser, times(1)).parse(any());
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        verify(parser, times(2)).parse(captor.capture());
+        assertThat(captor.getAllValues()).extracting(input -> input.task().kind())
+                .containsExactly(ProgramParserModel.Task.Kind.PLAN, ProgramParserModel.Task.Kind.PLAN_ONLY);
     }
 
     @Test
@@ -286,6 +290,94 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(captor.getAllValues().get(1).repairMessage())
                 .contains("weeks[week=1].days[0].blocks[0].items[0].sets[0] «3x5 100kg»", "фрагмент «3x5»");
         assertThat(jdbc.queryForObject("SELECT repair_hint FROM sizylift.import_session WHERE id=?", String.class, id)).isNull();
+    }
+
+    @Test
+    void aLargeProgramIsPlannedFirstAndItsWeeksAreParsedInParallel() throws Exception {
+        var started = new CountDownLatch(3);
+        var duplicate = exercise("n1", "Присед", "matched", SQUAT_ALIAS, List.of(), "", "", List.of("text:1"));
+        when(parser.parse(any())).thenAnswer(call -> {
+            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) return result(input, plan(List.of(matched("text:1")), 3, 2));
+            started.countDown();
+            assertThat(started.await(10, java.util.concurrent.TimeUnit.SECONDS)).as("части разбираются параллельно").isTrue();
+            var weeks = input.task().weeks();
+            var extras = weeks.contains(3) ? List.of(duplicate) : List.<Map<String, Object>>of();
+            var exercise = weeks.contains(3) ? duplicate : matched("text:1");
+            return result(input, weeks(weeks, extras, exercise));
+        });
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        worker.processOne();
+        var view = view(owner, id);
+        assertThat(view.get("status").asString()).isEqualTo("review");
+        assertThat(view.get("canCommit").asBoolean()).isTrue();
+        assertThat(view.at("/draft/exerciseResolutions").size()).isEqualTo(1);
+        var cycles = view.at("/program/cycles");
+        assertThat(cycles.size()).isEqualTo(2);
+        assertThat(cycles.get(0).get("weeks").size()).isEqualTo(2);
+        assertThat(cycles.get(1).at("/weeks/0/workouts/0/blocks/0/exercises/0/exerciseId").asString()).isEqualTo(SQUAT.toString());
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        verify(parser, times(4)).parse(captor.capture());
+        assertThat(captor.getAllValues().stream().filter(input -> input.task().kind() == ProgramParserModel.Task.Kind.WEEKS)
+                .map(input -> input.task().weeks()).toList()).containsExactlyInAnyOrder(List.of(1), List.of(2), List.of(3));
+        assertThat(jdbc.queryForObject("SELECT outline IS NULL FROM sizylift.import_session WHERE id=?", Boolean.class, id)).isTrue();
+        assertThat(view.get("outputTokens").asLong()).isEqualTo(4 * 300);
+    }
+
+    @Test
+    void aTruncatedPartIsSplitAndAnInvalidPartIsRepairedWithoutTheQueue() throws Exception {
+        when(parser.parse(any())).thenAnswer(call -> {
+            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            var weeks = input.task().weeks();
+            if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) return result(input, plan(List.of(matched("text:1")), 2, 1));
+            if (weeks.size() == 2) throw com.sizylift.backend.imports.model.ModelFailure.truncated(1000, 32768);
+            var answer = weeks(weeks, List.of(), matched("text:1"));
+            if (weeks.equals(List.of(2)) && input.repairMessage().isEmpty()) firstItem(answer).put("sets", List.of("5x5"));
+            return result(input, answer);
+        });
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        worker.processOne();
+        assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        verify(parser, times(5)).parse(captor.capture());
+        var repaired = captor.getAllValues().stream().filter(input -> input.task().weeks().equals(List.of(2))).toList();
+        assertThat(repaired).hasSize(2);
+        assertThat(repaired.get(1).repairMessage()).contains("weeks[week=2].days[0].blocks[0].items[0].sets[0] «5x5»");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void aProgramThatDidNotFitIntoOneAnswerIsReplannedWithoutWeeks() throws Exception {
+        when(parser.parse(any())).thenAnswer(call -> {
+            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            return switch (input.task().kind()) {
+                case PLAN -> throw com.sizylift.backend.imports.model.ModelFailure.truncated(1000, 32768);
+                case PLAN_ONLY -> result(input, plan(List.of(matched("text:1")), 1, 1));
+                case WEEKS -> result(input, weeks(input.task().weeks(), List.of(), matched("text:1")));
+            };
+        });
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        worker.processOne();
+        assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        verify(parser, times(3)).parse(captor.capture());
+        assertThat(captor.getAllValues()).extracting(input -> input.task().kind()).containsExactly(
+                ProgramParserModel.Task.Kind.PLAN, ProgramParserModel.Task.Kind.PLAN_ONLY, ProgramParserModel.Task.Kind.WEEKS);
+    }
+
+    @Test
+    void cancellingDuringThePartsStopsFurtherCallsAndKeepsTheSessionCancelled() throws Exception {
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        var user = userId(owner);
+        when(parser.parse(any())).thenAnswer(call -> {
+            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) return result(input, plan(List.of(matched("text:1")), 1, 1));
+            imports.cancel(user, id);
+            return result(input, weeks(input.task().weeks(), List.of(), matched("text:1")));
+        });
+        worker.processOne();
+        assertThat(view(owner, id).get("status").asString()).isEqualTo("cancelled");
+        verify(parser, times(2)).parse(any());
     }
 
     @Test
