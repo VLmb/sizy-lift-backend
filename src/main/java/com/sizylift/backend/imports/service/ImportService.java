@@ -154,7 +154,8 @@ public class ImportService {
                 output == null ? "" : output.clarificationMessage(), output, session.normalized(), session.decisions(),
                 compiled != null, compiled == null ? null : compiled.program(), warnings,
                 session.errorCode() == null ? null : new Failure(session.errorCode(), session.errorMessage()),
-                session.inputTokens(), session.outputTokens(), session.reservedCostMicros(), receipt(session));
+                session.inputTokens(), session.outputTokens(), session.reservedCostMicros(), receipt(session),
+                session.status().equals("processing") ? session.progress() : null);
     }
 
     public static Receipt receipt(ImportSession session) {

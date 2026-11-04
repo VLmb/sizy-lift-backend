@@ -41,16 +41,17 @@ public class ImportWorker {
     private final ImportMetrics metrics;
     private final ImportCost cost;
     private final ImportChunks chunks;
+    private final ImportProgress progress;
     private final Semaphore capacity;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public ImportWorker(ImportRepository sessions, ImportProperties limits, ImportSourceReader sourceReader,
             ProgramParserModel model, ImportDraftValidator validator, ProgramDraftCompiler compiler,
             AccessPolicy access, TransactionTemplate transactions, Clock clock, ImportMetrics metrics,
-            ImportCost cost, ImportChunks chunks) {
+            ImportCost cost, ImportChunks chunks, ImportProgress progress) {
         this.sessions = sessions; this.limits = limits; this.sourceReader = sourceReader; this.model = model;
         this.validator = validator; this.compiler = compiler; this.access = access; this.transactions = transactions;
-        this.clock = clock; this.metrics = metrics; this.cost = cost; this.chunks = chunks;
+        this.clock = clock; this.metrics = metrics; this.cost = cost; this.chunks = chunks; this.progress = progress;
         this.capacity = new Semaphore(limits.concurrentRequests());
     }
 
@@ -140,13 +141,15 @@ public class ImportWorker {
      * в ответ, сразу повторяем вызов за одним планом — недели разберутся частями.
      */
     private ImportDraftValidator.Outcome plan(ImportSession session, ProgramParserModel.Input input) {
+        var tracker = progress.plan(session);
         try {
-            return validator.plan(call(session, input).json(), input.source(), input.catalog(), input.history());
+            return validator.plan(call(session, input, tracker.call()).json(), input.source(), input.catalog(), input.history());
         } catch (ModelFailure e) {
             if (!e.truncated() || input.task().kind() != Task.Kind.PLAN) throw e;
             var planOnly = new ProgramParserModel.Input(input.source(), input.catalog(), input.startDate(), input.history(),
                     Task.planOnly(), input.repairMessage());
-            return validator.plan(call(session, planOnly).json(), input.source(), input.catalog(), input.history());
+            return validator.plan(call(session, planOnly, progress.plan(session).call()).json(),
+                    input.source(), input.catalog(), input.history());
         }
     }
 
@@ -154,12 +157,12 @@ public class ImportWorker {
      * Попытка раунда с резервом бюджета; usage учитывается и для обрезанного ответа. Аренда продлевается
      * перед каждым вызовом: план и повтор без недель вместе могут длиться дольше одной аренды.
      */
-    private ProgramParserModel.Result call(ImportSession session, ProgramParserModel.Input input) {
+    private ProgramParserModel.Result call(ImportSession session, ProgramParserModel.Input input, ProgramParserModel.Listener listener) {
         if (!sessions.extend(session, clock.instant(), limits)) throw ImportChunks.ChunkFailure.lost();
         if (!sessions.reserve(session, cost.micros(input), clock.instant(), limits)) throw new Budget();
         ProgramParserModel.Result result;
         try {
-            result = model.parse(input);
+            result = model.parse(input, listener);
         } catch (ModelFailure e) {
             if (e.truncated()) usage(session, e.inputTokens(), e.outputTokens(), 0);
             throw e;

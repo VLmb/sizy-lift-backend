@@ -35,17 +35,18 @@ public class ImportConfiguration {
         factory.setReadTimeout(timeout);
         return new DeepSeekProgramParser(RestClient.builder().requestFactory(factory).requestInterceptor((request, body, execution) ->
                 new BoundedResponse(execution.execute(request, body))), json,
-                key, url, model, properties.maxOutputTokens());
+                key, url, model, properties.maxOutputTokens(), timeout);
     }
 
     @Bean
     @ConditionalOnMissingBean(ProgramParserModel.class)
     ProgramParserModel disabledProgramParser() {
-        return input -> { throw ImportFailure.unavailable(); };
+        return (input, listener) -> { throw ImportFailure.unavailable(); };
     }
 
     private static class BoundedResponse implements org.springframework.http.client.ClientHttpResponse {
-        private static final int MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+        /** Поток: каждое событие SSE несёт JSON-обёртку вокруг нескольких токенов, поэтому лимит больше самих аргументов. */
+        private static final int MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
         private final org.springframework.http.client.ClientHttpResponse delegate;
         private java.io.InputStream body;
         BoundedResponse(org.springframework.http.client.ClientHttpResponse delegate) { this.delegate = delegate; }

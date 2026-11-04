@@ -13,7 +13,14 @@ import com.sizylift.backend.imports.entity.ImportSession.Source;
 import com.sizylift.backend.web.dto.WebDtos.CatalogExercise;
 
 public interface ProgramParserModel {
-    Result parse(Input input);
+    /** Один вызов модели; listener получает фрагменты аргументов инструмента по мере генерации. */
+    Result parse(Input input, Listener listener);
+
+    @FunctionalInterface
+    interface Listener {
+        Listener NONE = delta -> { };
+        void onArguments(String delta);
+    }
 
     /** Модель видит только короткий alias и название; UUID восстанавливает сервер. */
     record CatalogEntry(String alias, UUID id, String name) {

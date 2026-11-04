@@ -41,14 +41,15 @@ public class ImportChunks {
     private final ImportProperties limits;
     private final ImportCost cost;
     private final ImportMetrics metrics;
+    private final ImportProgress progress;
     private final Clock clock;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public ImportChunks(ProgramParserModel model, ImportDraftValidator validator,
                         ImportRepository sessions, ImportProperties limits,
-                        ImportCost cost, ImportMetrics metrics, Clock clock) {
+                        ImportCost cost, ImportMetrics metrics, ImportProgress progress, Clock clock) {
         this.model = model; this.validator = validator; this.sessions = sessions; this.limits = limits;
-        this.cost = cost; this.metrics = metrics; this.clock = clock;
+        this.cost = cost; this.metrics = metrics; this.progress = progress; this.clock = clock;
     }
 
     /** Части подряд идущих недель примерно по workoutsPerChunk тренировок; частей не больше maxChunks. */
@@ -114,6 +115,7 @@ public class ImportChunks {
         private final ImportSession session;
         private final ImportPlan plan;
         private final ProgramParserModel.Input base;
+        private final ImportProgress.Tracker tracker;
         private final Semaphore permits = new Semaphore(limits.chunkParallelism());
         /** Дробление обрезанных частей ограничено, чтобы сбой модели не превратился в лавину платных вызовов. */
         private final AtomicInteger calls = new AtomicInteger();
@@ -121,6 +123,7 @@ public class ImportChunks {
 
         Run(ImportSession session, ImportPlan plan, ProgramParserModel.Input base) {
             this.session = session; this.plan = plan; this.base = base;
+            this.tracker = progress.weeks(session, plan);
         }
 
         List<ImportDraftValidator.Chunk> chunk(List<Integer> weeks) {
@@ -128,15 +131,23 @@ public class ImportChunks {
             for (int attempt = 0; attempt < limits.attemptsPerRound(); attempt++) {
                 var input = new ProgramParserModel.Input(base.source(), base.catalog(), base.startDate(), base.history(),
                         Task.weeks(plan, weeks), hint);
+                var counter = tracker.call();
                 try {
-                    return List.of(validator.weeks(call(input).json(), plan, weeks, base.source(), base.catalog(), base.history()));
+                    var chunk = validator.weeks(call(input, counter).json(), plan, weeks, base.source(), base.catalog(), base.history());
+                    tracker.completed(counter, chunk.weeks().size());
+                    return List.of(chunk);
                 } catch (ImportDraftValidator.InvalidDraft e) {
+                    tracker.abandoned(counter);
                     hint = e.repairHint();
                 } catch (ModelFailure e) {
+                    tracker.abandoned(counter);
                     if (e.truncated()) return halves(weeks);
                     if (!e.retryable()) throw ChunkFailure.unavailable();
                     pause(e.retryAfter());
                     hint = "";
+                } catch (RuntimeException e) {
+                    tracker.abandoned(counter);
+                    throw e;
                 }
             }
             throw ChunkFailure.unavailable();
@@ -151,7 +162,7 @@ public class ImportChunks {
             return collect(List.of(first, second));
         }
 
-        private ProgramParserModel.Result call(ProgramParserModel.Input input) {
+        private ProgramParserModel.Result call(ProgramParserModel.Input input, ProgramParserModel.Listener listener) {
             if (calls.incrementAndGet() > maxCalls) throw ChunkFailure.unavailable();
             if (cost.tooLarge(input)) throw ChunkFailure.tooLarge();
             permits.acquireUninterruptibly();
@@ -160,7 +171,7 @@ public class ImportChunks {
                 // Аренда продлевается уже после ожидания слота: вызов всегда укладывается в одну аренду.
                 if (!sessions.extend(session, clock.instant(), limits)) throw ChunkFailure.lost();
                 if (!sessions.reserveChunk(session, cost.micros(input), clock.instant(), limits)) throw ChunkFailure.budget();
-                result = model.parse(input);
+                result = model.parse(input, listener);
             } catch (ModelFailure e) {
                 if (e.truncated()) record(e.inputTokens(), e.outputTokens(), 0);
                 throw e;

@@ -12,6 +12,7 @@ import com.sizylift.backend.imports.config.ImportProperties;
 import com.sizylift.backend.imports.dto.ImportDraftV1;
 import com.sizylift.backend.imports.dto.ImportDtos.Create;
 import com.sizylift.backend.imports.dto.ImportDtos.Decision;
+import com.sizylift.backend.imports.dto.ImportDtos.Progress;
 import com.sizylift.backend.imports.dto.ImportPlan;
 import com.sizylift.backend.imports.entity.ImportSession;
 import com.sizylift.backend.imports.entity.ImportSession.Clarification;
@@ -61,17 +62,21 @@ public class ImportRepository {
             """;
     private static final String FINISH = """
             UPDATE sizylift.import_session SET status=?,version=version+1,model_output=?::jsonb,decisions=?::jsonb,
-                lease_token=NULL,lease_until=NULL,error_code=?,error_message=?,repair_hint=NULL,outline=NULL,
+                lease_token=NULL,lease_until=NULL,error_code=?,error_message=?,repair_hint=NULL,outline=NULL,progress=NULL,
                 input_tokens=input_tokens+?,output_tokens=output_tokens+?,cached_tokens=cached_tokens+?
             WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
             """;
     private static final String RETRY = """
             UPDATE sizylift.import_session SET status='queued',version=version+1,lease_token=NULL,lease_until=NULL,
-                next_attempt_at=?,error_code='retrying',error_message='Повторяем обработку.',repair_hint=?
+                next_attempt_at=?,error_code='retrying',error_message='Повторяем обработку.',repair_hint=?,progress=NULL
             WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
             """;
     private static final String OUTLINE = """
             UPDATE sizylift.import_session SET outline=?::jsonb
+            WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
+            """;
+    private static final String PROGRESS = """
+            UPDATE sizylift.import_session SET progress=?::jsonb
             WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
             """;
     private static final String EXTEND = """
@@ -88,7 +93,7 @@ public class ImportRepository {
             """;
     private static final String ANSWER = """
             UPDATE sizylift.import_session SET status='queued',version=version+1,round=round+1,attempts=0,
-                history=?::jsonb,error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL,next_attempt_at=? WHERE id=?
+                history=?::jsonb,error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL,progress=NULL,next_attempt_at=? WHERE id=?
             """;
     private static final String PATCH = """
             UPDATE sizylift.import_session SET version=version+1,name=?,start_date=?,decisions=?::jsonb WHERE id=?
@@ -97,17 +102,17 @@ public class ImportRepository {
             UPDATE sizylift.import_session SET status='committed',version=version+1,program_revision=?,
                 source_text=NULL,source_bytes=NULL,source_name='',name='',normalized=NULL,catalog='[]',
                 model_output=NULL,decisions='{}',history='[]',lease_token=NULL,lease_until=NULL,
-                error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL WHERE id=?
+                error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL,progress=NULL WHERE id=?
             """;
     private static final String CANCEL = """
             UPDATE sizylift.import_session SET status='cancelled',version=version+1,source_text=NULL,source_bytes=NULL,name='',source_name='',
                 normalized=NULL,catalog='[]',model_output=NULL,decisions='{}',history='[]',lease_token=NULL,
-                lease_until=NULL,error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL WHERE id=?
+                lease_until=NULL,error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL,progress=NULL WHERE id=?
             """;
     private static final String EXPIRE = """
             UPDATE sizylift.import_session SET status='expired',version=version+1,source_text=NULL,source_bytes=NULL,
                 source_name='',name='',normalized=NULL,catalog='[]',model_output=NULL,decisions='{}',history='[]',
-                lease_token=NULL,lease_until=NULL,error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL
+                lease_token=NULL,lease_until=NULL,error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL,progress=NULL
             WHERE expires_at <= ? AND status NOT IN ('committed','expired','cancelled')
             """;
     private static final String PURGE = """
@@ -168,6 +173,9 @@ public class ImportRepository {
     public boolean outline(ImportSession session, ImportPlan plan, Instant now) {
         return jdbc.update(OUTLINE, json.writeValueAsString(plan), session.id(), session.leaseToken(), stamp(now)) == 1;
     }
+    public boolean progress(ImportSession session, Progress progress, Instant now) {
+        return jdbc.update(PROGRESS, json.writeValueAsString(progress), session.id(), session.leaseToken(), stamp(now)) == 1;
+    }
     /** Продлевает аренду перед каждым вызовом модели по частям; false — сессию отменили или забрали. */
     public boolean extend(ImportSession session, Instant now, ImportProperties limits) {
         return jdbc.update(EXTEND, stamp(now.plus(limits.lease())), session.id(), session.leaseToken(), stamp(now)) == 1;
@@ -205,7 +213,7 @@ public class ImportRepository {
                 row.getLong("input_tokens"), row.getLong("output_tokens"), row.getLong("cached_tokens"),
                 row.getString("error_code"), row.getString("error_message"), row.getObject("lease_token", UUID.class),
                 row.getTimestamp("expires_at").toInstant(), row.getString("repair_hint"),
-                read(row, "outline", ImportPlan.class));
+                read(row, "outline", ImportPlan.class), read(row, "progress", Progress.class));
     }
     private <T> T read(ResultSet row, String field, Class<T> type) throws SQLException {
         var value = row.getString(field);
