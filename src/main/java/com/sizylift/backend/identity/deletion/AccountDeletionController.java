@@ -5,15 +5,19 @@ import java.time.Duration;
 
 import com.sizylift.backend.identity.controller.AuthenticatedAccount;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class AccountDeletionController {
     private static final Duration RECENT_LOGIN = Duration.ofMinutes(5);
+    static final String DISABLED = "account_deletion_disabled";
+    static final String UNAVAILABLE = "account_deletion_unavailable";
     private final AuthenticatedAccount accounts;
     private final AccountDeletionService deletion;
     private final Clock clock;
@@ -32,6 +36,22 @@ public class AccountDeletionController {
             throw new RecentLoginRequired();
         }
         deletion.delete(accounts.resolve(jwt));
+    }
+
+    @ExceptionHandler(KeycloakAccountDeletion.Disabled.class)
+    ResponseEntity<Failure> disabled() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new Failure(DISABLED,
+                "Удаление аккаунта пока не включено на сервере. Данные не изменены."));
+    }
+
+    @ExceptionHandler(KeycloakAccountDeletion.Unavailable.class)
+    ResponseEntity<Failure> unavailable() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new Failure(UNAVAILABLE,
+                "Сервис входа сейчас недоступен. Данные не изменены, попробуйте позже."));
+    }
+
+    /** Код для клиента и сообщение для пользователя; детали Keycloak не раскрываются. */
+    public record Failure(String code, String message) {
     }
 
     @ResponseStatus(HttpStatus.FORBIDDEN)

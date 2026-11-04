@@ -72,7 +72,7 @@ class ProductionComposeStartupTest {
                     assertThat(context).hasNotFailed();
                     if (available) context.getBean(KeycloakAccountDeletion.class).requireConfigured();
                     else assertThatThrownBy(context.getBean(KeycloakAccountDeletion.class)::requireConfigured)
-                            .isInstanceOf(KeycloakAccountDeletion.Unavailable.class);
+                            .isInstanceOf(KeycloakAccountDeletion.Disabled.class);
                 });
         assertThat(values.get(ENABLED)).isEqualTo(expectedFlag);
         assertThat(Files.readString(errors)).doesNotContain(ENABLED, CLIENT, SECRET);
