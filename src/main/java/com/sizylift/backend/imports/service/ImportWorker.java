@@ -21,6 +21,7 @@ import com.sizylift.backend.web.service.SheetImportService;
 import jakarta.annotation.PreDestroy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -29,7 +30,7 @@ public class ImportWorker {
     private static final long PROMPT_OVERHEAD_BYTES = 32_768;
     private static final long MAX_REQUEST_BYTES = 900_000;
     private static final long MILLION = 1_000_000;
-    private static final String REPAIR_HINT = "Предыдущий ответ нарушил схему, ограничения или типы упражнений. Проверь ответ; если смысл неясен, верни needsClarification.";
+    private static final String TOO_LARGE = "Для одного разбора программа слишком большая. Оставьте нужные недели или разделите источник на части.";
     private final ImportRepository sessions;
     private final ImportProperties limits;
     private final ImportSourceReader sourceReader;
@@ -90,9 +91,9 @@ public class ImportWorker {
             }
             var source = session.normalized() == null ? sourceReader.read(session) : session.normalized();
             if (session.normalized() == null && !sessions.normalized(session, source, clock.instant())) return;
-            var catalog = session.catalog().stream().map(ex -> new ProgramParserModel.CatalogEntry(ex.id(), ex.name())).toList();
-            var input = new ProgramParserModel.Input(source, catalog, session.startDate(), session.output(), session.history(),
-                    session.attempts() == 0 ? "" : REPAIR_HINT);
+            var catalog = ProgramParserModel.CatalogEntry.of(session.catalog());
+            var input = new ProgramParserModel.Input(source, catalog, session.startDate(), session.history(),
+                    session.attempts() == 0 || session.repairHint() == null ? "" : session.repairHint());
             long bytes = json.writeValueAsString(input).getBytes(StandardCharsets.UTF_8).length + PROMPT_OVERHEAD_BYTES;
             if (bytes > MAX_REQUEST_BYTES) {
                 fail(session, "input_too_large", "Для одного запроса источник слишком большой. Сократите его или выберите нужные листы.");
@@ -109,10 +110,10 @@ public class ImportWorker {
             modelRequested = true;
             var result = model.parse(input);
             if (result.inputTokens() < 0 || result.outputTokens() < 0 || result.cachedTokens() < 0
-                    || result.cachedTokens() > result.inputTokens()) throw new ImportDraftValidator.InvalidDraft();
+                    || result.cachedTokens() > result.inputTokens()) throw new ModelFailure(true, Duration.ZERO);
             sessions.usage(session, result.inputTokens(), result.outputTokens(), result.cachedTokens(), clock.instant());
             metrics.usage(result.inputTokens(), result.outputTokens(), result.cachedTokens());
-            var draft = validator.parse(result.json(), source, session.catalog(), session.history());
+            var draft = validator.parse(result.json(), source, catalog, session.history());
             if (draft.needsClarification() && session.round() >= limits.clarificationRounds()) {
                 sessions.finish(session, "failed", draft, Map.of(), "clarification_limit",
                         "Достигнут лимит уточнений. Исправьте исходный текст и начните новый импорт.", 0, 0, 0, clock.instant());
@@ -127,11 +128,17 @@ public class ImportWorker {
             sessions.finish(session, outcome, draft, decisions, null, null, 0, 0, 0, clock.instant());
             metrics.outcome(session.sourceKind(), outcome, System.nanoTime() - started);
         } catch (ImportDraftValidator.InvalidDraft e) {
-            retryOrFail(session, true, Duration.ZERO);
+            retryOrFail(session, true, Duration.ZERO, e.repairHint());
         } catch (ModelFailure e) {
-            retryOrFail(session, e.retryable(), e.retryAfter());
+            if (e.truncated()) {
+                // Повтор того же запроса снова упрётся в лимит вывода: сразу сообщаем, как уменьшить источник.
+                sessions.usage(session, e.inputTokens(), e.outputTokens(), 0, clock.instant());
+                metrics.usage(e.inputTokens(), e.outputTokens(), 0);
+                fail(session, "input_too_large", TOO_LARGE);
+            } else retryOrFail(session, e.retryable(), e.retryAfter(), null);
         } catch (ImportFailure e) {
-            if (modelRequested) retryOrFail(session, true, Duration.ZERO);
+            if (modelRequested) retryOrFail(session, true, Duration.ZERO,
+                    "Предыдущий ответ отклонён сервером: " + e.getMessage() + " Проверь типы упражнений и значения подходов.");
             else fail(session, "invalid_source", e.getMessage());
         } catch (SheetImportService.InvalidSheet | SheetImportService.UnavailableSheet e) {
             fail(session, "sheet_unavailable", "Таблица недоступна. Проверьте ссылку или загрузите Excel.");
@@ -140,15 +147,25 @@ public class ImportWorker {
         }
     }
 
-    private void retryOrFail(ImportSession session, boolean retryable, Duration requested) {
+    /** repairHint == null — сбой транспорта: следующая попытка повторяет тот же запрос без подсказки. */
+    private void retryOrFail(ImportSession session, boolean retryable, Duration requested, String repairHint) {
         if (retryable && session.attempts() + 1 < limits.attemptsPerRound()) {
-            long delay = Math.max(1 + ThreadLocalRandom.current().nextLong(3), requested.toSeconds());
-            sessions.retry(session, clock.instant().plusSeconds(delay), clock.instant());
+            // Невалидный ответ не связан с перегрузкой провайдера: повторяем сразу, без паузы.
+            long delay = repairHint != null ? 0 : Math.max(1 + ThreadLocalRandom.current().nextLong(3), requested.toSeconds());
+            sessions.retry(session, clock.instant().plusSeconds(delay), clock.instant(), repairHint);
         } else fail(session, "model_unavailable", "Не удалось получить корректный разбор. Повторите импорт позже.");
     }
     private void fail(ImportSession session, String code, String message) {
         sessions.finish(session, "failed", session.output(), session.decisions(), code, message, 0, 0, 0, clock.instant());
         metrics.outcome(session.sourceKind(), code, 0);
+    }
+
+    /** Новое задание начинает обрабатываться сразу после commit транзакции, не дожидаясь следующего tick. */
+    @TransactionalEventListener(fallbackExecution = true)
+    public void onQueued(ImportQueued event) {
+        if (!limits.enabled() || !limits.workerEnabled()) return;
+        try { executor.submit(this::tick); }
+        catch (java.util.concurrent.RejectedExecutionException ignored) { /* приложение останавливается */ }
     }
 
     @Scheduled(fixedDelayString = "${sizylift.imports.cleanup-interval:1m}", initialDelayString = "1m")

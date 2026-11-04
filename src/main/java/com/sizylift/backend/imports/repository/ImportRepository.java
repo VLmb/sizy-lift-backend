@@ -60,13 +60,13 @@ public class ImportRepository {
             """;
     private static final String FINISH = """
             UPDATE sizylift.import_session SET status=?,version=version+1,model_output=?::jsonb,decisions=?::jsonb,
-                lease_token=NULL,lease_until=NULL,error_code=?,error_message=?,
+                lease_token=NULL,lease_until=NULL,error_code=?,error_message=?,repair_hint=NULL,
                 input_tokens=input_tokens+?,output_tokens=output_tokens+?,cached_tokens=cached_tokens+?
             WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
             """;
     private static final String RETRY = """
             UPDATE sizylift.import_session SET status='queued',version=version+1,lease_token=NULL,lease_until=NULL,
-                next_attempt_at=?,error_code='retrying',error_message='Повторяем обработку.'
+                next_attempt_at=?,error_code='retrying',error_message='Повторяем обработку.',repair_hint=?
             WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
             """;
     private static final String USAGE = """
@@ -75,7 +75,7 @@ public class ImportRepository {
             """;
     private static final String ANSWER = """
             UPDATE sizylift.import_session SET status='queued',version=version+1,round=round+1,attempts=0,
-                history=?::jsonb,error_code=NULL,error_message=NULL,next_attempt_at=? WHERE id=?
+                history=?::jsonb,error_code=NULL,error_message=NULL,repair_hint=NULL,next_attempt_at=? WHERE id=?
             """;
     private static final String PATCH = """
             UPDATE sizylift.import_session SET version=version+1,name=?,start_date=?,decisions=?::jsonb WHERE id=?
@@ -84,17 +84,17 @@ public class ImportRepository {
             UPDATE sizylift.import_session SET status='committed',version=version+1,program_revision=?,
                 source_text=NULL,source_bytes=NULL,source_name='',name='',normalized=NULL,catalog='[]',
                 model_output=NULL,decisions='{}',history='[]',lease_token=NULL,lease_until=NULL,
-                error_code=NULL,error_message=NULL WHERE id=?
+                error_code=NULL,error_message=NULL,repair_hint=NULL WHERE id=?
             """;
     private static final String CANCEL = """
             UPDATE sizylift.import_session SET status='cancelled',version=version+1,source_text=NULL,source_bytes=NULL,name='',source_name='',
                 normalized=NULL,catalog='[]',model_output=NULL,decisions='{}',history='[]',lease_token=NULL,
-                lease_until=NULL,error_code=NULL,error_message=NULL WHERE id=?
+                lease_until=NULL,error_code=NULL,error_message=NULL,repair_hint=NULL WHERE id=?
             """;
     private static final String EXPIRE = """
             UPDATE sizylift.import_session SET status='expired',version=version+1,source_text=NULL,source_bytes=NULL,
                 source_name='',name='',normalized=NULL,catalog='[]',model_output=NULL,decisions='{}',history='[]',
-                lease_token=NULL,lease_until=NULL,error_code=NULL,error_message=NULL
+                lease_token=NULL,lease_until=NULL,error_code=NULL,error_message=NULL,repair_hint=NULL
             WHERE expires_at <= ? AND status NOT IN ('committed','expired','cancelled')
             """;
     private static final String PURGE = """
@@ -149,8 +149,8 @@ public class ImportRepository {
         return jdbc.update(FINISH, status, json.writeValueAsString(output), json.writeValueAsString(decisions),
                 code, message, input, completion, cached, session.id(), session.leaseToken(), stamp(now)) == 1;
     }
-    public void retry(ImportSession session, Instant next, Instant now) {
-        jdbc.update(RETRY, stamp(next), session.id(), session.leaseToken(), stamp(now));
+    public void retry(ImportSession session, Instant next, Instant now, String repairHint) {
+        jdbc.update(RETRY, stamp(next), repairHint, session.id(), session.leaseToken(), stamp(now));
     }
     public void usage(ImportSession session, int input, int output, int cached, Instant now) {
         jdbc.update(USAGE, input, output, cached, session.id(), session.leaseToken(), stamp(now));
@@ -180,7 +180,7 @@ public class ImportRepository {
                 row.getInt("round"), row.getInt("attempts"), row.getLong("reserved_cost_micros"),
                 row.getLong("input_tokens"), row.getLong("output_tokens"), row.getLong("cached_tokens"),
                 row.getString("error_code"), row.getString("error_message"), row.getObject("lease_token", UUID.class),
-                row.getTimestamp("expires_at").toInstant());
+                row.getTimestamp("expires_at").toInstant(), row.getString("repair_hint"));
     }
     private <T> T read(ResultSet row, String field, Class<T> type) throws SQLException {
         var value = row.getString(field);

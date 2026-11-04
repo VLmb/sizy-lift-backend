@@ -8,9 +8,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 
 import com.sizylift.backend.CoachWorkspaceApiSupport;
-import com.sizylift.backend.imports.dto.ImportDraftV1;
 import com.sizylift.backend.imports.dto.ImportDtos.Commit;
 import com.sizylift.backend.imports.dto.ImportDtos.Receipt;
+import com.sizylift.backend.imports.model.DeepSeekProgramParser;
 import com.sizylift.backend.imports.model.ProgramParserModel;
 import com.sizylift.backend.imports.service.ImportCommitService;
 import com.sizylift.backend.imports.service.ImportService;
@@ -25,7 +25,6 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.ObjectNode;
 
 import static com.sizylift.backend.imports.ImportFixtures.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,7 +56,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void importsTextUsingTheCatalogAndSavesAProgramOnlyOnCommit() throws Exception {
-        when(parser.parse(any())).thenReturn(result(draft(matched("text:1"))));
+        when(parser.parse(any())).thenAnswer(reply(draft(matched("text:1"))));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         var user = userId(owner);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.program WHERE user_id=?", Integer.class, user)).isZero();
@@ -84,7 +83,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void clarificationReplaysTheOriginalSourceAndAllAnswersAndDeduplicatesTheAnswer() throws Exception {
-        when(parser.parse(any())).thenReturn(result(clarification("От какого веса считать снижение?")), result(draft(matched("text:1"))));
+        when(parser.parse(any())).thenAnswer(reply(clarification("От какого веса считать снижение?"), draft(matched("text:1"))));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         var first = view(owner, id);
@@ -102,39 +101,39 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(requests.get(1).catalog()).isEqualTo(requests.get(0).catalog());
         assertThat(requests.get(1).history()).hasSize(1);
         assertThat(requests.get(1).history().getFirst().answer()).isEqualTo("От первого рабочего подхода");
-        assertThat(requests.get(1).draft().needsClarification()).isTrue();
+        assertThat(requests.get(1).history().getFirst().question()).isEqualTo("От какого веса считать снижение?");
+        assertThat(DeepSeekProgramParser.render(requests.get(1))).contains("answer:1\tВопрос: От какого веса считать снижение?");
     }
 
     @Test
     void contextsOfTwoImportsForTheSameUserDoNotMix() throws Exception {
-        when(parser.parse(any())).thenReturn(result(clarification("Уточните первый источник")), result(clarification("Уточните второй источник")));
+        when(parser.parse(any())).thenAnswer(reply(clarification("Уточните первый источник"), clarification("Уточните второй источник")));
         var first = create(owner, TEXT, null, UUID.randomUUID());
         var second = create(owner, "Второй источник", null, UUID.randomUUID());
         worker.processOne(); worker.processOne();
         var firstView = view(owner, first);
         postJson(owner, BASE + "/" + first + "/clarifications", Map.of("requestId", UUID.randomUUID(),
                 "version", firstView.get("version").asLong(), "round", 0, "answer", "Ответ только для первого")).andExpect(status().isAccepted());
-        when(parser.parse(any())).thenAnswer(call -> {
+        doAnswer(call -> {
             var input = call.getArgument(0, ProgramParserModel.Input.class);
             assertThat(input.history()).hasSize(1);
             assertThat(input.source().items().getFirst().text()).isEqualTo(TEXT);
-            return result(draft(matched("text:1")));
-        });
+            return result(input, draft(matched("text:1")));
+        }).when(parser).parse(any());
         worker.processOne();
         assertThat(view(owner, second).get("clarificationMessage").asString()).isEqualTo("Уточните второй источник");
     }
 
     @Test
     void ambiguousExerciseCanBeChosenWithoutCallingTheModelAgain() throws Exception {
-        var ambiguous = new ImportDraftV1.Resolution("squat", "Присед", "ambiguous", "", List.of(SQUAT.toString()), "", "", List.of("text:1"));
-        when(parser.parse(any())).thenReturn(result(draft(ambiguous)));
+        when(parser.parse(any())).thenAnswer(reply(draft(ambiguous("text:1"))));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
         assertThat(view.get("canCommit").asBoolean()).isFalse();
         var chosen = body(call(owner, patch(BASE + "/" + id).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("version", view.get("version").asLong(), "decisions",
-                        List.of(Map.of("key", "squat", "kind", "existing", "exerciseId", SQUAT)))))).andExpect(status().isOk()));
+                        List.of(Map.of("key", "e1", "kind", "existing", "exerciseId", SQUAT)))))).andExpect(status().isOk()));
         assertThat(chosen.get("canCommit").asBoolean()).isTrue();
         verify(parser, times(1)).parse(any());
     }
@@ -145,11 +144,11 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         link(coach, owner);
         var athlete = userId(owner);
         var coachId = userId(coach);
-        when(parser.parse(any())).thenReturn(result(draft(custom("custom", "Альфа", "weight_reps"))));
+        when(parser.parse(any())).thenAnswer(reply(draft(custom("e1", "Альфа", "weight_reps"))));
         var id = create(coach, "Альфа 3×5 100 кг @8", athlete, UUID.randomUUID());
         worker.processOne();
         var view = view(coach, id);
-        var exerciseId = UUID.fromString(view.at("/decisions/custom/exerciseId").asString());
+        var exerciseId = UUID.fromString(view.at("/decisions/e1/exerciseId").asString());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE id=?", Integer.class, exerciseId)).isZero();
         var receipt = body(postJson(coach, BASE + "/" + id + "/commit", Map.of("version", view.get("version").asLong()))
                 .andExpect(status().isOk()));
@@ -163,10 +162,10 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void genuineIdCollisionRollsBackEarlierExercisesAndAllFeedEntries() throws Exception {
-        when(parser.parse(any())).thenReturn(result(draft(custom("one", "Альфа", "weight_reps"), custom("two", "Омега", "weight_reps"))));
+        when(parser.parse(any())).thenAnswer(reply(draft(custom("e1", "Альфа", "weight_reps"), custom("e2", "Омега", "weight_reps"))));
         var id = create(owner, "Альфа и Омега: 3×5 100 кг @8", null, UUID.randomUUID());
         worker.processOne();
-        var collision = List.of(ProgramDraftCompiler.id(id, "exercise:one"), ProgramDraftCompiler.id(id, "exercise:two"))
+        var collision = List.of(ProgramDraftCompiler.id(id, "exercise:e1"), ProgramDraftCompiler.id(id, "exercise:e2"))
                 .stream().sorted(com.sizylift.backend.access.service.AccessPolicy.LOCK_ORDER).toList().getLast();
         var stranger = newSubject();
         legacy(stranger, "exercise", collision, 1, fixture("exercise"));
@@ -182,7 +181,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void concurrentCommitsReturnTheSameProgram() throws Exception {
-        when(parser.parse(any())).thenReturn(result(draft(matched("text:1"))));
+        when(parser.parse(any())).thenAnswer(reply(draft(matched("text:1"))));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         long version = view(owner, id).get("version").asLong();
@@ -200,7 +199,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     void revocationAndForeignAccessCannotReadOrCommitAnImport() throws Exception {
         var coach = newSubject();
         var link = link(coach, owner);
-        when(parser.parse(any())).thenReturn(result(draft(matched("text:1"))));
+        when(parser.parse(any())).thenAnswer(reply(draft(matched("text:1"))));
         var id = create(coach, TEXT, userId(owner), UUID.randomUUID());
         worker.processOne();
         call(owner, get(BASE + "/" + id)).andExpect(status().isNotFound());
@@ -225,7 +224,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var user = userId(owner);
         when(parser.parse(any())).thenAnswer(call -> {
             imports.cancel(user, id);
-            return result(draft(matched("text:1")));
+            return result(call.getArgument(0, ProgramParserModel.Input.class), draft(matched("text:1")));
         });
         worker.processOne();
         var view = view(owner, id);
@@ -253,7 +252,40 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         jdbc.update("UPDATE sizylift.import_session SET next_attempt_at=now() WHERE id=?", id);
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("failed");
-        verify(parser, times(2)).parse(any());
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        verify(parser, times(2)).parse(captor.capture());
+        assertThat(captor.getAllValues().get(0).repairMessage()).isEmpty();
+        assertThat(captor.getAllValues().get(1).repairMessage()).contains("Схема");
+    }
+
+    @Test
+    void aTruncatedAnswerFailsAtOnceWithoutAPaidRepeat() throws Exception {
+        when(parser.parse(any())).thenThrow(com.sizylift.backend.imports.model.ModelFailure.truncated(5000, 32768));
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        worker.processOne();
+        var view = view(owner, id);
+        assertThat(view.get("status").asString()).isEqualTo("failed");
+        assertThat(view.at("/error/code").asString()).isEqualTo("input_too_large");
+        assertThat(view.get("outputTokens").asLong()).isEqualTo(32768);
+        assertThat(worker.processOne()).isFalse();
+        verify(parser, times(1)).parse(any());
+    }
+
+    @Test
+    void theRepairAttemptReceivesTheConcreteErrorsAndClarificationsResetThem() throws Exception {
+        var invalid = draft(matched("text:1"));
+        firstItem(invalid).put("sets", List.of("3x5 100kg"));
+        when(parser.parse(any())).thenAnswer(reply(invalid, draft(matched("text:1"))));
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        worker.processOne();
+        jdbc.update("UPDATE sizylift.import_session SET next_attempt_at=now() WHERE id=?", id);
+        worker.processOne();
+        assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        verify(parser, times(2)).parse(captor.capture());
+        assertThat(captor.getAllValues().get(1).repairMessage())
+                .contains("weeks[week=1].days[0].blocks[0].items[0].sets[0] «3x5 100kg»", "фрагмент «3x5»");
+        assertThat(jdbc.queryForObject("SELECT repair_hint FROM sizylift.import_session WHERE id=?", String.class, id)).isNull();
     }
 
     @Test
@@ -267,7 +299,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
                 .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt()
                         .jwt(token -> token.issuer(ISSUER).subject(owner).claim("email", owner + "@example.com"))))
                 .andExpect(status().isAccepted()));
-        when(parser.parse(any())).thenReturn(result(draft(matched("csv:1:1"))));
+        when(parser.parse(any())).thenAnswer(reply(draft(matched("csv:1:1"))));
         worker.processOne();
         var id = UUID.fromString(created.get("id").asString());
         assertThat(view(owner, id).get("canCommit").asBoolean()).isTrue();
@@ -275,10 +307,9 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void missingValuesAndRangesRemainUnknownAndRirIsPreservedAsANote() throws Exception {
-        var draft = (ObjectNode) json.valueToTree(draft(matched("text:1")));
-        var set = (ObjectNode) draft.at("/programDraft/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0");
-        set.put("repetitions", "8-12").put("weightKg", "").put("rpe", "").put("rir", "2");
-        when(parser.parse(any())).thenReturn(new ProgramParserModel.Result(draft.toString(), 100, 100, 0));
+        var draft = draft(matched("text:1"));
+        firstItem(draft).put("sets", List.of("n=3 r=8-12 rir=2 type=working"));
+        when(parser.parse(any())).thenAnswer(reply(draft));
         var id = create(owner, "Присед 3×8-12 RIR 2", null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
@@ -291,17 +322,16 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void ambiguousExerciseCanBecomeACustomExerciseWithAStableId() throws Exception {
-        var r = new ImportDraftV1.Resolution("squat", "Присед", "ambiguous", "", List.of(SQUAT.toString()), "", "", List.of("text:1"));
-        when(parser.parse(any())).thenReturn(result(draft(r)));
+        when(parser.parse(any())).thenAnswer(reply(draft(ambiguous("text:1"))));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         var before = view(owner, id);
         var chosen = body(call(owner, patch(BASE + "/" + id).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("version", before.get("version").asLong(), "decisions", List.of(
-                        Map.of("key", "squat", "kind", "new", "name", "Присед с паузой", "resultType", "weight_reps", "liftClass", "basic"))))))
+                        Map.of("key", "e1", "kind", "new", "name", "Присед с паузой", "resultType", "weight_reps", "liftClass", "basic"))))))
                 .andExpect(status().isOk()));
         assertThat(chosen.get("canCommit").asBoolean()).isTrue();
-        assertThat(chosen.at("/decisions/squat/exerciseId").asString()).isEqualTo(ProgramDraftCompiler.id(id, "exercise:squat").toString());
+        assertThat(chosen.at("/decisions/e1/exerciseId").asString()).isEqualTo(ProgramDraftCompiler.id(id, "exercise:e1").toString());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE user_id=?", Integer.class, userId(owner))).isZero();
         postJson(owner, BASE + "/" + id + "/commit", Map.of("version", chosen.get("version").asLong())).andExpect(status().isOk());
         verify(parser, times(1)).parse(any());
@@ -309,7 +339,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void excessiveClarificationStopsAndEachRoundContainsAllPreviousAnswers() throws Exception {
-        when(parser.parse(any())).thenReturn(result(clarification("Что означает запись?")));
+        when(parser.parse(any())).thenAnswer(reply(clarification("Что означает запись?")));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         for (int round = 0; round < 3; round++) {
@@ -349,15 +379,15 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void untrustedCatalogIdsAndInvalidNumericValuesAreRejected() throws Exception {
-        var invalid = (ObjectNode) json.valueToTree(draft(matched("text:1")));
-        ((ObjectNode) invalid.at("/exerciseResolutions/0")).put("exerciseId", UUID.randomUUID().toString());
-        when(parser.parse(any())).thenReturn(new ProgramParserModel.Result(invalid.toString(), 100, 100, 0));
+        var invalid = draft(matched("text:1"));
+        firstExercise(invalid).put("match", "c99999");
+        when(parser.parse(any())).thenAnswer(reply(invalid));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("queued");
-        var invented = (ObjectNode) json.valueToTree(draft(matched("text:1")));
-        ((ObjectNode) invented.at("/programDraft/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0")).put("weightKg", "-987");
-        when(parser.parse(any())).thenReturn(new ProgramParserModel.Result(invented.toString(), 100, 100, 0));
+        var invented = draft(matched("text:1"));
+        firstItem(invented).put("sets", List.of("n=3 r=5 kg=-987"));
+        doAnswer(reply(invented)).when(parser).parse(any());
         jdbc.update("UPDATE sizylift.import_session SET next_attempt_at=now() WHERE id=?", id);
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("failed");
@@ -379,7 +409,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var id = create(owner, TEXT, null, UUID.randomUUID());
         var old = transactions.execute(status -> sessions.claim(java.time.Instant.now(), limits).orElseThrow());
         jdbc.update("UPDATE sizylift.import_session SET lease_until=now()-interval '1 second' WHERE id=?", id);
-        when(parser.parse(any())).thenReturn(result(draft(matched("text:1"))));
+        when(parser.parse(any())).thenAnswer(reply(draft(matched("text:1"))));
         assertThat(worker.processOne()).isTrue();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
         assertThat(sessions.finish(old, "failed", null, Map.of(), "late", "late", 0, 0, 0, java.time.Instant.now())).isFalse();
@@ -388,7 +418,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void numbersWrittenAsWordsCanBeInterpretedByTheModel() throws Exception {
-        when(parser.parse(any())).thenReturn(result(draft(matched("text:1"))));
+        when(parser.parse(any())).thenAnswer(reply(draft(matched("text:1"))));
         var id = create(owner, "Присед: три подхода по пять повторений со ста килограммами, RPE восемь", null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
@@ -403,7 +433,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         when(parser.parse(any())).thenAnswer(call -> {
             entered.countDown();
             assertThat(release.await(15, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-            return result(draft(matched("text:1")));
+            return result(call.getArgument(0, ProgramParserModel.Input.class), draft(matched("text:1")));
         });
         for (int i = 0; i <= limits.concurrentRequests(); i++) create(newSubject(), TEXT, null, UUID.randomUUID());
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -449,18 +479,18 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
                         .jwt(token -> token.issuer(ISSUER).subject(owner).claim("email", owner + "@example.com"))))
                 .andExpect(status().isAccepted()));
         when(parser.parse(any())).thenAnswer(call -> {
-            var source = call.getArgument(0, ProgramParserModel.Input.class).source();
+            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            var source = input.source();
             assertThat(source.items()).containsExactly(
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0", "Неделя 1"),
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!A3", "Присед"),
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!B3", "3×5"),
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!C3", "100,5"),
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!D3", "75%"));
-            var output = (ObjectNode) json.valueToTree(draft(matched("sheet:0!A3")));
-            var set = (ObjectNode) output.at("/programDraft/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0");
-            set.put("weightKg", "100.5").put("percentOneRm", "75");
-            set.putArray("sourceRefs").add("sheet:0!B3").add("sheet:0!C3").add("sheet:0!D3");
-            return new ProgramParserModel.Result(json.writeValueAsString(output), 1000, 300, 0);
+            var output = draft(matched("sheet:0!A3"));
+            firstItem(output).put("refs", List.of("sheet:0!A3", "sheet:0!B3", "sheet:0!C3", "sheet:0!D3"));
+            firstItem(output).put("sets", List.of("n=3 r=5 kg=100.5 pct=75"));
+            return result(input, output);
         });
         var id = UUID.fromString(created.get("id").asString());
         worker.processOne();
@@ -491,7 +521,15 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     private JsonNode view(String subject, UUID id) throws Exception {
         return body(call(subject, get(BASE + "/" + id)).andExpect(status().isOk()));
     }
-    private ProgramParserModel.Result result(ImportDraftV1 draft) {
-        return new ProgramParserModel.Result(json.writeValueAsString(draft), 1000, 300, 100);
+    /** Ответы по очереди; последний повторяется. alias приседа берётся из каталога, переданного модели. */
+    @SafeVarargs
+    private org.mockito.stubbing.Answer<ProgramParserModel.Result> reply(Map<String, Object>... drafts) {
+        var queue = new java.util.ArrayDeque<>(List.of(drafts));
+        return call -> result(call.getArgument(0, ProgramParserModel.Input.class), queue.size() > 1 ? queue.poll() : queue.peek());
+    }
+    private ProgramParserModel.Result result(ProgramParserModel.Input input, Map<String, Object> draft) {
+        var alias = input.catalog().stream().filter(entry -> entry.id().equals(SQUAT)).findFirst().orElseThrow().alias();
+        var text = json.writeValueAsString(draft).replace("\"" + SQUAT_ALIAS + "\"", "\"" + alias + "\"");
+        return new ProgramParserModel.Result(text, 1000, 300, 100);
     }
 }

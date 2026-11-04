@@ -2,7 +2,10 @@ package com.sizylift.backend.imports.dto;
 
 import java.util.List;
 
-/** Ответ модели. Пустая строка числового поля означает неизвестное значение, а не ноль. */
+/**
+ * Черновик импорта в API и хранении; сервер строит его из компактного ответа модели ({@link ImportModelDraft}).
+ * Пустая строка числового поля означает неизвестное значение, а не ноль.
+ */
 public record ImportDraftV1(int schemaVersion, boolean needsClarification, String clarificationMessage,
                             Draft programDraft, List<Resolution> exerciseResolutions) {
     public record Draft(String name, String description, List<Cycle> cycles) { }

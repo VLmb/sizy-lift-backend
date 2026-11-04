@@ -20,6 +20,7 @@ import com.sizylift.backend.imports.entity.ImportSession.Clarification;
 import com.sizylift.backend.imports.repository.ImportRepository;
 import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.web.service.WebReadService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,11 +36,13 @@ public class ImportService {
     private final ProgramDraftCompiler compiler;
     private final ObjectMapper json;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public ImportService(ImportRepository sessions, ImportProperties limits, AccessPolicy access,
-                         WebReadService reads, ProgramDraftCompiler compiler, ObjectMapper json, Clock clock) {
+                         WebReadService reads, ProgramDraftCompiler compiler, ObjectMapper json, Clock clock,
+                         ApplicationEventPublisher events) {
         this.sessions = sessions; this.limits = limits; this.access = access; this.reads = reads;
-        this.compiler = compiler; this.json = json; this.clock = clock;
+        this.compiler = compiler; this.json = json; this.clock = clock; this.events = events;
     }
 
     @Transactional
@@ -63,6 +66,7 @@ public class ImportService {
             throw new ImportFailure(HttpStatus.TOO_MANY_REQUESTS, "import_limit", "Достигнут лимит импортов. Попробуйте позже.");
         var catalog = reads.catalog(user, owner).exercises();
         var session = sessions.create(user, owner, input, bytes, filename == null ? "" : safeFilename(filename), hash, catalog, now, limits);
+        events.publishEvent(new ImportQueued(session.id()));
         return new Created(session.id(), session.status(), session.version());
     }
 
@@ -85,6 +89,7 @@ public class ImportService {
         var history = new ArrayList<>(session.history());
         history.add(new Clarification(answer.requestId(), session.round(), session.output().clarificationMessage(), answer.answer().trim()));
         sessions.answer(id, history, clock.instant());
+        events.publishEvent(new ImportQueued(id));
         return view(sessions.find(id).orElseThrow());
     }
 
