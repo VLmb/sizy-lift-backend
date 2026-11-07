@@ -35,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {"sizylift.imports.enabled=true", "sizylift.imports.worker-enabled=false",
         "sizylift.imports.workouts-per-chunk=2",
+        "sizylift.web.allowed-origins=https://web.test,https://pwa.test",
         "sizylift.imports.deepseek.api-key=test-only", "sizylift.imports.deepseek.url=http://127.0.0.1"})
 @AutoConfigureMockMvc
 class ImportApiTest extends CoachWorkspaceApiSupport {
@@ -46,6 +47,9 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     @Autowired com.sizylift.backend.imports.repository.ImportRepository sessions;
     @Autowired com.sizylift.backend.imports.config.ImportProperties limits;
     @Autowired org.springframework.transaction.support.TransactionTemplate transactions;
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
+    org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping routes;
     String owner;
 
     @BeforeEach
@@ -53,6 +57,91 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         owner = newSubject();
         reset(parser);
         jdbc.update("DELETE FROM sizylift.import_session");
+    }
+
+    @Test
+    void allRegisteredApiRoutesAllowPwaPreflightAndKeepAuthentication() throws Exception {
+        var inventory = new java.util.TreeSet<String>();
+        for (var mapping : routes.getHandlerMethods().keySet()) {
+            for (var pattern : mapping.getPatternValues()) {
+                if (!pattern.startsWith("/api/")) continue;
+                var path = pattern.replaceAll("\\{[^}]+}", "00000000-0000-4000-8000-000000000001");
+                for (var method : mapping.getMethodsCondition().getMethods()) {
+                    inventory.add(method.name() + " " + path);
+                }
+            }
+        }
+        assertThat(inventory.size()).isGreaterThan(30);
+        for (var route : inventory) {
+            var parts = route.split(" ", 2);
+            for (var origin : List.of("https://web.test", "https://pwa.test")) {
+                mvc.perform(options(parts[1]).header("Origin", origin)
+                                .header("Access-Control-Request-Method", parts[0])
+                                .header("Access-Control-Request-Headers", "authorization,content-type"))
+                        .andExpect(status().isOk())
+                        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                                .string("Access-Control-Allow-Origin", origin));
+            }
+            mvc.perform(options(parts[1]).header("Origin", "https://untrusted.invalid")
+                            .header("Access-Control-Request-Method", parts[0]))
+                    .andExpect(status().isForbidden());
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .request(org.springframework.http.HttpMethod.valueOf(parts[0]), parts[1])
+                            .header("Origin", "https://pwa.test"))
+                    .andExpect(status().isUnauthorized());
+        }
+        java.nio.file.Files.writeString(java.nio.file.Path.of("build/pwa-api-routes.json"),
+                json.writeValueAsString(inventory));
+    }
+
+    @Test
+    void coachCanCreateListAndRevokeAnInviteFromPwaOrigin() throws Exception {
+        var coach = newSubject();
+        var origin = "https://pwa.test";
+        call(coach, put("/api/v2/coaching/coach-mode").header("Origin", origin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+                .andExpect(status().isOk());
+        var invite = body(call(coach, post("/api/v2/coaching/invites").header("Origin", origin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isCreated()));
+        assertThat(invite.get("token").asString()).matches("[A-Za-z0-9_-]{22}");
+        assertThat(invite.get("expiresAt").asString()).isNotBlank();
+        var list = body(call(coach, get("/api/v2/coaching/invites").header("Origin", origin))
+                .andExpect(status().isOk()));
+        assertThat(list.size()).isEqualTo(1);
+        call(coach, delete("/api/v2/coaching/invites/" + list.get(0).get("id").asString())
+                        .header("Origin", origin)).andExpect(status().isNoContent());
+    }
+
+    @Test
+    void acceptsBrowserImportsFromWebAndPwaButRejectsOtherOrigins() throws Exception {
+        var originHeader = org.springframework.http.HttpHeaders.ORIGIN;
+        var allowOrigin = org.springframework.http.HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN;
+        for (var origin : List.of("https://web.test", "https://pwa.test")) {
+            mvc.perform(options(BASE).header(originHeader, origin)
+                            .header("Access-Control-Request-Method", "POST")
+                            .header("Access-Control-Request-Headers", "authorization,content-type"))
+                    .andExpect(status().isOk())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(allowOrigin, origin));
+            var created = body(call(owner, post(BASE).header(originHeader, origin)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(input(TEXT, null, UUID.randomUUID()))))
+                    .andExpect(status().isAccepted())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(allowOrigin, origin)));
+            assertThat(created.get("id").asString()).isNotBlank();
+            assertThat(created.get("status").asString()).isEqualTo("queued");
+            assertThat(created.get("version").asLong()).isPositive();
+        }
+        var count = jdbc.queryForObject("SELECT count(*) FROM sizylift.import_session", Integer.class);
+        call(owner, post(BASE).header(originHeader, "https://untrusted.test")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(input(TEXT, null, UUID.randomUUID()))))
+                .andExpect(status().isForbidden());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.import_session", Integer.class)).isEqualTo(count);
+        mvc.perform(options(BASE).header(originHeader, "https://untrusted.test")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(parser);
     }
 
     @Test

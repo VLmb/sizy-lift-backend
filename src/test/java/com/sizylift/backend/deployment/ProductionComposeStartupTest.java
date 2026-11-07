@@ -36,6 +36,11 @@ class ProductionComposeStartupTest {
         verify(Map.of(ENABLED, "true", CLIENT, "local-config-test", SECRET, "local-config-test-only"), "true", true);
     }
 
+    @Test
+    void explicitOriginsReachProductionSpringConfiguration() throws Exception {
+        verify(Map.of("WEB_ALLOWED_ORIGINS", "https://web.test,https://pwa.test"), "false", false);
+    }
+
     private void verify(Map<String, String> optional, String expectedFlag, boolean available) throws Exception {
         var properties = new HashMap<String, String>();
         for (var line : Files.readAllLines(Path.of("deploy/.env.example"))) {
@@ -53,6 +58,7 @@ class ProductionComposeStartupTest {
                 "-f", "deploy/compose.prod.yaml", "config", "--format", "json");
         // Настройки машины разработчика не должны подменять тестовый env-файл.
         properties.keySet().forEach(process.environment()::remove);
+        process.environment().remove("WEB_ALLOWED_ORIGINS");
         process.environment().remove(ENABLED);
         process.environment().remove(CLIENT);
         process.environment().remove(SECRET);
@@ -67,9 +73,13 @@ class ProductionComposeStartupTest {
                 .withInitializer(new ConfigDataApplicationContextInitializer())
                 .withPropertyValues("spring.profiles.active=prod")
                 .withPropertyValues(spring)
-                .withUserConfiguration(KeycloakAccountDeletion.class)
+                .withUserConfiguration(KeycloakAccountDeletion.class,
+                        com.sizylift.backend.web.config.WebCorsConfiguration.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
+                    var origins = context.getBean(com.sizylift.backend.web.config.WebProperties.class).allowedOrigins();
+                    assertThat(origins).containsExactly(optional.getOrDefault("WEB_ALLOWED_ORIGINS",
+                            "https://" + properties.get("WEB_DOMAIN")).split(","));
                     if (available) context.getBean(KeycloakAccountDeletion.class).requireConfigured();
                     else assertThatThrownBy(context.getBean(KeycloakAccountDeletion.class)::requireConfigured)
                             .isInstanceOf(KeycloakAccountDeletion.Disabled.class);
