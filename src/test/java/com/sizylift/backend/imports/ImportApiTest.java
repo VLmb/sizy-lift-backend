@@ -35,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {"sizylift.imports.enabled=true", "sizylift.imports.worker-enabled=false",
         "sizylift.imports.workouts-per-chunk=2",
+        "sizylift.web.allowed-origins=https://web.test,https://pwa.test",
         "sizylift.imports.deepseek.api-key=test-only", "sizylift.imports.deepseek.url=http://127.0.0.1"})
 @AutoConfigureMockMvc
 class ImportApiTest extends CoachWorkspaceApiSupport {
@@ -53,6 +54,37 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         owner = newSubject();
         reset(parser);
         jdbc.update("DELETE FROM sizylift.import_session");
+    }
+
+    @Test
+    void acceptsBrowserImportsFromWebAndPwaButRejectsOtherOrigins() throws Exception {
+        var originHeader = org.springframework.http.HttpHeaders.ORIGIN;
+        var allowOrigin = org.springframework.http.HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN;
+        for (var origin : List.of("https://web.test", "https://pwa.test")) {
+            mvc.perform(options(BASE).header(originHeader, origin)
+                            .header("Access-Control-Request-Method", "POST")
+                            .header("Access-Control-Request-Headers", "authorization,content-type"))
+                    .andExpect(status().isOk())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(allowOrigin, origin));
+            var created = body(call(owner, post(BASE).header(originHeader, origin)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(input(TEXT, null, UUID.randomUUID()))))
+                    .andExpect(status().isAccepted())
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string(allowOrigin, origin)));
+            assertThat(created.get("id").asString()).isNotBlank();
+            assertThat(created.get("status").asString()).isEqualTo("queued");
+            assertThat(created.get("version").asLong()).isPositive();
+        }
+        var count = jdbc.queryForObject("SELECT count(*) FROM sizylift.import_session", Integer.class);
+        call(owner, post(BASE).header(originHeader, "https://untrusted.test")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(input(TEXT, null, UUID.randomUUID()))))
+                .andExpect(status().isForbidden());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.import_session", Integer.class)).isEqualTo(count);
+        mvc.perform(options(BASE).header(originHeader, "https://untrusted.test")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(parser);
     }
 
     @Test
