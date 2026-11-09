@@ -163,6 +163,12 @@ class WebApiTest extends PostgresIntegrationTest {
         var catalog = body(call(coach, get("/api/v2/web/catalog").param("ownerId", athleteId))
                 .andExpect(status().isOk()));
         assertThat(ids(catalog.get("exercises"))).contains(exerciseId.toString());
+        publish(owner, "workout", UUID.randomUUID(), 1, fixture("workout"));
+        var athleteUsage = body(call(coach, get("/api/v2/web/catalog").param("ownerId", athleteId))
+                .andExpect(status().isOk())).get("exerciseUsage");
+        assertThat(athleteUsage.size()).isPositive();
+        assertThat(body(call(coach, get("/api/v2/web/catalog")).andExpect(status().isOk()))
+                .get("exerciseUsage").size()).isZero();
         call(stranger, get("/api/v2/web/programs").param("ownerId", athleteId)).andExpect(status().isNotFound());
         call(stranger, get("/api/v2/web/catalog").param("ownerId", athleteId)).andExpect(status().isNotFound());
 
@@ -202,6 +208,33 @@ class WebApiTest extends PostgresIntegrationTest {
                 .andExpect(status().isBadRequest());
         call(stranger, get("/api/v2/web/exercises/" + CATALOG_SQUAT + "/history")
                 .param("ownerId", userId(owner).toString())).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void catalogUsageCountsWorkoutsOnceAndExcludesEmptyAndOtherOwners() throws Exception {
+        var workoutId = UUID.randomUUID();
+        publish(owner, "workout", workoutId, 1, fixture("workout"));
+        var usage = body(call(owner, get("/api/v2/web/catalog")).andExpect(status().isOk()))
+                .get("exerciseUsage");
+        assertThat(usage.size()).isPositive();
+        for (var day : usage) {
+            assertThat(day.get("workoutCount").asLong()).isEqualTo(1);
+            assertThat(day.get("date").asString()).isEqualTo("2026-10-14");
+        }
+        assertThat(body(call(stranger, get("/api/v2/web/catalog")).andExpect(status().isOk()))
+                .get("exerciseUsage").size()).isZero();
+        jdbc.update("""
+                UPDATE sizylift.workout_set SET weight_grams=NULL, repetitions=NULL, duration_ms=NULL,
+                    distance_m=NULL, rpe_tenths=NULL, average_heart_rate_bpm=NULL, maximum_heart_rate_bpm=NULL,
+                    power_watts=NULL, elevation_gain_m=NULL, note='   '
+                WHERE user_id=?
+                """, userId(owner));
+        assertThat(body(call(owner, get("/api/v2/web/catalog")).andExpect(status().isOk()))
+                .get("exerciseUsage").size()).isZero();
+        jdbc.update("UPDATE sizylift.workout_set SET repetitions=1, completion_status='pending' WHERE user_id=?",
+                userId(owner));
+        assertThat(body(call(owner, get("/api/v2/web/catalog")).andExpect(status().isOk()))
+                .get("exerciseUsage").size()).isZero();
     }
 
     @Test

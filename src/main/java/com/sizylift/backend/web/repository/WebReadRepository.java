@@ -16,6 +16,7 @@ import com.sizylift.backend.publication.entity.LiftClass;
 import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.web.dto.WebDtos.CatalogExercise;
 import com.sizylift.backend.web.dto.WebDtos.HistoryEntry;
+import com.sizylift.backend.web.dto.WebDtos.ExerciseUsageDay;
 import com.sizylift.backend.web.dto.WebDtos.HistorySet;
 import com.sizylift.backend.web.dto.WebDtos.MuscleRef;
 import com.sizylift.backend.web.dto.WebDtos.OneRepMax;
@@ -98,6 +99,24 @@ public class WebReadRepository {
             ORDER BY we.position, s.position
             """;
     private static final String COMPLETED = "completed";
+    private static final String SELECT_EXERCISE_USAGE = """
+            SELECT we.exercise_id, w.workout_date, count(DISTINCT w.id) AS workout_count
+            FROM sizylift.workout w
+            JOIN sizylift.workout_exercise we ON we.user_id = w.user_id AND we.workout_id = w.id
+            JOIN sizylift.workout_set s ON s.user_id = we.user_id AND s.workout_exercise_id = we.id
+            WHERE w.user_id = ? AND s.completion_status = ?
+              AND CASE s.result_type
+                  WHEN 'weight_reps' THEN s.weight_grams IS NOT NULL OR s.repetitions IS NOT NULL OR s.rpe_tenths IS NOT NULL
+                  WHEN 'added_weight_reps' THEN s.weight_grams IS NOT NULL OR s.repetitions IS NOT NULL OR s.rpe_tenths IS NOT NULL
+                  WHEN 'duration' THEN s.duration_ms IS NOT NULL OR s.rpe_tenths IS NOT NULL
+                  WHEN 'distance_time' THEN s.duration_ms IS NOT NULL OR s.distance_m IS NOT NULL
+                      OR s.average_heart_rate_bpm IS NOT NULL OR s.maximum_heart_rate_bpm IS NOT NULL
+                      OR s.power_watts IS NOT NULL OR s.elevation_gain_m IS NOT NULL
+                  WHEN 'free' THEN NULLIF(btrim(s.note), '') IS NOT NULL
+                  ELSE false END
+            GROUP BY we.exercise_id, w.workout_date
+            ORDER BY we.exercise_id, w.workout_date
+            """;
 
     private final JdbcTemplate jdbc;
 
@@ -107,6 +126,13 @@ public class WebReadRepository {
 
     public List<Reference> categories() {
         return jdbc.query(SELECT_CATEGORIES, WebReadRepository::reference);
+    }
+
+    /** Одна тренировка учитывается один раз независимо от числа подходов и повторов упражнения. */
+    public List<ExerciseUsageDay> exerciseUsage(UUID owner) {
+        return jdbc.query(SELECT_EXERCISE_USAGE, (row, n) -> new ExerciseUsageDay(
+                uuid(row, "exercise_id"), row.getObject("workout_date", LocalDate.class),
+                row.getLong("workout_count")), owner, COMPLETED);
     }
 
     public List<Reference> equipment() {
