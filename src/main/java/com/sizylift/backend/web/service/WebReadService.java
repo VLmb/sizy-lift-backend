@@ -64,7 +64,7 @@ public class WebReadService {
     public CatalogResponse catalog(UUID caller, UUID owner) {
         var target = readable(caller, owner, AggregateType.EXERCISE);
         return new CatalogResponse(repository.categories(), repository.equipment(), repository.muscles(),
-                repository.exercises(caller, target));
+                repository.exercises(caller, target), repository.exerciseUsage(target));
     }
 
     @Transactional(readOnly = true)

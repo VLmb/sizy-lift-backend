@@ -35,7 +35,10 @@ public final class WebDtos {
     }
 
     public record CatalogResponse(List<Reference> categories, List<Reference> equipment, List<Reference> muscles,
-                                  List<CatalogExercise> exercises) {
+                                  List<CatalogExercise> exercises, List<ExerciseUsageDay> exerciseUsage) {
+    }
+
+    public record ExerciseUsageDay(UUID exerciseId, LocalDate date, long workoutCount) {
     }
 
     /** Строка списка программ; {@code authorId} — тренер, если программу пишет он, иначе {@code null}. */
