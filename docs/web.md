@@ -68,7 +68,8 @@
                   "updatedAt": "…", "revision": 1017, "authorId": null, "changedAt": "…" } ] }
 ```
 
-Удалённые программы не попадают. `authorId` — тренер, если программу пишет он. Порядок — по `updatedAt`, новые сначала.
+Удалённые программы не попадают. `authorId` — тренер, если программу пишет он. `sourceProgramId` — программа
+тренера, из которой сделана копия ([coach-workspace.md](coach-workspace.md), раздел 8), иначе `null`. Порядок — по `updatedAt`, новые сначала.
 
 ### `GET /api/v2/web/programs/{id}?ownerId=`
 
@@ -129,6 +130,11 @@
 
 `before` обязателен; `exerciseId` — от 1 до 50 (иначе `400`). Права — как у чтения тренировок, без права `404`.
 Проверки — `LastSetsApiTest`.
+
+### `POST /api/v2/web/programs/assign`
+
+Копии-черновики программы нескольким подопечным одной транзакцией (CR-13,
+[coach-workspace.md](coach-workspace.md), раздел 8).
 
 ### `GET /api/v2/web/max-candidates?ownerId=&from=YYYY-MM-DD`
 

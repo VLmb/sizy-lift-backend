@@ -129,7 +129,8 @@ class CoachExerciseAdoption {
                         cycle.name(), cycle.position(), cycle.weeks().stream().map(week -> new ProgramPayloadV1.Week(
                                 week.id(), week.number(), week.name(), week.startDate(), week.endDate(),
                                 week.position(), week.workouts().stream()
-                                .map(workout -> rewrite(workout, copies)).toList())).toList())).toList());
+                                .map(workout -> rewrite(workout, copies)).toList())).toList())).toList(),
+                program.sourceProgramId());
     }
 
     private static ProgramPayloadV1.PlannedWorkout rewrite(ProgramPayloadV1.PlannedWorkout workout,

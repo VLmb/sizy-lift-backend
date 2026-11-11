@@ -66,12 +66,12 @@ class SyncChangesApiTest extends PostgresIntegrationTest {
             "contraindication", ContraindicationPayloadV1.class);
     /**
      * Необязательные поля, которые сервер уже отдаёт, а общие фикстуры приложения ещё не содержат
-     * (docs/coach-workspace.md, разделы 1–2).
+     * (docs/coach-workspace.md, разделы 1–2 и 8).
      */
     static final Map<String, List<String>> SERVER_ADDED_FIELDS = Map.of(
             "exercise", List.of("liftClass"),
             "program", List.of("cycles.[].weeks.[].workouts.[].blocks.[].exercises.[].sets.[]."
-                    + "targetPercentOneRmTenths"));
+                    + "targetPercentOneRmTenths", "sourceProgramId"));
 
     @Autowired
     MockMvc mvc;

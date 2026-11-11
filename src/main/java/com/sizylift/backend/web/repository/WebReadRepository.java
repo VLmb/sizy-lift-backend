@@ -58,7 +58,7 @@ public class WebReadRepository {
             ORDER BY q.equipment_id
             """.formatted(VISIBLE_EXERCISES);
     private static final String SELECT_PROGRAMS = """
-            SELECT p.id, p.name, p.description, p.start_date, p.status, p.updated_at,
+            SELECT p.id, p.name, p.description, p.start_date, p.status, p.updated_at, p.source_program_id,
                    a.revision, a.author_user_id, a.changed_at,
                    (SELECT max(w.end_date) FROM sizylift.training_week w
                     WHERE w.user_id = p.user_id AND w.program_id = p.id) AS end_date,
@@ -240,7 +240,8 @@ public class WebReadRepository {
         return new ProgramSummary(uuid(row, "id"), row.getString("name"), row.getString("description"),
                 row.getObject("start_date", LocalDate.class), row.getObject("end_date", LocalDate.class),
                 row.getString("status"), row.getInt("weeks"), row.getInt("workouts"), instant(row, "updated_at"),
-                row.getLong("revision"), uuid(row, "author_user_id"), instant(row, "changed_at"));
+                row.getLong("revision"), uuid(row, "author_user_id"), instant(row, "changed_at"),
+                uuid(row, "source_program_id"));
     }
 
     private static HistorySet historySet(ResultSet row) throws SQLException {

@@ -114,6 +114,9 @@
   `is_sbd` удалена.
 - `program`: необязательное `targetPercentOneRmTenths` в подходе (`1..1500`, `725` = 72,5 %), колонка
   `planned_set.target_percent_one_rm_tenths`. Вес по проценту сервер не пересчитывает.
+- `program`: необязательное `sourceProgramId` в корне — программа тренера, из которой сделана копия у подопечного
+  (назначение шаблона и приглашение с программой, [coach-workspace.md](coach-workspace.md), раздел 8). Колонка
+  `program.source_program_id`; без поля — `null`. По нему веб показывает «эта программа у него уже есть».
 - `program` (и разовая тренировка, ADR-0011): `targetRpeAuto` в подходе — RPE посчитан клиентом из веса,
   повторов и e1RM (`true`) или введён вручную (`false`). Без поля — `false`, в ленте поле есть всегда.
   Колонка `planned_set.target_rpe_auto`. Сервер RPE не считает. Фикстура `program.v1.json` содержит
