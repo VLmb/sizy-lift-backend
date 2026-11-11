@@ -22,7 +22,17 @@ public record ProgramPayloadV1(
         LocalDate startDate,
         @NotNull @Pattern(regexp = PROGRAM_STATUS) String status,
         @NotNull Instant updatedAt,
-        @NotNull @Size(max = MAX_CYCLES) List<@NotNull @Valid Cycle> cycles) implements PayloadV1 {
+        @NotNull @Size(max = MAX_CYCLES) List<@NotNull @Valid Cycle> cycles,
+        UUID sourceProgramId) implements PayloadV1 {
+
+    /**
+     * Без {@code sourceProgramId}. Само поле — необязательная программа тренера, из которой сделана копия у
+     * подопечного (CR-13, docs/coach-workspace.md, раздел 8); по нему клиент узнаёт «эта программа у него уже есть».
+     */
+    public ProgramPayloadV1(String name, String description, LocalDate startDate, String status, Instant updatedAt,
+                            List<Cycle> cycles) {
+        this(name, description, startDate, status, updatedAt, cycles, null);
+    }
 
     public record Cycle(
             @NotNull UUID id,

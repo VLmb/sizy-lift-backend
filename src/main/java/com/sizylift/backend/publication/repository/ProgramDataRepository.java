@@ -31,8 +31,9 @@ import static com.sizylift.backend.publication.repository.Sql.uuid;
 public class ProgramDataRepository {
 
     private static final String INSERT_PROGRAM = """
-            INSERT INTO sizylift.program (user_id, id, name, description, start_date, status, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO sizylift.program (user_id, id, name, description, start_date, status, updated_at,
+                                          source_program_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String INSERT_CYCLE = """
             INSERT INTO sizylift.program_cycle (user_id, id, program_id, name, position) VALUES (?, ?, ?, ?, ?)
@@ -65,7 +66,7 @@ public class ProgramDataRepository {
             """;
 
     private static final String SELECT_PROGRAM = """
-            SELECT name, description, start_date, status, updated_at
+            SELECT name, description, start_date, status, updated_at, source_program_id
             FROM sizylift.program WHERE user_id = ? AND id = ?
             """;
     private static final String SELECT_CYCLES = """
@@ -102,7 +103,7 @@ public class ProgramDataRepository {
 
     public void insert(UUID userId, UUID programId, ProgramPayloadV1 program) {
         jdbc.update(INSERT_PROGRAM, userId, programId, program.name(), program.description(), program.startDate(),
-                program.status(), timestamp(program.updatedAt()));
+                program.status(), timestamp(program.updatedAt()), program.sourceProgramId());
         Sql.batch(jdbc, INSERT_CYCLE, cycleRows(userId, programId, program));
         Sql.batch(jdbc, INSERT_WEEK, weekRows(userId, programId, program));
         Sql.batch(jdbc, INSERT_WORKOUT, workoutRows(userId, programId, program));
@@ -123,7 +124,8 @@ public class ProgramDataRepository {
         var cycles = jdbc.query(SELECT_CYCLES, (row, n) -> cycle(row, weeks), userId, programId);
         return Sql.first(jdbc.query(SELECT_PROGRAM, (row, n) -> new ProgramPayloadV1(row.getString("name"),
                 row.getString("description"), date(row, "start_date"), row.getString("status"),
-                instant(row, "updated_at"), cycles), userId, programId));
+                instant(row, "updated_at"), cycles, row.getObject("source_program_id", UUID.class)), userId,
+                programId));
     }
 
     public void delete(UUID userId, UUID programId) {

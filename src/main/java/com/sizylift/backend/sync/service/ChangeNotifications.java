@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.sizylift.backend.access.service.AccessPolicy;
+import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.notifications.entity.NotificationKind;
 import com.sizylift.backend.notifications.service.NotificationQueue;
 import com.sizylift.backend.publication.service.AggregateChange;
@@ -22,11 +23,15 @@ import org.springframework.stereotype.Component;
 class ChangeNotifications {
 
     private final AccessPolicy access;
-    private final NotificationQueue queue;
+    private static final String DRAFT = "draft";
 
-    ChangeNotifications(AccessPolicy access, NotificationQueue queue) {
+    private final NotificationQueue queue;
+    private final BetweenDataRepository between;
+
+    ChangeNotifications(AccessPolicy access, NotificationQueue queue, BetweenDataRepository between) {
         this.access = access;
         this.queue = queue;
+        this.between = between;
     }
 
     void onChange(AggregateChange change) {
@@ -35,7 +40,9 @@ class ChangeNotifications {
         }
         switch (change.type()) {
             case AggregateType.PROGRAM -> {
-                if (!change.byOwner()) {
+                // Черновик тренера тихий (docs/coach-workspace.md, раздел 8): подопечный узнаёт о программе,
+                // когда тренер делает её активной.
+                if (!change.byOwner() && !draft(change)) {
                     notifyOwner(change, NotificationKind.PROGRAM_UPDATED);
                 }
             }
@@ -63,6 +70,10 @@ class ChangeNotifications {
             default -> {
             }
         }
+    }
+
+    private boolean draft(AggregateChange change) {
+        return between.programStatus(change.ownerId(), change.aggregateId()).filter(DRAFT::equals).isPresent();
     }
 
     private void notifyOwner(AggregateChange change, NotificationKind kind) {

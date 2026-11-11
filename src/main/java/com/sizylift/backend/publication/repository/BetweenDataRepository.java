@@ -54,6 +54,9 @@ public class BetweenDataRepository {
     private static final String COMMENTS_OF_WORKOUT =
             "SELECT id FROM sizylift.workout_comment WHERE user_id = ? AND workout_id = ?";
 
+    private static final String PROGRAM_STATUS =
+            "SELECT status FROM sizylift.program WHERE user_id = ? AND id = ?";
+
     private final JdbcTemplate jdbc;
 
     public BetweenDataRepository(JdbcTemplate jdbc) {
@@ -91,6 +94,11 @@ public class BetweenDataRepository {
     public Optional<LocalDate> plannedWorkoutDate(UUID userId, UUID programId, UUID plannedWorkoutId) {
         return first(jdbc.query(PLANNED_WORKOUT_DATE, (row, n) -> date(row, "workout_date"), userId, programId,
                 plannedWorkoutId));
+    }
+
+    /** Статус программы владельца; нет программы — пусто. */
+    public Optional<String> programStatus(UUID userId, UUID programId) {
+        return first(jdbc.query(PROGRAM_STATUS, (row, n) -> row.getString("status"), userId, programId));
     }
 
     public void insertComment(UUID userId, UUID commentId, WorkoutCommentPayloadV1 comment) {
