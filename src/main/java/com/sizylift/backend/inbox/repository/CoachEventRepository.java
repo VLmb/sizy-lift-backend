@@ -47,6 +47,25 @@ public class CoachEventRepository {
             ON CONFLICT (link_id, dedup_key) DO UPDATE
                 SET occurred_at = excluded.occurred_at, subject_date = excluded.subject_date, seen_at = NULL
             """;
+    /**
+     * Комментарий подопечного к своей тренировке вне завершения. Предмет события — тренировка: её открытие
+     * отмечает событие просмотренным. Без опубликованной тренировки события нет.
+     */
+    private static final String INSERT_COMMENT_ADDED = """
+            INSERT INTO sizylift.coach_event (link_id, kind, subject_id, subject_date, comment_id, occurred_at,
+                                              dedup_key)
+            SELECT l.id, 'comment_added', w.id, w.workout_date, c.id, ?, 'comment_added' || ? || c.id
+            FROM sizylift.coaching_link l
+            JOIN sizylift.workout_comment c ON c.user_id = l.athlete_user_id AND c.id = ? AND NOT c.at_completion
+            JOIN sizylift.workout w ON w.user_id = c.user_id AND w.id = c.workout_id
+            WHERE l.athlete_user_id = ? AND l.ended_at IS NULL
+            ON CONFLICT (link_id, dedup_key) DO NOTHING
+            """;
+    private static final String DELETE_BY_COMMENT = """
+            DELETE FROM sizylift.coach_event e
+            USING sizylift.coaching_link l
+            WHERE l.id = e.link_id AND l.athlete_user_id = ? AND e.kind = 'comment_added' AND e.comment_id = ?
+            """;
     private static final String DELETE_BY_SUBJECT = """
             DELETE FROM sizylift.coach_event e
             USING sizylift.coaching_link l
@@ -122,9 +141,13 @@ public class CoachEventRepository {
     private static final String FEED = """
             SELECT e.id, l.athlete_user_id, ap.display_name, e.kind, e.subject_id, e.subject_date,
                    e.occurred_at, e.seen_at,
+                   (SELECT c.text FROM sizylift.workout_comment c
+                    WHERE c.user_id = l.athlete_user_id AND c.id = e.comment_id) AS comment_text,
                    CASE e.kind
                        WHEN 'workout_completed' THEN (SELECT w.title FROM sizylift.workout w
                                                       WHERE w.user_id = l.athlete_user_id AND w.id = e.subject_id)
+                       WHEN 'comment_added' THEN (SELECT w.title FROM sizylift.workout w
+                                                  WHERE w.user_id = l.athlete_user_id AND w.id = e.subject_id)
                        WHEN 'program_ending' THEN (SELECT p.name FROM sizylift.program p
                                                    WHERE p.user_id = l.athlete_user_id AND p.id = e.subject_id)
                        WHEN 'invite_accepted' THEN NULL
@@ -167,8 +190,10 @@ public class CoachEventRepository {
         this.jdbc = jdbc;
     }
 
+    /** {@code comment} — текст комментария события {@code comment_added}. */
     public record EventRow(UUID id, UUID athleteId, String athleteName, CoachEventKind kind, UUID subjectId,
-                           LocalDate subjectDate, String title, Instant occurredAt, Instant seenAt) {
+                           LocalDate subjectDate, String title, Instant occurredAt, Instant seenAt,
+                           String comment) {
     }
 
     /** Фильтры ленты; {@code null} — без ограничения. {@code beforeId} разводит события с одинаковым временем. */
@@ -188,6 +213,15 @@ public class CoachEventRepository {
     public void workoutRescheduled(UUID athleteId, UUID plannedWorkoutId, Instant occurredAt) {
         jdbc.update(UPSERT_WORKOUT_RESCHEDULED, Timestamp.from(occurredAt), KEY_SEPARATOR, plannedWorkoutId,
                 athleteId);
+    }
+
+    public void commentAdded(UUID athleteId, UUID commentId, Instant occurredAt) {
+        jdbc.update(INSERT_COMMENT_ADDED, Timestamp.from(occurredAt), KEY_SEPARATOR, commentId, athleteId);
+    }
+
+    /** Удаляет событие комментария, просмотренное тоже. */
+    public void deleteByComment(UUID athleteId, UUID commentId) {
+        jdbc.update(DELETE_BY_COMMENT, athleteId, commentId);
     }
 
     /** Удаляет события подопечного этого типа по объекту, просмотренные тоже. */
@@ -236,7 +270,8 @@ public class CoachEventRepository {
         return new EventRow(row.getObject("id", UUID.class), row.getObject("athlete_user_id", UUID.class),
                 row.getString("display_name"), CoachEventKind.fromCode(row.getString("kind")),
                 row.getObject("subject_id", UUID.class), row.getObject("subject_date", LocalDate.class),
-                row.getString("title"), instant(row, "occurred_at"), instant(row, "seen_at"));
+                row.getString("title"), instant(row, "occurred_at"), instant(row, "seen_at"),
+                row.getString("comment_text"));
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {

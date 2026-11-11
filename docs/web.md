@@ -113,6 +113,23 @@
                              "distanceM": null, "rpeTenths": 80 } ] } ] }
 ```
 
+### `GET /api/v2/web/last-sets?ownerId=&before=YYYY-MM-DD&exerciseId=…&exerciseId=…`
+
+Колонка «Прошлый раз» редактора программы (`sizy-lift-app/docs/product/coach-rework-2026-11.md`, CR-07): для
+каждого упражнения — последняя завершённая тренировка владельца с ним строго раньше `before` и все подходы
+упражнения в ней по порядку (блоки, упражнения, подходы), с `completionStatus`, чтобы клиент показал
+«не сделан». Упражнения без такого факта в ответ не попадают.
+
+```json
+{ "ownerId": "…", "before": "2026-11-13",
+  "entries": [ { "exerciseId": "…", "workoutId": "…", "workoutDate": "2026-11-06",
+                 "sets": [ { "setType": "working", "completionStatus": "completed", "weightGrams": 135000,
+                             "repetitions": 5, "durationMs": null, "distanceM": null, "rpeTenths": 75 } ] } ] }
+```
+
+`before` обязателен; `exerciseId` — от 1 до 50 (иначе `400`). Права — как у чтения тренировок, без права `404`.
+Проверки — `LastSetsApiTest`.
+
 ### `GET /api/v2/web/max-candidates?ownerId=&from=YYYY-MM-DD`
 
 Выполненные подходы для расчётного ПМ ([coach-workspace.md](coach-workspace.md), раздел 3): упражнения классов
@@ -176,7 +193,8 @@ Realm импортируется только при первом старте K
   в одном снимке REPEATABLE READ. Если старые клиенты создали несколько идентификаторов синглтона,
   для редактирования возвращается наиболее поздняя ревизия.
 - `GET /api/v2/web/athletes` — только активные подопечные вызывающего тренера: linkId, athleteId,
-  name, workoutDate, workoutTitle, activityAt, unseen (счётчики непросмотренных событий
+  name, workoutId, workoutDate, workoutTitle, workoutFacts и planUntil
+  ([coach-workspace.md](coach-workspace.md), раздел 7), activityAt, unseen (счётчики непросмотренных событий
   «Входящих» по типам), oldestUnseenAt, openTasks, overdueTasks. Порядок: сначала подопечные
   с непросмотренными событиями по oldestUnseenAt по возрастанию, затем остальные по activityAt по убыванию.
   Прежние `hasNew` и `POST /api/v2/web/athletes/{linkId}/seen` удалены 29.10.2026 (changeset `024`): их заменили

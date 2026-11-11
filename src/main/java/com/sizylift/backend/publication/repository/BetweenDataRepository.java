@@ -43,12 +43,13 @@ public class BetweenDataRepository {
             SELECT workout_date FROM sizylift.planned_workout WHERE user_id = ? AND program_id = ? AND id = ?
             """;
     private static final String INSERT_COMMENT = """
-            INSERT INTO sizylift.workout_comment (user_id, id, workout_id, text, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO sizylift.workout_comment (user_id, id, workout_id, text, created_at, updated_at, at_completion)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String DELETE_COMMENT = "DELETE FROM sizylift.workout_comment WHERE user_id = ? AND id = ?";
     private static final String SELECT_COMMENT = """
-            SELECT workout_id, text, created_at, updated_at FROM sizylift.workout_comment WHERE user_id = ? AND id = ?
+            SELECT workout_id, text, created_at, updated_at, at_completion FROM sizylift.workout_comment
+            WHERE user_id = ? AND id = ?
             """;
     private static final String COMMENTS_OF_WORKOUT =
             "SELECT id FROM sizylift.workout_comment WHERE user_id = ? AND workout_id = ?";
@@ -94,7 +95,7 @@ public class BetweenDataRepository {
 
     public void insertComment(UUID userId, UUID commentId, WorkoutCommentPayloadV1 comment) {
         jdbc.update(INSERT_COMMENT, userId, commentId, comment.workoutId(), comment.text(),
-                timestamp(comment.createdAt()), timestamp(comment.updatedAt()));
+                timestamp(comment.createdAt()), timestamp(comment.updatedAt()), comment.writtenAtCompletion());
     }
 
     public void deleteComment(UUID userId, UUID commentId) {
@@ -103,7 +104,8 @@ public class BetweenDataRepository {
 
     public Optional<WorkoutCommentPayloadV1> findComment(UUID userId, UUID commentId) {
         return first(jdbc.query(SELECT_COMMENT, (row, n) -> new WorkoutCommentPayloadV1(uuid(row, "workout_id"),
-                row.getString("text"), instant(row, "created_at"), instant(row, "updated_at")), userId, commentId));
+                row.getString("text"), instant(row, "created_at"), instant(row, "updated_at"),
+                row.getBoolean("at_completion") ? Boolean.TRUE : null), userId, commentId));
     }
 
     public List<UUID> commentsOf(UUID userId, UUID workoutId) {

@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>новая тренировка подопечного — {@code workout_completed}; её удаление убирает событие;</li>
  *   <li>перенос подопечного — {@code workout_rescheduled}; отмена переноса убирает событие;</li>
+ *   <li>новый комментарий подопечного к своей тренировке не при завершении — {@code comment_added}; удаление
+ *       комментария или тренировки убирает событие;</li>
  *   <li>любая запись программы (и тренером, и сервером) убирает пропуски по исчезнувшим плановым тренировкам,
  *       удаление программы — ещё и её {@code program_ending}.</li>
  * </ul>
@@ -43,6 +45,7 @@ public class CoachInboxRecorder {
             case AggregateType.WORKOUT -> onWorkout(change);
             case AggregateType.WORKOUT_RESCHEDULE -> onReschedule(change);
             case AggregateType.PROGRAM -> onProgram(change);
+            case AggregateType.WORKOUT_COMMENT -> onComment(change);
             // Удалённая разовая тренировка (ADR-0011) — пропуск не о чем показывать.
             case AggregateType.STANDALONE_WORKOUT -> {
                 if (change.deleted()) {
@@ -57,8 +60,18 @@ public class CoachInboxRecorder {
     private void onWorkout(AggregateChange change) {
         if (change.deleted()) {
             events.deleteBySubject(change.ownerId(), CoachEventKind.WORKOUT_COMPLETED, change.aggregateId());
+            events.deleteBySubject(change.ownerId(), CoachEventKind.COMMENT_ADDED, change.aggregateId());
         } else if (change.byOwner() && change.created()) {
             events.workoutCompleted(change.ownerId(), change.aggregateId(), calendar.now());
+        }
+    }
+
+    /** Комментарии тренера событий не дают: у них автор не владелец. */
+    private void onComment(AggregateChange change) {
+        if (change.deleted()) {
+            events.deleteByComment(change.ownerId(), change.aggregateId());
+        } else if (change.byOwner() && change.created()) {
+            events.commentAdded(change.ownerId(), change.aggregateId(), calendar.now());
         }
     }
 

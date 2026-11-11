@@ -6,7 +6,8 @@ public enum CoachEventKind {
     WORKOUT_RESCHEDULED("workout_rescheduled"),
     WORKOUT_MISSED("workout_missed"),
     PROGRAM_ENDING("program_ending"),
-    INVITE_ACCEPTED("invite_accepted");
+    INVITE_ACCEPTED("invite_accepted"),
+    COMMENT_ADDED("comment_added");
 
     private final String code;
 
