@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.imports.entity.ImportLanguage;
 import com.sizylift.backend.publication.entity.LiftClass;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
@@ -18,7 +19,13 @@ public final class ImportDtos {
 
     public record Create(@NotNull UUID requestId, UUID ownerId, @NotBlank String source,
                          @Size(max = 200_000) String text, @Size(max = 500) String url,
-                         @Size(max = NAME_CHARS) String name, @NotNull LocalDate startDate) { }
+                         @Size(max = NAME_CHARS) String name, @NotNull LocalDate startDate,
+                         @Pattern(regexp = "ru|en") String language) {
+        public Create(UUID requestId, UUID ownerId, String source, String text, String url, String name, LocalDate startDate) {
+            this(requestId, ownerId, source, text, url, name, startDate, null);
+        }
+        public String uiLanguage() { return ImportLanguage.of(language).code(); }
+    }
     public record Answer(@NotNull UUID requestId, @Min(1) long version, @Min(0) int round,
                          @NotBlank @Size(max = NOTE_CHARS) String answer) { }
     public record Patch(@Min(1) long version, @Size(max = NAME_CHARS) String name, LocalDate startDate,

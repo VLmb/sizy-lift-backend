@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import com.sizylift.backend.imports.dto.ImportDraftV1;
 import com.sizylift.backend.imports.dto.ImportDtos.Decision;
 import com.sizylift.backend.imports.entity.ImportSession;
+import com.sizylift.backend.imports.entity.ImportLanguage;
 import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.entity.LiftClass;
@@ -63,7 +64,8 @@ public class ProgramDraftCompiler {
             if (decision == null) throw ImportFailure.invalid("Выберите упражнение: " + r.originalName());
             exercises.put(r.key(), resolve(session.id(), decision, catalog, created, at));
         }
-        var context = new Compilation(session.id(), session.startDate(), exercises, warnings);
+        var context = new Compilation(session.id(), session.startDate(), exercises, warnings,
+                ImportLanguage.of(session.normalized() == null ? null : session.normalized().language()));
         var cycles = new ArrayList<ProgramPayloadV1.Cycle>();
         for (var cycle : session.output().programDraft().cycles()) cycles.add(cycle(context, cycle, cycles.size()));
         var program = new ProgramPayloadV1(session.name(), nullable(session.output().programDraft().description()),
@@ -75,7 +77,7 @@ public class ProgramDraftCompiler {
     private ProgramPayloadV1.Cycle cycle(Compilation context, ImportDraftV1.Cycle source, int position) {
         var weeks = new ArrayList<ProgramPayloadV1.Week>();
         for (var week : source.weeks()) weeks.add(week(context, week, weeks.size()));
-        return new ProgramPayloadV1.Cycle(id(context.id(), source.key()), source.name().isBlank() ? "Цикл" : source.name(), position, weeks);
+        return new ProgramPayloadV1.Cycle(id(context.id(), source.key()), source.name().isBlank() ? context.language().text("Цикл", "Cycle") : source.name(), position, weeks);
     }
 
     private ProgramPayloadV1.Week week(Compilation context, ImportDraftV1.Week source, int position) {
@@ -108,13 +110,14 @@ public class ProgramDraftCompiler {
         comments.add(source.comment());
         for (var prescription : source.sets()) {
             if (prescription.count().isBlank()) {
-                comments.add("Количество подходов не указано. " + describe(prescription));
-                context.warnings().add("У упражнения «" + resolved.name() + "» не указано количество подходов.");
+                comments.add(context.language().text("Количество подходов не указано. ", "Number of sets not specified. ") + describe(prescription, context.language()));
+                context.warnings().add(context.language().text("У упражнения «", "Exercise “") + resolved.name()
+                        + context.language().text("» не указано количество подходов.", "” has no set count."));
                 continue;
             }
             int count = positiveInt(prescription.count(), SETS_PER_EXERCISE);
             if (sets.size() + count > SETS_PER_EXERCISE) throw ImportFailure.invalid("Больше 200 подходов у упражнения.");
-            for (int i = 0; i < count; i++) sets.add(set(context.id(), prescription, resolved, i, sets.size(), context.warnings()));
+            for (int i = 0; i < count; i++) sets.add(set(context.id(), prescription, resolved, i, sets.size(), context.warnings(), context.language()));
         }
         return new ProgramPayloadV1.Exercise(id(context.id(), source.key()), position, resolved.id(), resolved.name(),
                 resolved.resultType(), join(comments), sets);
@@ -145,7 +148,7 @@ public class ProgramDraftCompiler {
     }
 
     private ProgramPayloadV1.Set set(UUID session, ImportDraftV1.Prescription source, Resolved exercise,
-                                     int index, int position, List<String> warnings) {
+                                     int index, int position, List<String> warnings, ImportLanguage language) {
         var notes = new ArrayList<String>();
         notes.add(source.note());
         Integer reps = null;
@@ -154,28 +157,28 @@ public class ProgramDraftCompiler {
             else {
                 if (!source.repetitions().matches("[1-9]\\d{0,3}-[1-9]\\d{0,3}|AMRAP"))
                     throw ImportFailure.invalid("Некорректное предписание повторений.");
-                notes.add("Повторения: " + source.repetitions());
-                warnings.add("Диапазоны повторений и AMRAP сохранены в заметках.");
+                notes.add(language.text("Повторения: ", "Reps: ") + source.repetitions());
+                warnings.add(language.text("Диапазоны повторений и AMRAP сохранены в заметках.", "Rep ranges and AMRAP were kept in the notes."));
             }
         }
-        Integer weight = weight(source.weightKg(), notes, warnings);
+        Integer weight = weight(source.weightKg(), notes, warnings, language);
         Integer duration = scaled(source.durationSeconds(), MILLIS_PER_SECOND);
         Integer distance = scaled(source.distanceMeters(), 1);
         Integer percent = scaled(source.percentOneRm(), TENTHS);
         Integer rpe = scaled(source.rpe(), TENTHS);
         if (rpe != null && (rpe < RPE_MIN || rpe > RPE_MAX || rpe % RPE_STEP != 0)) {
             notes.add("RPE: " + source.rpe());
-            warnings.add("RPE вне поддерживаемой шкалы сохранён в заметке.");
+            warnings.add(language.text("RPE вне поддерживаемой шкалы сохранён в заметке.", "RPE outside the supported range was kept in the note."));
             rpe = null;
         }
         if (!source.rir().isBlank()) {
             notes.add("RIR: " + source.rir());
-            warnings.add("RIR сохранён в заметках.");
+            warnings.add(language.text("RIR сохранён в заметках.", "RIR was kept in the notes."));
         }
         if (percent != null && (percent < PERCENT_MIN || percent > PERCENT_MAX || exercise.liftClass() == LiftClass.OTHER
                 || !exercise.resultType().equals("weight_reps"))) {
-            notes.add(source.percentOneRm() + "% ПМ");
-            warnings.add("Процент, недоступный для этого упражнения, сохранён в заметке.");
+            notes.add(source.percentOneRm() + language.text("% ПМ", "% 1RM"));
+            warnings.add(language.text("Процент, недоступный для этого упражнения, сохранён в заметке.", "Percentage not supported for this exercise; kept in the note."));
             percent = null;
         }
         var type = exercise.resultType();
@@ -184,16 +187,17 @@ public class ProgramDraftCompiler {
                 || (type.equals("weight_reps") || type.equals("added_weight_reps")) && (duration != null || distance != null)
                 || type.equals("distance_time") && (reps != null || weight != null))
             throw ImportFailure.invalid("Тип выбранного упражнения несовместим с подходами. Выберите другое или создайте своё.");
-        if (source.setType().isBlank()) notes.add("Тип подхода в источнике не указан.");
+        if (source.setType().isBlank()) notes.add(language.text("Тип подхода в источнике не указан.", "Set type not specified in the source."));
         return new ProgramPayloadV1.Set(id(session, source.key() + ":" + index), position,
                 source.setType().isBlank() ? "working" : source.setType(), weight, reps, duration, distance,
                 rpe, false, percent, scaled(source.restSeconds(), MILLIS_PER_SECOND), join(notes));
     }
 
-    private String describe(ImportDraftV1.Prescription value) {
-        return "Повторения: " + value.repetitions() + "; кг: " + value.weightKg() + "; %ПМ: " + value.percentOneRm()
-                + "; секунды: " + value.durationSeconds() + "; метры: " + value.distanceMeters()
-                + "; RPE: " + value.rpe() + "; RIR: " + value.rir() + "; отдых, с: " + value.restSeconds() + ". " + value.note();
+    private String describe(ImportDraftV1.Prescription value, ImportLanguage language) {
+        return language.text("Повторения: ", "Reps: ") + value.repetitions()
+                + language.text("; кг: ", "; kg: ") + value.weightKg() + language.text("; %ПМ: ", "; % 1RM: ") + value.percentOneRm()
+                + language.text("; секунды: ", "; seconds: ") + value.durationSeconds() + language.text("; метры: ", "; meters: ") + value.distanceMeters()
+                + "; RPE: " + value.rpe() + "; RIR: " + value.rir() + language.text("; отдых, с: ", "; rest, s: ") + value.restSeconds() + ". " + value.note();
     }
     private Integer scaled(String value, int factor) {
         if (value.isBlank()) return null;
@@ -205,15 +209,15 @@ public class ProgramDraftCompiler {
             throw ImportFailure.invalid("Некорректное числовое значение в программе.");
         }
     }
-    private Integer weight(String value, List<String> notes, List<String> warnings) {
+    private Integer weight(String value, List<String> notes, List<String> warnings, ImportLanguage language) {
         if (value.isBlank()) return null;
         try {
             var grams = new BigDecimal(value.replace(',', '.')).multiply(BigDecimal.valueOf(GRAMS_PER_KG));
             if (grams.signum() < 0) throw new ArithmeticException();
             var rounded = grams.setScale(0, RoundingMode.HALF_UP);
             if (rounded.compareTo(grams) != 0) {
-                notes.add("Исходный вес: " + value + " кг");
-                warnings.add("Вес округлён до целого грамма.");
+                notes.add(language.text("Исходный вес: ", "Original weight: ") + value + language.text(" кг", " kg"));
+                warnings.add(language.text("Вес округлён до целого грамма.", "Weight rounded to the nearest gram."));
             }
             return rounded.intValueExact();
         } catch (NumberFormatException | ArithmeticException e) {
@@ -238,5 +242,5 @@ public class ProgramDraftCompiler {
         return UUID.nameUUIDFromBytes(("sizylift:import:" + session + ":" + key).getBytes(StandardCharsets.UTF_8));
     }
     private record Resolved(UUID id, String name, String resultType, LiftClass liftClass) { }
-    private record Compilation(UUID id, java.time.LocalDate startDate, Map<String, Resolved> exercises, List<String> warnings) { }
+    private record Compilation(UUID id, java.time.LocalDate startDate, Map<String, Resolved> exercises, List<String> warnings, ImportLanguage language) { }
 }

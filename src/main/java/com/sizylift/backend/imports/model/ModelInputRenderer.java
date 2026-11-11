@@ -37,6 +37,7 @@ public final class ModelInputRenderer {
     public static String render(Input input) {
         var text = new StringBuilder(INITIAL_CAPACITY).append("КАТАЛОГ\n");
         for (var entry : input.catalog()) text.append(entry.alias()).append('\t').append(escape(entry.name())).append('\n');
+        text.append("ЯЗЫК ИНТЕРФЕЙСА\n").append(input.source().language()).append('\n');
         text.append("ДАТА СТАРТА\n").append(input.startDate()).append(", ")
                 .append(input.startDate().getDayOfWeek().getDisplayName(TextStyle.FULL, RUSSIAN)).append('\n');
         text.append("ИСТОЧНИК\n");

@@ -15,6 +15,7 @@ import com.sizylift.backend.imports.dto.ImportDtos.Decision;
 import com.sizylift.backend.imports.dto.ImportDtos.Progress;
 import com.sizylift.backend.imports.dto.ImportPlan;
 import com.sizylift.backend.imports.entity.ImportSession;
+import com.sizylift.backend.imports.entity.ImportLanguage;
 import com.sizylift.backend.imports.entity.ImportSession.Clarification;
 import com.sizylift.backend.imports.entity.ImportSession.Source;
 import com.sizylift.backend.web.dto.WebDtos.CatalogExercise;
@@ -27,13 +28,14 @@ import tools.jackson.databind.ObjectMapper;
 @Repository
 public class ImportRepository {
     private static final String BY_ID = "SELECT * FROM sizylift.import_session WHERE id = ?";
+    private static final String LANGUAGE = "SELECT ui_language FROM sizylift.import_session WHERE id = ?";
     private static final String LOCK = BY_ID + " FOR UPDATE";
     private static final String BY_REQUEST = "SELECT * FROM sizylift.import_session WHERE user_id = ? AND request_id = ?";
     private static final String ADMISSION_LOCK = "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))";
     private static final String INSERT = """
             INSERT INTO sizylift.import_session(id,user_id,owner_id,request_id,request_hash,status,source_kind,
-                source_text,source_bytes,source_name,catalog,name,start_date,program_id,created_at,expires_at)
-            VALUES (?,?,?,?,?,'queued',?,?,?,?,?::jsonb,?,?,?,?,?)
+                source_text,source_bytes,source_name,catalog,name,start_date,program_id,created_at,expires_at,ui_language)
+            VALUES (?,?,?,?,?,'queued',?,?,?,?,?::jsonb,?,?,?,?,?,?)
             """;
     private static final String ACTIVE = """
             SELECT count(*) FROM sizylift.import_session WHERE user_id = ? AND expires_at > ?
@@ -125,6 +127,7 @@ public class ImportRepository {
 
     public void lockAdmission(UUID user) { jdbc.queryForObject(ADMISSION_LOCK, Object.class, "import:user:" + user); }
     public void lockQueue() { jdbc.queryForObject(ADMISSION_LOCK, Object.class, "import:queue"); }
+    public String language(UUID id) { return jdbc.queryForObject(LANGUAGE, String.class, id); }
     public Optional<ImportSession> find(UUID id) { return jdbc.query(BY_ID, this::row, id).stream().findFirst(); }
     public Optional<ImportSession> lock(UUID id) { return jdbc.query(LOCK, this::row, id).stream().findFirst(); }
     public Optional<ImportSession> byRequest(UUID user, UUID request) {
@@ -138,8 +141,8 @@ public class ImportRepository {
         var id = UUID.randomUUID();
         jdbc.update(INSERT, id, user, owner, input.requestId(), hash, input.source(),
                 input.source().equals("sheet") ? input.url() : input.text(), bytes, sourceName,
-                json.writeValueAsString(catalog), input.name() == null ? "Импортированная программа" : input.name().trim(),
-                input.startDate(), UUID.randomUUID(), stamp(now), stamp(now.plus(limits.retention())));
+                json.writeValueAsString(catalog), input.name() == null ? ImportLanguage.of(input.language()).defaultName() : input.name().trim(),
+                input.startDate(), UUID.randomUUID(), stamp(now), stamp(now.plus(limits.retention())), input.uiLanguage());
         return find(id).orElseThrow();
     }
 
