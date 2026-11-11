@@ -95,3 +95,9 @@ databaseChangeLog:
   - include:
       file: changes/033-import-language.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/034-coach-rework-inbox.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/035-coach-rework-stage2.sql
+      relativeToChangelogFile: true

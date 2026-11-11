@@ -340,6 +340,116 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
                 .isEqualTo(athleteId.toString());
     }
 
+    @Test
+    void completedEventCarriesFactsAndTheCompletionComment() throws Exception {
+        var workout = UUID.randomUUID();
+        push(athlete, item("workout", workout, null, 0, 1, workout()));
+        push(athlete, item("workout_comment", UUID.randomUUID(), null, 0, 1,
+                comment(workout, "Колено ноет на третьем подходе").put("atCompletion", true)));
+
+        var event = only(events(inbox(coach, ""), "workout_completed"));
+        var facts = event.get("facts");
+        assertThat(facts.get("plannedSets").asInt()).isEqualTo(1);
+        assertThat(facts.get("doneSets").asInt()).isEqualTo(1);
+        assertThat(facts.get("quality").asString()).isEqualTo("great");
+        assertThat(facts.get("hasComment").asBoolean()).isTrue();
+        var record = facts.get("record");
+        assertThat(record.get("recordType").asString()).isEqualTo("maximum_weight");
+        assertThat(record.get("exerciseName").asString()).isEqualTo("Присед со штангой");
+        assertThat(record.get("weightGrams").asInt()).isEqualTo(120000);
+        assertThat(record.get("repetitions").asInt()).isEqualTo(5);
+        assertThat(event.get("comment").asString()).isEqualTo("Колено ноет на третьем подходе");
+        assertThat(events(inbox(coach, ""), "comment_added")).as("комментарий при завершении — не событие")
+                .isEmpty();
+    }
+
+    @Test
+    void weightRecordWinsOverALargerE1RmGrowth() throws Exception {
+        var payload = workout();
+        var weightRecord = (tools.jackson.databind.node.ObjectNode) payload.get("recordEvents").get(0);
+        var e1rm = weightRecord.deepCopy();
+        e1rm.put("id", UUID.randomUUID().toString()).put("recordType", "estimated_one_rep_max")
+                .put("value", 200000).put("previousValue", 100000);
+        ((ArrayNode) payload.get("recordEvents")).add(e1rm);
+        push(athlete, item("workout", UUID.randomUUID(), null, 0, 1, payload));
+
+        var record = only(events(inbox(coach, ""), "workout_completed")).get("facts").get("record");
+        assertThat(record.get("recordType").asString()).isEqualTo("maximum_weight");
+    }
+
+    @Test
+    void skippedPlannedSetIsNotDone() throws Exception {
+        var payload = workout();
+        var set = (tools.jackson.databind.node.ObjectNode) payload.get("blocks").get(0).get("exercises").get(0)
+                .get("sets").get(1);
+        set.put("completionStatus", "skipped");
+        push(athlete, item("workout", UUID.randomUUID(), null, 0, 1, payload));
+
+        var facts = only(events(inbox(coach, ""), "workout_completed")).get("facts");
+        assertThat(facts.get("plannedSets").asInt()).isEqualTo(1);
+        assertThat(facts.get("doneSets").asInt()).isZero();
+        assertThat(facts.get("hasComment").asBoolean()).isFalse();
+        assertThat(only(events(inbox(coach, ""), "workout_completed")).get("comment").isNull()).isTrue();
+    }
+
+    @Test
+    void athleteCommentOutsideCompletionIsAnEventAndCoachCommentIsNot() throws Exception {
+        var workout = UUID.randomUUID();
+        push(athlete, item("workout", workout, null, 0, 1, workout()));
+        var commentId = UUID.randomUUID();
+        var written = push(athlete, item("workout_comment", commentId, null, 0, 1,
+                comment(workout, "Можно перенести на пятницу?")));
+        push(coach, item("workout_comment", UUID.randomUUID(), athleteId, 0, 1, comment(workout, "Да")));
+
+        var event = only(events(inbox(coach, ""), "comment_added"));
+        assertThat(event.get("subjectId").asString()).isEqualTo(workout.toString());
+        assertThat(event.get("subjectDate").asString()).isEqualTo("2026-10-14");
+        assertThat(event.get("title").asString()).isEqualTo("Присед и жим");
+        assertThat(event.get("comment").asString()).isEqualTo("Можно перенести на пятницу?");
+        assertThat(event.get("facts").isNull()).isTrue();
+
+        markSeen(Map.of("subjectId", workout));
+        assertThat(only(events(inbox(coach, ""), "comment_added")).get("seenAt").isNull())
+                .as("открытие тренировки отмечает и комментарий").isFalse();
+
+        push(athlete, item("workout_comment", commentId, null, written.get("revision").asLong(), 2, null));
+        assertThat(events(inbox(coach, ""), "comment_added")).isEmpty();
+    }
+
+    @Test
+    void deletingTheWorkoutRemovesItsCommentEvents() throws Exception {
+        var workout = UUID.randomUUID();
+        var published = push(athlete, item("workout", workout, null, 0, 1, workout()));
+        push(athlete, item("workout_comment", UUID.randomUUID(), null, 0, 1, comment(workout, "Вопрос")));
+        assertThat(events(inbox(coach, ""), "comment_added")).hasSize(1);
+
+        push(athlete, item("workout", workout, null, published.get("revision").asLong(), 2, null));
+
+        assertThat(events(inbox(coach, ""), "comment_added")).isEmpty();
+    }
+
+    @Test
+    void rosterShowsFactsOfTheLastWorkoutAndTheEndOfThePlan() throws Exception {
+        var row = roster().get(0);
+        assertThat(row.get("planUntil").isNull()).isTrue();
+        assertThat(row.get("workoutFacts").isNull()).isTrue();
+
+        var program = UUID.randomUUID();
+        push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        var workout = UUID.randomUUID();
+        push(athlete, item("workout", workout, null, 0, 1, workout()));
+        push(athlete, item("workout_comment", UUID.randomUUID(), null, 0, 1, comment(workout, "Тяжело")));
+
+        row = roster().get(0);
+        assertThat(row.get("planUntil").asString()).isEqualTo("2026-10-14");
+        assertThat(row.get("workoutId").asString()).isEqualTo(workout.toString());
+        assertThat(row.get("workoutFacts").get("plannedSets").asInt()).isEqualTo(1);
+        assertThat(row.get("workoutFacts").get("hasComment").asBoolean()).isTrue();
+
+        push(athlete, item("workout_reschedule", PLANNED_WORKOUT, null, 0, 1, reschedule(program, "2026-10-17")));
+        assertThat(roster().get(0).get("planUntil").asString()).as("с учётом переноса").isEqualTo("2026-10-17");
+    }
+
     private double created(String kind) {
         var counter = meters.find("sizylift.coach.inbox.daily.events").tag("kind", kind).counter();
         return counter == null ? 0 : counter.count();
@@ -374,6 +484,11 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
 
     private JsonNode roster() throws Exception {
         return body(call(coach, get("/api/v2/web/athletes")).andExpect(status().isOk()));
+    }
+
+    private tools.jackson.databind.node.ObjectNode comment(UUID workout, String text) {
+        return json.createObjectNode().put("workoutId", workout.toString()).put("text", text)
+                .put("createdAt", T10.toString()).put("updatedAt", T10.toString());
     }
 
     private void markSeen(Map<String, Object> request) throws Exception {

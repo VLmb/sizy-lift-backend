@@ -46,11 +46,12 @@ public class CoachingService {
     private final Clock clock;
     private final ProgramArchiveRepository archives;
     private final CoachInboxRecorder inbox;
+    private final CoachProgramCopies programs;
 
     CoachingService(CoachingRepository coaching, PublishedAggregateRepository aggregates, FeedMaintenance feeds,
                     InviteTokens tokens, TransactionTemplate transactions, CoachingMetrics metrics,
                     NotificationQueue notifications, Clock clock,
-                    ProgramArchiveRepository archives, CoachInboxRecorder inbox) {
+                    ProgramArchiveRepository archives, CoachInboxRecorder inbox, CoachProgramCopies programs) {
         this.coaching = coaching;
         this.aggregates = aggregates;
         this.feeds = feeds;
@@ -61,6 +62,7 @@ public class CoachingService {
         this.clock = clock;
         this.archives = archives;
         this.inbox = inbox;
+        this.programs = programs;
     }
 
     public Overview overview(UUID userId) {
@@ -75,12 +77,20 @@ public class CoachingService {
     }
 
     public CreatedInvite createInvite(UUID coachId) {
+        return createInvite(coachId, null);
+    }
+
+    /** {@code programId} — необязательная своя программа тренера (CR-02); чужая или удалённая — 404. */
+    public CreatedInvite createInvite(UUID coachId, UUID programId) {
         if (!coaching.coachEnabled(coachId)) {
             throw new CoachingExceptions.Forbidden();
         }
+        if (programId != null && programs.own(coachId, programId).isEmpty()) {
+            throw new CoachingExceptions.NotFound();
+        }
         var token = tokens.generate();
         var expiresAt = clock.instant().plus(INVITE_TTL);
-        coaching.insertInvite(coachId, tokens.hash(token), expiresAt);
+        coaching.insertInvite(coachId, tokens.hash(token), expiresAt, programId);
         metrics.count(Event.INVITE_CREATED);
         return new CreatedInvite(token, expiresAt);
     }
@@ -92,6 +102,17 @@ public class CoachingService {
             throw new CoachingExceptions.InviteGone();
         }
         return invite;
+    }
+
+    /**
+     * Страница приглашения до входа (CR-02): имя тренера и состав привязанной программы, если она ещё есть.
+     * Использованное, отозванное или истёкшее приглашение — 410, как и при просмотре после входа.
+     */
+    public PublicInvite publicPreview(String token) {
+        var invite = preview(token);
+        var program = invite.programId() == null ? null
+                : programs.own(invite.coachId(), invite.programId()).map(programs::preview).orElse(null);
+        return new PublicInvite(displayName(invite.coachId()), program);
     }
 
     /** Создаёт связь и засевает ленту тренера всем, что он видит у подопечного. */
@@ -145,6 +166,7 @@ public class CoachingService {
                         Map.of(NotificationQueue.LINK_ID, link.id().toString(),
                                 NotificationQueue.ACTOR_ID, athleteId.toString()));
                 inbox.inviteAccepted(link.id());
+                copyInvitedProgram(invite, athleteId);
                 metrics.count(Event.LINK_CREATED);
                 return link;
             });
@@ -208,6 +230,32 @@ public class CoachingService {
         });
     }
 
+    /** Привязанная к приглашению программа становится тихим черновиком тренера у подопечного (CR-02). */
+    private void copyInvitedProgram(CoachingInvite invite, UUID athleteId) {
+        if (invite.programId() != null) {
+            programs.own(invite.coachId(), invite.programId())
+                    .ifPresent(template -> programs.createDraft(invite.coachId(), athleteId, invite.programId(),
+                            template));
+        }
+    }
+
+    /** Карточка подопечного (CR-18): только тренер активной связи; после разрыва — 404. */
+    public CoachingRepository.Card card(UUID coachId, UUID linkId) {
+        return coaching.card(coachLink(coachId, linkId).id());
+    }
+
+    public CoachingRepository.Card saveCard(UUID coachId, UUID linkId, CoachingRepository.Card card) {
+        var link = coachLink(coachId, linkId);
+        coaching.updateCard(link.id(), new CoachingRepository.Card(card.notes(), card.startDate(),
+                card.startName(), card.targetExerciseIds(), clock.instant()));
+        return coaching.card(link.id());
+    }
+
+    private CoachingLink coachLink(UUID coachId, UUID linkId) {
+        return coaching.findLink(linkId).filter(link -> link.coachId().equals(coachId) && link.active())
+                .orElseThrow(CoachingExceptions.NotFound::new);
+    }
+
     public String displayName(UUID userId) {
         return coaching.displayName(userId);
     }
@@ -226,5 +274,9 @@ public class CoachingService {
     }
 
     public record Overview(boolean coachEnabled, CoachingLink coach, List<CoachingLink> athletes) {
+    }
+
+    /** Публичный ответ приглашения: ничего, кроме имени тренера и состава программы. */
+    public record PublicInvite(String coachName, CoachProgramCopies.Preview program) {
     }
 }

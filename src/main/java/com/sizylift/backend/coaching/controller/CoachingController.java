@@ -5,7 +5,12 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.sizylift.backend.access.service.AccessPolicy;
+import com.sizylift.backend.coaching.dto.CoachingDtos.CardRequest;
+import com.sizylift.backend.coaching.dto.CoachingDtos.CardResponse;
+import com.sizylift.backend.coaching.dto.CoachingDtos.CreateInviteRequest;
 import com.sizylift.backend.coaching.dto.CoachingDtos.EnabledRequest;
+import com.sizylift.backend.coaching.dto.CoachingDtos.PublicInviteResponse;
+import com.sizylift.backend.coaching.repository.CoachingRepository;
 import com.sizylift.backend.coaching.dto.CoachingDtos.InvitePreviewResponse;
 import com.sizylift.backend.coaching.dto.CoachingDtos.InviteResponse;
 import com.sizylift.backend.coaching.dto.CoachingDtos.LinkResponse;
@@ -32,6 +37,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v2/coaching")
 public class CoachingController {
 
+    /** Путь страницы приглашения без входа; открыт в SecurityConfiguration. */
+    public static final String PUBLIC_INVITE_PATH = "/invites/{token}/public";
+
     private final AuthenticatedAccount authenticatedAccount;
     private final CoachingService coaching;
 
@@ -55,9 +63,41 @@ public class CoachingController {
 
     @PostMapping("/invites")
     @ResponseStatus(HttpStatus.CREATED)
-    public InviteResponse createInvite(@AuthenticationPrincipal Jwt jwt) {
-        var invite = coaching.createInvite(userId(jwt));
+    public InviteResponse createInvite(@AuthenticationPrincipal Jwt jwt,
+                                       @RequestBody(required = false) CreateInviteRequest request) {
+        var invite = coaching.createInvite(userId(jwt), request == null ? null : request.programId());
         return new InviteResponse(invite.token(), invite.expiresAt());
+    }
+
+    /** Без входа (CR-02): ссылка одноразовая и живёт 7 дней, ответ — только имя тренера, доступы и состав. */
+    @GetMapping(PUBLIC_INVITE_PATH)
+    public PublicInviteResponse publicInvite(@PathVariable String token) {
+        var invite = coaching.publicPreview(token);
+        return new PublicInviteResponse(invite.coachName(), sorted(AccessPolicy.COACH_VISIBLE),
+                sorted(AccessPolicy.coachVisibleTypes(true)), invite.program());
+    }
+
+    @GetMapping("/links/{linkId}/card")
+    public CardResponse card(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID linkId) {
+        return card(coaching.card(userId(jwt), linkId));
+    }
+
+    @PutMapping("/links/{linkId}/card")
+    public CardResponse saveCard(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID linkId,
+                                 @Valid @RequestBody CardRequest request) {
+        var targets = request.targetExerciseIds() == null ? null
+                : request.targetExerciseIds().stream().distinct().toList();
+        return card(coaching.saveCard(userId(jwt), linkId, new CoachingRepository.Card(blank(request.notes()),
+                request.startDate(), blank(request.startName()), targets, null)));
+    }
+
+    private static CardResponse card(CoachingRepository.Card card) {
+        return new CardResponse(card.notes(), card.startDate(), card.startName(), card.targetExerciseIds(),
+                card.updatedAt());
+    }
+
+    private static String blank(String text) {
+        return text == null || text.isBlank() ? null : text.strip();
     }
 
     @GetMapping("/invites/{token}")

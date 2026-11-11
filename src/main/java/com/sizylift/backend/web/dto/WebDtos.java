@@ -44,7 +44,7 @@ public final class WebDtos {
     /** Строка списка программ; {@code authorId} — тренер, если программу пишет он, иначе {@code null}. */
     public record ProgramSummary(UUID id, String name, String description, LocalDate startDate, LocalDate endDate,
                                  String status, int weeks, int workouts, Instant updatedAt, long revision,
-                                 UUID authorId, Instant changedAt) {
+                                 UUID authorId, Instant changedAt, UUID sourceProgramId) {
     }
 
     public record ProgramListResponse(UUID ownerId, List<ProgramSummary> programs) {
@@ -76,6 +76,18 @@ public final class WebDtos {
     }
 
     public record HistoryEntry(UUID workoutId, LocalDate workoutDate, String title, List<HistorySet> sets) {
+    }
+
+    /** Подход последнего факта: все подходы по порядку, {@code completionStatus} как в тренировке. */
+    public record LastSet(String setType, String completionStatus, Integer weightGrams, Integer repetitions,
+                          Integer durationMs, Integer distanceM, Integer rpeTenths) {
+    }
+
+    /** Последняя завершённая тренировка с упражнением раньше заданной даты и подходы упражнения в ней. */
+    public record LastSetsEntry(UUID exerciseId, UUID workoutId, LocalDate workoutDate, List<LastSet> sets) {
+    }
+
+    public record LastSetsResponse(UUID ownerId, LocalDate before, List<LastSetsEntry> entries) {
     }
 
     public record ExerciseHistoryResponse(UUID ownerId, UUID exerciseId, List<HistoryEntry> entries) {

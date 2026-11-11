@@ -18,6 +18,8 @@ import com.sizylift.backend.web.dto.WebDtos.CatalogExercise;
 import com.sizylift.backend.web.dto.WebDtos.HistoryEntry;
 import com.sizylift.backend.web.dto.WebDtos.ExerciseUsageDay;
 import com.sizylift.backend.web.dto.WebDtos.HistorySet;
+import com.sizylift.backend.web.dto.WebDtos.LastSet;
+import com.sizylift.backend.web.dto.WebDtos.LastSetsEntry;
 import com.sizylift.backend.web.dto.WebDtos.MuscleRef;
 import com.sizylift.backend.web.dto.WebDtos.OneRepMax;
 import com.sizylift.backend.web.dto.WebDtos.ProgramSummary;
@@ -56,7 +58,7 @@ public class WebReadRepository {
             ORDER BY q.equipment_id
             """.formatted(VISIBLE_EXERCISES);
     private static final String SELECT_PROGRAMS = """
-            SELECT p.id, p.name, p.description, p.start_date, p.status, p.updated_at,
+            SELECT p.id, p.name, p.description, p.start_date, p.status, p.updated_at, p.source_program_id,
                    a.revision, a.author_user_id, a.changed_at,
                    (SELECT max(w.end_date) FROM sizylift.training_week w
                     WHERE w.user_id = p.user_id AND w.program_id = p.id) AS end_date,
@@ -99,6 +101,24 @@ public class WebReadRepository {
             ORDER BY we.position, s.position
             """;
     private static final String COMPLETED = "completed";
+    /** Для каждого упражнения — самая поздняя тренировка с ним строго раньше даты. */
+    private static final String SELECT_LAST_WORKOUTS = """
+            SELECT DISTINCT ON (we.exercise_id) we.exercise_id, w.id, w.workout_date
+            FROM sizylift.workout w
+            JOIN sizylift.workout_exercise we ON we.user_id = w.user_id AND we.workout_id = w.id
+            WHERE w.user_id = ? AND w.workout_date < ? AND we.exercise_id = ANY (?::uuid[])
+            ORDER BY we.exercise_id, w.workout_date DESC, w.completed_at DESC, w.id
+            """;
+    /** Все подходы упражнения в тренировке по порядку блоков, упражнений и подходов. */
+    private static final String SELECT_EXERCISE_SETS = """
+            SELECT s.set_type, s.completion_status, s.weight_grams, s.repetitions, s.duration_ms, s.distance_m,
+                   s.rpe_tenths
+            FROM sizylift.workout_set s
+            JOIN sizylift.workout_exercise we ON we.user_id = s.user_id AND we.id = s.workout_exercise_id
+            JOIN sizylift.workout_block b ON b.user_id = we.user_id AND b.id = we.block_id
+            WHERE s.user_id = ? AND s.workout_id = ? AND we.exercise_id = ?
+            ORDER BY b.position, we.position, s.position
+            """;
     private static final String SELECT_EXERCISE_USAGE = """
             SELECT we.exercise_id, w.workout_date, count(DISTINCT w.id) AS workout_count
             FROM sizylift.workout w
@@ -186,6 +206,18 @@ public class WebReadRepository {
                 .toList();
     }
 
+    /** Последний факт по каждому упражнению раньше {@code before}; упражнения без факта в ответ не попадают. */
+    public List<LastSetsEntry> lastSets(UUID owner, LocalDate before, List<UUID> exerciseIds) {
+        var workouts = jdbc.query(SELECT_LAST_WORKOUTS, (row, n) -> new LastSetsEntry(uuid(row, "exercise_id"),
+                uuid(row, "id"), row.getObject("workout_date", LocalDate.class), List.of()),
+                owner, before, exerciseIds.toArray(UUID[]::new));
+        return workouts.stream()
+                .map(entry -> new LastSetsEntry(entry.exerciseId(), entry.workoutId(), entry.workoutDate(),
+                        jdbc.query(SELECT_EXERCISE_SETS, (row, n) -> lastSet(row), owner, entry.workoutId(),
+                                entry.exerciseId())))
+                .toList();
+    }
+
     /** Состояние агрегата, нужное клиенту для следующей записи. */
     public record AggregateHead(long revision, UUID authorId, Instant changedAt) {
     }
@@ -208,12 +240,19 @@ public class WebReadRepository {
         return new ProgramSummary(uuid(row, "id"), row.getString("name"), row.getString("description"),
                 row.getObject("start_date", LocalDate.class), row.getObject("end_date", LocalDate.class),
                 row.getString("status"), row.getInt("weeks"), row.getInt("workouts"), instant(row, "updated_at"),
-                row.getLong("revision"), uuid(row, "author_user_id"), instant(row, "changed_at"));
+                row.getLong("revision"), uuid(row, "author_user_id"), instant(row, "changed_at"),
+                uuid(row, "source_program_id"));
     }
 
     private static HistorySet historySet(ResultSet row) throws SQLException {
         return new HistorySet(row.getString("set_type"), integer(row, "weight_grams"), integer(row, "repetitions"),
                 integer(row, "duration_ms"), integer(row, "distance_m"), integer(row, "rpe_tenths"));
+    }
+
+    private static LastSet lastSet(ResultSet row) throws SQLException {
+        return new LastSet(row.getString("set_type"), row.getString("completion_status"),
+                integer(row, "weight_grams"), integer(row, "repetitions"), integer(row, "duration_ms"),
+                integer(row, "distance_m"), integer(row, "rpe_tenths"));
     }
 
     private static UUID uuid(ResultSet row, String column) throws SQLException {

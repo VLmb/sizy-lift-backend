@@ -114,10 +114,12 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
             mvc.perform(options(parts[1]).header("Origin", "https://untrusted.invalid")
                             .header("Access-Control-Request-Method", parts[0]))
                     .andExpect(status().isForbidden());
+            // Страница приглашения открыта без входа (CR-02): неизвестный токен — 404, а не 401.
+            var open = route.equals("GET /api/v2/coaching/invites/00000000-0000-4000-8000-000000000001/public");
             mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                             .request(org.springframework.http.HttpMethod.valueOf(parts[0]), parts[1])
                             .header("Origin", "https://pwa.test"))
-                    .andExpect(status().isUnauthorized());
+                    .andExpect(open ? status().isNotFound() : status().isUnauthorized());
         }
         java.nio.file.Files.writeString(java.nio.file.Path.of("build/pwa-api-routes.json"),
                 json.writeValueAsString(inventory));

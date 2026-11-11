@@ -3,6 +3,7 @@ package com.sizylift.backend.coaching.repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -24,10 +25,11 @@ public class CoachingRepository {
     private static final String COACH_MODE = "SELECT coach_enabled FROM sizylift.user_account WHERE id = ?";
     private static final String LOCK_ACCOUNT = "SELECT id FROM sizylift.user_account WHERE id = ? FOR UPDATE";
     private static final String INSERT_INVITE = """
-            INSERT INTO sizylift.coaching_invite (coach_user_id, token_hash, expires_at) VALUES (?, ?, ?)
+            INSERT INTO sizylift.coaching_invite (coach_user_id, token_hash, expires_at, program_id) VALUES (?, ?, ?, ?)
             """;
     private static final String SELECT_INVITE = """
-            SELECT id, coach_user_id, expires_at, accepted_at, revoked_at FROM sizylift.coaching_invite WHERE token_hash = ?
+            SELECT id, coach_user_id, expires_at, accepted_at, revoked_at, program_id FROM sizylift.coaching_invite
+            WHERE token_hash = ?
             """;
     private static final String ACCEPT_INVITE = """
             UPDATE sizylift.coaching_invite SET accepted_at = now(), accepted_by = ? WHERE id = ?
@@ -49,6 +51,16 @@ public class CoachingRepository {
             """.formatted(LINK_COLUMNS);
     private static final String DISPLAY_NAME =
             "SELECT display_name FROM sizylift.athlete_profile WHERE user_id = ? AND display_name IS NOT NULL";
+
+    private static final String SELECT_CARD = """
+            SELECT coach_notes, start_date, start_name, target_exercise_ids, card_updated_at
+            FROM sizylift.coaching_link WHERE id = ?
+            """;
+    private static final String UPDATE_CARD = """
+            UPDATE sizylift.coaching_link
+            SET coach_notes = ?, start_date = ?, start_name = ?, target_exercise_ids = ?::uuid[], card_updated_at = ?
+            WHERE id = ?
+            """;
 
     private static final String PENDING_INVITES = """
             SELECT id, created_at, expires_at FROM sizylift.coaching_invite
@@ -94,8 +106,32 @@ public class CoachingRepository {
         jdbc.query(LOCK_ACCOUNT, (row, n) -> null, userId);
     }
 
-    public void insertInvite(UUID coachId, byte[] tokenHash, Instant expiresAt) {
-        jdbc.update(INSERT_INVITE, coachId, tokenHash, expiresAt.atOffset(ZoneOffset.UTC));
+    public void insertInvite(UUID coachId, byte[] tokenHash, Instant expiresAt, UUID programId) {
+        jdbc.update(INSERT_INVITE, coachId, tokenHash, expiresAt.atOffset(ZoneOffset.UTC), programId);
+    }
+
+    /**
+     * Карточка подопечного у тренера (CR-18). {@code targetExerciseIds} — {@code null}, пока тренер не выбирал.
+     */
+    public record Card(String notes, LocalDate startDate, String startName, List<UUID> targetExerciseIds,
+                       Instant updatedAt) {
+    }
+
+    public Card card(UUID linkId) {
+        return jdbc.queryForObject(SELECT_CARD, (row, n) -> new Card(row.getString("coach_notes"),
+                row.getObject("start_date", LocalDate.class), row.getString("start_name"), uuids(row),
+                instant(row, "card_updated_at")), linkId);
+    }
+
+    public void updateCard(UUID linkId, Card card) {
+        var targets = card.targetExerciseIds() == null ? null : card.targetExerciseIds().toArray(UUID[]::new);
+        jdbc.update(UPDATE_CARD, card.notes(), card.startDate(), card.startName(), targets,
+                card.updatedAt().atOffset(ZoneOffset.UTC), linkId);
+    }
+
+    private static List<UUID> uuids(ResultSet row) throws SQLException {
+        var array = row.getArray("target_exercise_ids");
+        return array == null ? null : List.of((UUID[]) array.getArray());
     }
 
     public Optional<CoachingInvite> findInvite(byte[] tokenHash) {
@@ -145,7 +181,8 @@ public class CoachingRepository {
 
     private static CoachingInvite invite(ResultSet row, int rowNumber) throws SQLException {
         return new CoachingInvite(row.getObject("id", UUID.class), row.getObject("coach_user_id", UUID.class),
-                instant(row, "expires_at"), instant(row, "accepted_at"), instant(row, "revoked_at"));
+                instant(row, "expires_at"), instant(row, "accepted_at"), instant(row, "revoked_at"),
+                row.getObject("program_id", UUID.class));
     }
 
     private static CoachingLink link(ResultSet row, int rowNumber) throws SQLException {

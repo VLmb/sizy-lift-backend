@@ -30,6 +30,9 @@ class SecurityBoundaryApiTest extends PostgresIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping routes;
 
+    /** Единственный открытый маршрут API — страница приглашения до входа (docs/coaching.md, CR-02). */
+    static final String PUBLIC_INVITE = "GET /api/v2/coaching/invites/{token}/public";
+
     @Test
     void everyApiRouteRequiresBearerBeforeParsingItsInput() throws Exception {
         var checked = 0;
@@ -38,9 +41,10 @@ class SecurityBoundaryApiTest extends PostgresIntegrationTest {
                 if (!path.startsWith("/api/")) continue;
                 for (var method : mapping.getMethodsCondition().getMethods()) {
                     var concrete = path.replaceAll("\\{[^}]+}", UUID.randomUUID().toString());
+                    var open = PUBLIC_INVITE.equals(method.name() + " " + path);
                     var result = mvc.perform(request(HttpMethod.valueOf(method.name()), concrete)
                                     .contentType(MediaType.APPLICATION_JSON).content("{}"))
-                            .andExpect(status().isUnauthorized())
+                            .andExpect(open ? status().isNotFound() : status().isUnauthorized())
                             .andExpect(header().doesNotExist("Set-Cookie"))
                             .andReturn();
                     assertThat(result.getRequest().getSession(false)).as("%s %s", method, path).isNull();

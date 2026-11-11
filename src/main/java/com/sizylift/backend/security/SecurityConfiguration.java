@@ -21,6 +21,8 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
 public class SecurityConfiguration {
 
     private static final String[] HEALTH_PATHS = {"/actuator/health", "/actuator/health/**"};
+    /** Страница приглашения до входа (docs/coaching.md, «Приглашение до входа»). */
+    private static final String PUBLIC_INVITE = "/api/v2/coaching/invites/*/public";
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -28,6 +30,7 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(requests -> requests
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, HEALTH_PATHS).permitAll()
+                        .requestMatchers(HttpMethod.GET, PUBLIC_INVITE).permitAll()
                         .requestMatchers("/actuator/**").denyAll()
                         .requestMatchers("/api/v2/admin", "/api/v2/admin/**").access((authentication, context) ->
                                 new AuthorizationDecision(AdminAccess.allowed(authentication.get())))

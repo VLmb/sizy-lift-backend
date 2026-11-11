@@ -37,6 +37,8 @@ public class WebReadService {
     public static final int DEFAULT_HISTORY_LIMIT = 5;
     public static final int MAX_HISTORY_LIMIT = 20;
     public static final int MAX_HISTORY_OFFSET = 100_000;
+    /** Упражнений в одном запросе последнего факта: больше, чем бывает в одной тренировке. */
+    public static final int MAX_LAST_SETS_EXERCISES = 50;
 
     private final WebReadRepository repository;
     private final PayloadReader payloads;
@@ -105,6 +107,16 @@ public class WebReadService {
         return new ExerciseHistoryResponse(target, exerciseId, repository.history(target, exerciseId, limit, offset));
     }
 
+    /** Последний факт упражнений раньше даты — колонка «Прошлый раз» редактора (docs/web.md). */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public LastSetsResponse lastSets(UUID caller, UUID owner, LocalDate before, List<UUID> exerciseIds) {
+        var target = readable(caller, owner, AggregateType.WORKOUT);
+        var ids = exerciseIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty() || ids.size() > MAX_LAST_SETS_EXERCISES) {
+            throw new InvalidExercises();
+        }
+        return new LastSetsResponse(target, before, repository.lastSets(target, before, ids));
+    }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public TimelineResponse timeline(UUID caller, UUID owner, LocalDate from, LocalDate to) {
@@ -153,6 +165,11 @@ public class WebReadService {
 
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public static class InvalidPeriod extends RuntimeException {
+    }
+
+    /** Нет ни одного упражнения или их больше {@link #MAX_LAST_SETS_EXERCISES}. */
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public static class InvalidExercises extends RuntimeException {
     }
 
     /** Владелец данных: сам вызывающий, если {@code owner} не задан, иначе тот, чьи данные он вправе читать. */

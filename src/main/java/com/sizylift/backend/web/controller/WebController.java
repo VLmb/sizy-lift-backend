@@ -75,6 +75,13 @@ public class WebController {
         return reads.history(userId(jwt), ownerId, exerciseId, limit, offset);
     }
 
+    @GetMapping("/last-sets")
+    public LastSetsResponse lastSets(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) UUID ownerId,
+                                     @RequestParam LocalDate before,
+                                     @RequestParam("exerciseId") java.util.List<UUID> exerciseIds) {
+        return reads.lastSets(userId(jwt), ownerId, before, exerciseIds);
+    }
+
     @GetMapping("/timeline")
     public TimelineResponse timeline(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) UUID ownerId,
                                      @RequestParam LocalDate from, @RequestParam LocalDate to) {
