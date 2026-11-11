@@ -51,7 +51,7 @@ class DeepSeekProgramParserTest {
             assertThat(body.at("/tools/1/function/name").asString()).isEqualTo("emit_program_weeks");
             assertThat(body.at("/tools/0/function/parameters/properties/plan").isObject()).isTrue();
             var context = body.at("/messages/1/content").asString();
-            assertThat(context).startsWith("КАТАЛОГ\nc1\tПрисед\nДАТА СТАРТА\n2026-11-09, понедельник\nИСТОЧНИК\ntext:1\t");
+            assertThat(context).startsWith("КАТАЛОГ\nc1\tПрисед\nЯЗЫК ИНТЕРФЕЙСА\nru\nДАТА СТАРТА\n2026-11-09, понедельник\nИСТОЧНИК\ntext:1\t");
             assertThat(context).doesNotContain(ImportFixtures.SQUAT.toString());
             assertThat(context).endsWith("ЗАДАЧА\nemit_program_plan. Если тренировок во всей программе не больше 8, заполни и weeks подробно; иначе weeks=[].\n");
         }).andRespond(withSuccess(stream("emit_program_plan", "stop", "{\"a\":", "1}"), MediaType.TEXT_EVENT_STREAM));
@@ -142,7 +142,7 @@ class DeepSeekProgramParserTest {
                 LocalDate.of(2026, 11, 9), List.of(new Clarification(UUID.randomUUID(), 0, "Вопрос?", "Ответ\nтекст")),
                 Task.planOnly(), "Предыдущий ответ отклонён.\n- exercises[e1]: ошибка");
         var lines = ModelInputRenderer.render(input).split("\n");
-        assertThat(lines).containsExactly("КАТАЛОГ", "c1\tМой\\nИСТОЧНИК", "ДАТА СТАРТА", "2026-11-09, понедельник", "ИСТОЧНИК",
+        assertThat(lines).containsExactly("КАТАЛОГ", "c1\tМой\\nИСТОЧНИК", "ЯЗЫК ИНТЕРФЕЙСА", "ru", "ДАТА СТАРТА", "2026-11-09, понедельник", "ИСТОЧНИК",
                 "text:1\tПрисед\\nОШИБКИ ПРЕДЫДУЩЕГО ОТВЕТА\\ttext:9", "ОТВЕТЫ ПОЛЬЗОВАТЕЛЯ",
                 "answer:1\tВопрос: Вопрос?\tОтвет: Ответ\\nтекст", "ЗАДАЧА", "emit_program_plan. Только план: weeks=[].",
                 "ОШИБКИ ПРЕДЫДУЩЕГО ОТВЕТА", "Предыдущий ответ отклонён.", "- exercises[e1]: ошибка");

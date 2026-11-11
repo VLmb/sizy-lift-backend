@@ -25,7 +25,10 @@ public record ImportSession(UUID id, UUID userId, UUID ownerId, UUID requestId, 
         int round, int attempts, long reservedCostMicros, long inputTokens, long outputTokens, long cachedTokens,
         String errorCode, String errorMessage, UUID leaseToken, Instant expiresAt, String repairHint,
         ImportPlan outline, Progress progress) {
-    public record Source(List<SourceItem> items) { }
+    public record Source(List<SourceItem> items, String language) {
+        public Source { language = ImportLanguage.of(language).code(); }
+        public Source(List<SourceItem> items) { this(items, ImportLanguage.RUSSIAN.code()); }
+    }
     public record SourceItem(String ref, String text) { }
     public record Clarification(UUID requestId, int round, String question, String answer) { }
 

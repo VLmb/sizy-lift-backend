@@ -13,6 +13,7 @@ import com.sizylift.backend.imports.config.ImportProperties;
 import com.sizylift.backend.imports.dto.ImportDraftV1;
 import com.sizylift.backend.imports.dto.ImportDtos.Decision;
 import com.sizylift.backend.imports.entity.ImportSession;
+import com.sizylift.backend.imports.entity.ImportSession.Source;
 import com.sizylift.backend.imports.model.ModelFailure;
 import com.sizylift.backend.imports.model.ProgramParserModel;
 import com.sizylift.backend.imports.model.ProgramParserModel.Task;
@@ -91,7 +92,11 @@ public class ImportWorker {
                 fail(session, "access_revoked", "Доступ к программе подопечного отозван.");
                 return;
             }
-            var source = session.normalized() == null ? sourceReader.read(session) : session.normalized();
+            var source = session.normalized();
+            if (source == null) {
+                var parsed = sourceReader.read(session);
+                source = new Source(parsed.items(), sessions.language(session.id()));
+            }
             if (session.normalized() == null && !sessions.normalized(session, source, clock.instant())) return;
             var catalog = ProgramParserModel.CatalogEntry.of(session.catalog());
             var input = new ProgramParserModel.Input(source, catalog, session.startDate(), session.history(),

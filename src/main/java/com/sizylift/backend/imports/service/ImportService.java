@@ -2,6 +2,7 @@ package com.sizylift.backend.imports.service;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import tools.jackson.databind.node.ObjectNode;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -185,7 +186,10 @@ public class ImportService {
     private String hash(Create input, byte[] bytes, String filename) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
-            digest.update(json.writeValueAsString(input).getBytes(StandardCharsets.UTF_8));
+            // Язык фиксируется первым запросом сессии; повтор запроса не меняет её настройки.
+            var parameters = (ObjectNode) json.valueToTree(input);
+            parameters.remove("language");
+            digest.update(json.writeValueAsString(parameters).getBytes(StandardCharsets.UTF_8));
             if (bytes != null) digest.update(bytes);
             if (filename != null) digest.update(filename.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest.digest());

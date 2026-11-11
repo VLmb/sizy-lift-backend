@@ -60,6 +60,35 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void englishInterfaceLanguageIsPersistedAndReachesTheWorker() throws Exception {
+        var request = UUID.randomUUID();
+        var body = new java.util.LinkedHashMap<String, Object>();
+        body.put("requestId", request.toString()); body.put("source", "text");
+        body.put("text", TEXT); body.put("startDate", "2026-11-09"); body.put("language", "en");
+        var response = postJson(owner, BASE, body).andExpect(status().isAccepted()).andReturn();
+        var id = UUID.fromString(json.readTree(response.getResponse().getContentAsString()).get("id").asString());
+        assertThat(sessions.language(id)).isEqualTo("en");
+        assertThat(sessions.find(id).orElseThrow().name()).isEqualTo("Imported program");
+        when(parser.parse(any(), any())).thenAnswer(call -> {
+            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            assertThat(input.source().language()).isEqualTo("en");
+            assertThat(ModelInputRenderer.render(input)).contains("ЯЗЫК ИНТЕРФЕЙСА\nen\n");
+            var output = draft(matched("text:1"));
+            firstItem(output).put("sets", new java.util.ArrayList<>(List.of("n=3 r=8-12 kg=100 | Личная заметка")));
+            return result(input, output);
+        });
+        assertThat(worker.processOne()).isTrue();
+        assertThat(sessions.find(id).orElseThrow().normalized().language()).isEqualTo("en");
+        var preview = view(owner, id);
+        assertThat(preview.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0/note").asString())
+                .contains("Reps: 8-12", "Личная заметка", "Set type not specified in the source.");
+        // Повтор после смены языка не создаёт новую сессию и не меняет первый выбор.
+        body.remove("language");
+        postJson(owner, BASE, body).andExpect(status().isAccepted());
+        assertThat(sessions.language(id)).isEqualTo("en");
+    }
+
+    @Test
     void allRegisteredApiRoutesAllowPwaPreflightAndKeepAuthentication() throws Exception {
         var inventory = new java.util.TreeSet<String>();
         for (var mapping : routes.getHandlerMethods().keySet()) {
