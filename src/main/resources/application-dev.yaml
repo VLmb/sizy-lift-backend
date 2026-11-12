@@ -13,6 +13,15 @@ spring:
           jwk-set-uri: http://localhost:8180/realms/sizylift/protocol/openid-connect/certs
 
 sizylift:
+  video:
+    # Garage из compose.yaml: ключ и бакет создаются при первом запуске контейнера.
+    storage:
+      endpoint: http://localhost:3900
+      public-endpoint: http://localhost:3900
+      region: garage
+      bucket: sizy-video
+      access-key: GK6f1c2d3e4a5b6c7d8e9f0a1b
+      secret-key: 7d1e5c0b9a8f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d
   web:
     # Vite dev server веба (sizy-lift-frontend).
     allowed-origins:

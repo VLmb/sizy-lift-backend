@@ -29,7 +29,8 @@ AI-импорт текста, XLS/XLSX/CSV и публичных Google Sheets �
 Профиль выбирается через `SPRING_PROFILES_ACTIVE`; `./gradlew bootRun` без него
 запускается в `dev`. В production приложение не стартует, если не задана хотя бы
 одна обязательная переменная (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`,
-`KEYCLOAK_ISSUER_URI`, `KEYCLOAK_JWK_SET_URI`, `EXPO_ACCESS_TOKEN`); пишет логи в JSON (ECS), учитывает
+`KEYCLOAK_ISSUER_URI`, `KEYCLOAK_JWK_SET_URI`, `EXPO_ACCESS_TOKEN`, `VIDEO_STORAGE_ENDPOINT`,
+`VIDEO_PUBLIC_ENDPOINT`, `VIDEO_ACCESS_KEY`, `VIDEO_SECRET_KEY`); пишет логи в JSON (ECS), учитывает
 `X-Forwarded-*` от прокси, а actuator слушает отдельный порт 8081.
 В `application-dev.yaml` и `compose.yaml` хранятся только одноразовые пароли
 локальных контейнеров, доступных на `127.0.0.1`; production-секреты в Git не попадают.
@@ -62,6 +63,9 @@ curl -i http://localhost:8080/api/v1/me             # 401 без токена
 Страницы авторизации используют тему Sizy «Бронза». Настройка существующего realm,
 провайдер согласия и отложенное включение юридических документов описаны в
 [keycloak-theme.md](docs/keycloak-theme.md).
+
+Вместе с PostgreSQL и Keycloak `docker compose up -d --wait` поднимает Garage — хранилище видео
+(S3 API на `http://localhost:3900`, [docs/video.md](docs/video.md)).
 
 ## Production
 

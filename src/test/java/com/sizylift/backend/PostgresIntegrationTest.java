@@ -8,7 +8,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
-/** Один контейнер PostgreSQL на все интеграционные тесты; останавливается вместе с JVM. */
+/**
+ * Один контейнер PostgreSQL и одно хранилище видео (Garage) на все интеграционные тесты; останавливаются
+ * вместе с JVM.
+ */
 @ActiveProfiles("test")
 public abstract class PostgresIntegrationTest {
     private static final String TMPFS_ENV = "SIZYLIFT_TEST_POSTGRES_TMPFS";
@@ -33,5 +36,6 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        GarageContainer.register(registry);
     }
 }

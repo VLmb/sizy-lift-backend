@@ -55,8 +55,8 @@ public class ProgramDataRepository {
             """;
     private static final String INSERT_EXERCISE = """
             INSERT INTO sizylift.planned_exercise (user_id, id, program_id, planned_block_id, position,
-                exercise_id, exercise_name, result_type, plan_comment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                exercise_id, exercise_name, result_type, plan_comment, technique_video_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String INSERT_SET = """
             INSERT INTO sizylift.planned_set (user_id, id, program_id, planned_exercise_id, position, result_type,
@@ -86,7 +86,8 @@ public class ProgramDataRepository {
             FROM sizylift.planned_block WHERE user_id = ? AND program_id = ? ORDER BY position, id
             """;
     private static final String SELECT_EXERCISES = """
-            SELECT id, planned_block_id, position, exercise_id, exercise_name, result_type, plan_comment
+            SELECT id, planned_block_id, position, exercise_id, exercise_name, result_type, plan_comment,
+                technique_video_id
             FROM sizylift.planned_exercise WHERE user_id = ? AND program_id = ? ORDER BY position, id
             """;
     private static final String SELECT_SETS = """
@@ -164,7 +165,8 @@ public class ProgramDataRepository {
         return blocks(program)
                 .flatMap(block -> block.exercises().stream().map(exercise -> new Object[] {userId, exercise.id(),
                         programId, block.id(), exercise.position(), exercise.exerciseId(), exercise.exerciseName(),
-                        exercise.resultType(), exercise.planComment()}))
+                        exercise.resultType(), exercise.planComment(),
+                        exercise.techniqueVideoId()}))
                 .toList();
     }
 
@@ -224,7 +226,7 @@ public class ProgramDataRepository {
         var id = uuid(row, "id");
         return new Child<>(uuid(row, "planned_block_id"), new Exercise(id, row.getInt("position"),
                 uuid(row, "exercise_id"), row.getString("exercise_name"), row.getString("result_type"),
-                row.getString("plan_comment"), children(sets, id)));
+                row.getString("plan_comment"), children(sets, id), uuid(row, "technique_video_id")));
     }
 
     private static Child<UUID, Set> set(ResultSet row, int rowNumber) throws SQLException {

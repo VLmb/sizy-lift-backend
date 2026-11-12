@@ -101,3 +101,6 @@ databaseChangeLog:
   - include:
       file: changes/035-coach-rework-stage2.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/036-video.sql
+      relativeToChangelogFile: true

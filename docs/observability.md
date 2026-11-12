@@ -40,6 +40,8 @@ OTLP-экспорт идёт параллельно. В логах и трейс
 - `sizylift.coach.inbox.daily.events{kind}` — события «Входящих», созданные ежедневной задачей
   (`workout_missed`, `program_ending`); `sizylift.coach.inbox.daily.run{outcome}` — таймер запуска
   (`completed`, `skipped` — работает другой экземпляр, `failed`) ([coach-workspace.md](coach-workspace.md)).
+- `sizylift.video.stored.bytes`, `sizylift.video.bucket.limit.bytes`, `sizylift.video.removal.failures` —
+  видео: занятое место, предел хранилища и сбои удаления файлов ([video.md](video.md)).
 
 SQL-запросы отдельными span'ами пока не трассируются.
 

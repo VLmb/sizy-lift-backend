@@ -77,7 +77,17 @@ public record ProgramPayloadV1(
             @NotBlank @Size(max = SHORT_TEXT) String exerciseName,
             @NotNull @Pattern(regexp = RESULT_TYPE) String resultType,
             @Size(max = LONG_TEXT) String planComment,
-            @NotNull @Size(max = MAX_SETS_PER_EXERCISE) List<@NotNull @Valid Set> sets) {
+            @NotNull @Size(max = MAX_SETS_PER_EXERCISE) List<@NotNull @Valid Set> sets,
+            UUID techniqueVideoId) {
+
+        /**
+         * Без {@code techniqueVideoId}. Само поле — необязательное видео техники тренера к упражнению
+         * (docs/video.md); сервер снимает его, когда тренер удаляет ролик.
+         */
+        public Exercise(UUID id, int position, UUID exerciseId, String exerciseName, String resultType,
+                        String planComment, List<Set> sets) {
+            this(id, position, exerciseId, exerciseName, resultType, planComment, sets, null);
+        }
     }
 
     /**

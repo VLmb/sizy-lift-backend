@@ -25,6 +25,8 @@ keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
 - **Push-уведомления** идут через Expo (`https://exp.host`) с токеном `EXPO_ACCESS_TOKEN` из
   `deploy/.env` (Expo → Access tokens, включена «enhanced push security»). Без него приложение не
   стартует. Подробности — [notifications.md](notifications.md).
+- **Видео** лежит в контейнере Garage (S3 API) на отдельном томе `garage-data`; наружу он открыт только
+  через Caddy на `MEDIA_DOMAIN`, по подписанным ссылкам. Подробности — [video.md](video.md).
 
 Минимальный сервер: 2 vCPU, 4 ГБ RAM (приложение ~1,3 ГБ, телеметрия `otel-lgtm` ещё ~1–1,5 ГБ),
 Docker Engine и Compose v2.
@@ -182,6 +184,36 @@ BACKEND_VERSION=$(git rev-parse --short HEAD) \
 После успешного healthcheck backend обновите frontend обычной командой выше. Эти команды
 приведены для оператора; production при разработке не обновлялся. Ограничение мобильной
 синхронизации нового ресурса описано в [web.md](web.md).
+
+## Видео подходов и техники
+
+Обновление с миграцией `036-video` ([video.md](video.md), [ADR-0012](adr/0012-video-storage.md)):
+сначала backend, затем frontend и приложение. До запуска:
+
+1. Заведите DNS-запись для домена хранилища (например, `media.example.com`) на этот сервер.
+2. Добавьте в `deploy/.env`:
+
+   ```dotenv
+   MEDIA_DOMAIN=media.example.com
+   VIDEO_ACCESS_KEY=GK<24 шестнадцатеричных символа>   # echo GK$(openssl rand -hex 12)
+   VIDEO_SECRET_KEY=<64 шестнадцатеричных символа>     # openssl rand -hex 32
+   GARAGE_RPC_SECRET=<64 шестнадцатеричных символа>    # openssl rand -hex 32
+   ```
+
+   Без этих переменных Compose не запустится: хранилище — обязательная часть стека.
+3. Запустите стек обычной командой обновления. Контейнер `garage` при первом старте создаёт узел, ключ
+   из `VIDEO_ACCESS_KEY`/`VIDEO_SECRET_KEY` и закрытый бакет `sizy-video`; Caddy получает сертификат для
+   `MEDIA_DOMAIN`.
+4. Необязательно — предел бакета на стороне хранилища (сервер и сам не выдаёт место сверх 8 ГБ):
+
+   ```bash
+   docker compose --env-file deploy/.env -f deploy/compose.prod.yaml exec garage /garage bucket set-quotas sizy-video --max-size 8GiB
+   ```
+
+Смена ключа после первого запуска — командами `garage key` в контейнере, а не правкой `.env`: переменные
+читаются только при создании. Видео в резервные копии PostgreSQL не входит и не резервируется (риск принят,
+ADR-0012, раздел 8); том `garage-data` при `docker compose down -v` удаляется вместе с роликами.
+Эти команды приведены для оператора; production при разработке не обновлялся.
 
 ## Административная панель
 

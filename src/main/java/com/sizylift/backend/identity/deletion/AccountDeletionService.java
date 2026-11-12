@@ -2,6 +2,7 @@ package com.sizylift.backend.identity.deletion;
 
 import com.sizylift.backend.coaching.service.CoachingService;
 import com.sizylift.backend.identity.entity.UserAccount;
+import com.sizylift.backend.video.service.VideoService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -16,11 +17,14 @@ public class AccountDeletionService {
     private final AccountDeletionRepository repository;
     private final KeycloakAccountDeletion keycloak;
     private final CoachingService coaching;
+    private final VideoService videos;
     private final TransactionTemplate transactions;
     private final Counter failedAttempts;
 
     public AccountDeletionService(AccountDeletionRepository repository, KeycloakAccountDeletion keycloak,
-                                  CoachingService coaching, TransactionTemplate transactions, MeterRegistry meters) {
+                                  CoachingService coaching, VideoService videos,
+                                  TransactionTemplate transactions, MeterRegistry meters) {
+        this.videos = videos;
         this.repository = repository;
         this.keycloak = keycloak;
         this.coaching = coaching;
@@ -43,6 +47,8 @@ public class AccountDeletionService {
             // Подопечные обрабатываются в устойчивом порядке.
             overview.athletes().stream().sorted(java.util.Comparator.comparing(link -> link.athleteId().toString()))
                     .forEach(link -> coaching.end(account.id(), link.id()));
+            // Записи о роликах уйдут каскадом вместе с аккаунтом; файлы убирает фоновая задача (ADR-0012).
+            videos.queueRemovalOfAll(account.id());
             repository.delete(account);
         });
     }
