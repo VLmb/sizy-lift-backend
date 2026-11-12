@@ -145,7 +145,7 @@ class CoachExerciseAdoption {
     private static ProgramPayloadV1.Exercise rewrite(ProgramPayloadV1.Exercise exercise, Map<UUID, UUID> copies) {
         return new ProgramPayloadV1.Exercise(exercise.id(), exercise.position(),
                 copies.getOrDefault(exercise.exerciseId(), exercise.exerciseId()), exercise.exerciseName(),
-                exercise.resultType(), exercise.planComment(), exercise.sets());
+                exercise.resultType(), exercise.planComment(), exercise.sets(), exercise.techniqueVideoId());
     }
 
     /** Программа после замены ссылок и созданные копии (их нужно разослать в ленты). */

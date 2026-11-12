@@ -1,0 +1,12 @@
+# Garage — S3-совместимое хранилище видео (ADR-0012), один узел без репликации.
+# Секретов здесь нет: rpc_secret приходит из GARAGE_RPC_SECRET, ключ и бакет — из GARAGE_DEFAULT_*.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr = "0.0.0.0:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "0.0.0.0:3900"

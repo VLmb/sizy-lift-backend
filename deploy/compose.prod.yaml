@@ -23,6 +23,7 @@ services:
       API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
       AUTH_DOMAIN: ${AUTH_DOMAIN:?Set AUTH_DOMAIN}
       WEB_DOMAIN: ${WEB_DOMAIN:?Set WEB_DOMAIN}
+      MEDIA_DOMAIN: ${MEDIA_DOMAIN:?Set MEDIA_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
@@ -78,6 +79,10 @@ services:
       KEYCLOAK_ADMIN_READ_CLIENT_SECRET: ${KEYCLOAK_ADMIN_READ_CLIENT_SECRET:-}
       ADMIN_PROMETHEUS_URL: http://otel-lgtm:9090
       ADMIN_RUNTIME_URL: http://admin-runtime:8090
+      VIDEO_STORAGE_ENDPOINT: http://garage:3900
+      VIDEO_PUBLIC_ENDPOINT: https://${MEDIA_DOMAIN:?Set MEDIA_DOMAIN}
+      VIDEO_ACCESS_KEY: ${VIDEO_ACCESS_KEY:?Set VIDEO_ACCESS_KEY}
+      VIDEO_SECRET_KEY: ${VIDEO_SECRET_KEY:?Set VIDEO_SECRET_KEY}
     networks:
       - default
       - admin-runtime
@@ -86,6 +91,22 @@ services:
         condition: service_healthy
       otel-lgtm:
         condition: service_started
+
+  # Хранилище видео (ADR-0012): S3 API, наружу — только через Caddy на MEDIA_DOMAIN. Бакет закрытый.
+  # В образе нет оболочки, поэтому healthcheck нет: backend обращается к хранилищу только при работе с видео.
+  garage:
+    image: dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    restart: unless-stopped
+    logging: *bounded-logging
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Set GARAGE_RPC_SECRET}
+      GARAGE_DEFAULT_ACCESS_KEY: ${VIDEO_ACCESS_KEY:?Set VIDEO_ACCESS_KEY}
+      GARAGE_DEFAULT_SECRET_KEY: ${VIDEO_SECRET_KEY:?Set VIDEO_SECRET_KEY}
+      GARAGE_DEFAULT_BUCKET: sizy-video
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
 
   postgres:
     image: postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
@@ -252,6 +273,7 @@ networks:
     internal: true
 
 volumes:
+  garage-data:
   caddy-data:
   caddy-config:
   postgres-data:

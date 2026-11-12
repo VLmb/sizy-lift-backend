@@ -38,6 +38,15 @@ sizylift:
     # Адрес веб-версии (Origin), с которого браузер вызывает API, например https://example.com.
     # Несколько адресов — через запятую.
     allowed-origins: ${WEB_ALLOWED_ORIGINS}
+  video:
+    storage:
+      # endpoint — адрес хранилища внутри сети Compose; public-endpoint — адрес в подписанных ссылках.
+      endpoint: ${VIDEO_STORAGE_ENDPOINT}
+      public-endpoint: ${VIDEO_PUBLIC_ENDPOINT}
+      region: ${VIDEO_STORAGE_REGION:garage}
+      bucket: ${VIDEO_STORAGE_BUCKET:sizy-video}
+      access-key: ${VIDEO_ACCESS_KEY}
+      secret-key: ${VIDEO_SECRET_KEY}
   notifications:
     enabled: true
     expo:

@@ -34,6 +34,13 @@ dependencies {
     implementation("org.apache.poi:poi-ooxml:6.0.0")
     implementation("org.apache.commons:commons-csv:1.14.1")
     implementation("com.networknt:json-schema-validator:3.0.8")
+    // Хранилище видео (ADR-0012): только S3 API, синхронный клиент без Netty и Apache HttpClient.
+    implementation(platform("software.amazon.awssdk:bom:2.46.7"))
+    implementation("software.amazon.awssdk:s3") {
+        exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
+        exclude(group = "software.amazon.awssdk", module = "apache-client")
+    }
+    implementation("software.amazon.awssdk:url-connection-client")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -70,6 +77,7 @@ tasks.withType<Test> {
     inputs.file("deploy/compose.prod.yaml")
     inputs.file("deploy/prometheus.yaml")
     inputs.dir("deploy/telemetry")
+    inputs.dir("deploy/garage")
     inputs.file("keycloak/realm-sizylift.json")
     inputs.dir("keycloak/themes")
     inputs.file("keycloak-provider/build/libs/sizy-keycloak-provider.jar")

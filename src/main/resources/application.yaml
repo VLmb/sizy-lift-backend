@@ -45,6 +45,20 @@ sizylift:
     # «Сегодня» для «Входящих» и задач тренера; ежедневная задача ищет пропущенные тренировки и конец программ.
     zone: Europe/Moscow
     daily-cron: "0 17 4 * * *"
+  video:
+    # Видео подходов и техники (ADR-0012). Адрес и ключи хранилища — по профилям.
+    upload-url-ttl: 15m
+    view-url-ttl: 10m
+    max-size-bytes: 26214400
+    max-preview-size-bytes: 204800
+    max-duration: 60s
+    quota:
+      set-bytes: 314572800
+      technique-bytes: 1073741824
+    bucket-limit-bytes: 8589934592
+    pending-ttl: 24h
+    cleanup-cron: "0 47 4 * * *"
+    removal-interval: 1m
   notifications:
     # Push через Expo (ADR-0009). В dev и тестах выключено: уведомления копятся в outbox без отправки.
     enabled: false

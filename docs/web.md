@@ -193,6 +193,9 @@ Realm импортируется только при первом старте K
 - `GET /api/v2/web/workouts/{id}?ownerId=` — ownerId, id, revision, workout (полный payload v1),
   comments. Комментарий: id, revision, authorId и payload. Снимки плана не берутся из текущей программы:
   они сохранены в тренировке. Запись комментария — обычный sync/push с типом workout_comment.
+  Комментарий к упражнению несёт в payload workoutExerciseId, setNumber, videoId и videoDurationMs
+  ([coaching.md](coaching.md#комментарии)); ролик открывается через GET /api/v2/videos/{id}
+  ([video.md](video.md)). Загрузки видео с сайта нет.
 - `GET /api/v2/web/profile?ownerId=` — ownerId, profile (id, revision, authorId, payload либо null),
   healthAccess, injuries и contraindications (такие же конверты). Без разрешения на здоровье сервер
   возвращает пустые массивы, не имена и не идентификаторы. Профиль и комментарии читаются с ревизиями

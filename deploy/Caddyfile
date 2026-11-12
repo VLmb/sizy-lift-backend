@@ -16,6 +16,11 @@
 	reverse_proxy keycloak:8080
 }
 
+# Хранилище видео: только подписанные ссылки, анонимного доступа у бакета нет.
+{$MEDIA_DOMAIN} {
+	reverse_proxy garage:3900
+}
+
 {$WEB_DOMAIN} {
 	reverse_proxy web:80
 }
