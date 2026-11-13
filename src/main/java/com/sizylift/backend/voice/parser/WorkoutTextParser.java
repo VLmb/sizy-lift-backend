@@ -68,8 +68,9 @@ public final class WorkoutTextParser {
             items.add(new Item(null, null, null, "", Confidence.LOW, params.lines(), params.restSeconds(),
                     params.unrecognized(), params.issues(), List.of()));
         }
-        for (var slot : slots.subList(1, slots.size())) items.add(item(slot, text));
-        return new ParsedWorkout(items, unrecognized);
+        var everywhere = new Integer[1];
+        for (var slot : slots.subList(1, slots.size())) items.add(item(slot, text, everywhere));
+        return new ParsedWorkout(everywhere[0] == null ? items : withRest(items, everywhere[0]), unrecognized);
     }
 
     private List<Slot> slots(List<Token> tokens) {
@@ -106,7 +107,7 @@ public final class WorkoutTextParser {
      * у предыдущего упражнения уже есть подходы и перед предлогом связка: «…до отказа, и с гантелями по 22 кг»
      * — распознавание потеряло слово «шраги», и подходы нельзя приписать подтягиваниям.
      */
-    private static int nameStart(Slot current, List<Token> tokens, int i) {
+    private int nameStart(Slot current, List<Token> tokens, int i) {
         int j = unknownNameEnd(tokens, i);
         while (j < tokens.size() && tokens.get(j).isNoise()) j++;
         if (j >= tokens.size() || !ParameterParser.startsParameters(tokens.get(j))) return -1;
@@ -125,15 +126,25 @@ public final class WorkoutTextParser {
                 && tokens.get(i - 2).is(Kind.FILLER);
     }
 
-    /** Название — слова подряд, внутри могут быть предлоги: «жим арнольда», «тяга с резиной». */
-    private static int unknownNameEnd(List<Token> tokens, int i) {
+    /**
+     * Название — слова подряд, внутри могут быть предлоги: «жим арнольда», «тяга с резиной». Обрывается
+     * на известном названии из нескольких слов: в «наша румынская тяга» неизвестно только «наша». Одно общее
+     * слово («присед») название не обрывает: «зерхер присед» — другое упражнение, «присед» лишь кандидат.
+     */
+    private int unknownNameEnd(List<Token> tokens, int i) {
         int end = i + 1;
         int j = i + 1;
-        while (j < tokens.size() && (tokens.get(j).is(Kind.WORD) || tokens.get(j).is(Kind.PREPOSITION))) {
+        while (j < tokens.size() && (tokens.get(j).is(Kind.WORD) || tokens.get(j).is(Kind.PREPOSITION))
+                && (tokens.get(j).is(Kind.PREPOSITION) || !specificName(tokens, j))) {
             if (tokens.get(j).is(Kind.WORD)) end = j + 1;
             j++;
         }
         return end;
+    }
+
+    private boolean specificName(List<Token> tokens, int j) {
+        var m = dictionary.match(tokens, j);
+        return m != null && m.end() - m.start() > 1;
     }
 
     /** «Присед, нет, фронтальный присед»: упражнение без параметров, за которым идёт исправление, отменяется. */
@@ -144,10 +155,11 @@ public final class WorkoutTextParser {
         }
     }
 
-    private Item item(Slot slot, TextTokenizer.Result text) {
+    private Item item(Slot slot, TextTokenizer.Result text, Integer[] everywhere) {
         var spoken = text.text(slot.nameFrom, slot.nameTo);
         var type = slot.unknown() ? null : slot.match.exercise().resultType();
         var params = ParameterParser.parse(slot.params, text, type);
+        if (params.restEverywhere()) everywhere[0] = params.restSeconds();
         if (slot.unknown()) {
             var stems = slot.name.stream().filter(t -> t.is(Kind.WORD)).map(t -> t.stem).toList();
             var candidates = dictionary.candidates(stems).stream().map(e -> new Candidate(e.id(), e.name())).toList();
@@ -155,9 +167,19 @@ public final class WorkoutTextParser {
                     params.unrecognized(), params.issues(), candidates);
         }
         var m = slot.match;
-        var confidence = m.edits() == 0 && !m.ambiguous() ? Confidence.HIGH : Confidence.MEDIUM;
+        // «становое само», «фронтальный приз»: непонятное слово вплотную за названием — возможно, часть
+        // другого названия, искажённого распознаванием; выбор не блокируется, но помечается.
+        boolean glued = !slot.params.isEmpty() && slot.params.getFirst().is(Kind.WORD);
+        var confidence = m.edits() == 0 && !m.ambiguous() && !glued ? Confidence.HIGH : Confidence.MEDIUM;
         var alternatives = m.alternatives().stream().map(e -> new Candidate(e.id(), e.name())).toList();
         return new Item(m.exercise().id(), m.exercise().name(), type, spoken, confidence, params.lines(),
                 params.restSeconds(), params.unrecognized(), params.issues(), alternatives);
+    }
+
+    /** «Отдых 3 минуты везде»: отдых получают упражнения, у которых свой не назван. */
+    private static List<Item> withRest(List<Item> items, int seconds) {
+        return items.stream().map(i -> i.restSeconds() != null ? i : new Item(i.exerciseId(), i.exerciseName(),
+                i.resultType(), i.spoken(), i.confidence(), i.lines(), seconds, i.unrecognized(), i.issues(),
+                i.candidates())).toList();
     }
 }

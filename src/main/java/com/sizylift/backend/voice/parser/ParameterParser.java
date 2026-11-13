@@ -18,9 +18,12 @@ import com.sizylift.backend.voice.parser.Token.Unit;
 final class ParameterParser {
     enum Field { COUNT, REPS, REPS_MAX, KG, PERCENT, SECONDS, METERS, RPE, RIR }
 
-    record Result(List<SetLine> lines, Integer restSeconds, List<String> unrecognized, List<String> issues) { }
+    /** {@code restEverywhere} — «отдых 2 минуты везде»: отдых для всех упражнений диктовки. */
+    record Result(List<SetLine> lines, Integer restSeconds, boolean restEverywhere, List<String> unrecognized,
+                  List<String> issues) { }
 
-    private static final String PO = "по";
+    /** «под 3» — так распознавание часто слышит «по 3». */
+    private static final Set<String> PO = Set.of("по", "под");
     private static final Set<String> WEIGHT_PREPOSITIONS = Set.of("на", "с", "со");
     private static final Set<String> TIMES = Set.of("х", "x");
     private static final String NA = "на";
@@ -77,6 +80,7 @@ final class ParameterParser {
     private Line editing;
     private String mode;
     private Integer rest;
+    private boolean restEverywhere;
 
     private ParameterParser(List<Token> tokens, TextTokenizer.Result text, String resultType) {
         this.tokens = tokens;
@@ -101,7 +105,7 @@ final class ParameterParser {
         while (i < tokens.size()) i = step(i);
         var issues = new ArrayList<String>();
         var out = lines.stream().map(l -> toSetLine(l, issues)).toList();
-        return new Result(out, rest, gaps(), issues);
+        return new Result(out, rest, restEverywhere, gaps(), issues);
     }
 
     private int step(int i) {
@@ -187,20 +191,30 @@ final class ParameterParser {
         var n = at(i + 1);
         if (n == null || !n.is(Kind.NUMBER)) return i + 1;
         set(field, n.value);
+        if (everywhere(i + 2)) {
+            // «RPE 8 везде» — для всех подходов упражнения.
+            for (var l : lines) l.values[field.ordinal()] = n.value;
+            return cover(i, i + 2);
+        }
         return cover(i, i + 1);
+    }
+
+    private boolean everywhere(int k) { return at(k) != null && at(k).is(Kind.EVERYWHERE); }
+
+    /** Отдых задан; «везде» после него распространяет отдых на всю диктовку. */
+    private int restSet(double seconds, int from, int to) {
+        rest = (int) Math.round(seconds);
+        if (everywhere(to + 1)) { restEverywhere = true; return cover(from, to + 1); }
+        return cover(from, to);
     }
 
     /** «отдых 2 минуты», «отдых между подходами 90», «пауза минута». */
     private int rest(int i) {
         int j = restValueIndex(i);
         var v = at(j);
-        if (v != null && v.isQuantity(Unit.SECONDS)) {
-            rest = (int) Math.round(v.value);
-            return cover(i, j);
-        }
+        if (v != null && v.isQuantity(Unit.SECONDS)) return restSet(v.value, i, j);
         if (v != null && v.is(Kind.NUMBER) && tokens.get(i).is(Kind.REST) && !pairFollows(j)) {
-            rest = (int) Math.round(v.value <= REST_MINUTES_LIMIT ? v.value * SECONDS_PER_MINUTE : v.value);
-            return cover(i, j);
+            return restSet(v.value <= REST_MINUTES_LIMIT ? v.value * SECONDS_PER_MINUTE : v.value, i, j);
         }
         return i + 1;
     }
@@ -223,11 +237,11 @@ final class ParameterParser {
         switch (q.unit) {
             case SETS -> {
                 var po = at(i + 1);
-                if (po != null && po.is(Kind.PREPOSITION) && PO.equals(po.text)) startSpec();
+                if (po != null && po.is(Kind.PREPOSITION) && isPo(po)) startSpec();
                 set(Field.COUNT, q.value);
                 var p = at(i + 1);
                 var v = at(i + 2);
-                if (p != null && p.is(Kind.PREPOSITION) && PO.equals(p.text) && v != null) {
+                if (p != null && p.is(Kind.PREPOSITION) && isPo(p) && v != null) {
                     if (v.is(Kind.NUMBER)) { set(Field.REPS, v.value); return range(i, i + 3, v.value); }
                     if (v.is(Kind.QUANTITY)) { cover(i, i + 1); return quantity(i + 2); }
                 }
@@ -236,10 +250,7 @@ final class ParameterParser {
                 int j = i + 1;
                 while (at(j) != null && (at(j).is(Kind.PREPOSITION) || at(j).is(Kind.FILLER))) j++;
                 // «две минуты отдыха» — отдых; но в «по минуте, отдых 30 секунд» у отдыха своё значение.
-                if (at(j) != null && at(j).is(Kind.REST) && !restHasValue(j)) {
-                    rest = (int) Math.round(q.value);
-                    return cover(i, j);
-                }
+                if (at(j) != null && at(j).is(Kind.REST) && !restHasValue(j)) return restSet(q.value, i, j);
                 set(Field.SECONDS, q.value);
             }
             case REPS -> {
@@ -248,13 +259,15 @@ final class ParameterParser {
             }
             case KG -> set(Field.KG, q.value);
             case PERCENT -> {
-                // «70 процентов на 3» — пара, как «80 на 5».
-                var p = at(i + 1);
-                var b = at(i + 2);
+                // «70 процентов на 3» — пара, как «80 на 5»; «от максимума» между ними пропускается.
+                int k = i + 1;
+                while (at(k) != null && (at(k).is(Kind.PERCENT_BASE) || at(k).is(Kind.PREPOSITION) && OT.equals(at(k).text))) k++;
+                var p = at(k);
+                var b = at(k + 1);
                 if (p != null && p.is(Kind.PREPOSITION) && NA.equals(p.text) && b != null
                         && (b.is(Kind.NUMBER) || b.isQuantity(Unit.REPS))) {
                     pair(Field.PERCENT, q.value, b.value);
-                    return cover(i, i + 2);
+                    return cover(i, k + 1);
                 }
                 set(Field.PERCENT, q.value);
             }
@@ -277,13 +290,13 @@ final class ParameterParser {
         }
         if (reserveFollows(i + 1)) { set(Field.RIR, a.value); return cover(i, i + 2); }
         if (p == null || !p.is(Kind.PREPOSITION) || b == null) return i + 1;
-        if ((PO.equals(p.text) || TIMES.contains(p.text)) && b.is(Kind.NUMBER)) {
+        if ((isPo(p) || TIMES.contains(p.text)) && b.is(Kind.NUMBER)) {
             startSpec();
             set(Field.COUNT, a.value);
             set(Field.REPS, b.value);
             return range(i, i + 3, b.value);
         }
-        if (PO.equals(p.text) && b.is(Kind.QUANTITY)) {
+        if (isPo(p) && b.is(Kind.QUANTITY)) {
             startSpec();
             set(Field.COUNT, a.value);
             cover(i, i + 1);
@@ -296,7 +309,9 @@ final class ParameterParser {
             return cover(i, i + 2);
         }
         if (NA.equals(p.text) && (b.is(Kind.NUMBER) || b.isQuantity(Unit.REPS))) {
-            pair(Field.KG, a.value, b.value);
+            // «100 на 6» — вес на повторы; «6 на 100» — повторы на вес: повторов меньше, чем килограммов.
+            boolean repsFirst = b.is(Kind.NUMBER) && a.value < b.value;
+            pair(Field.KG, repsFirst ? b.value : a.value, repsFirst ? a.value : b.value);
             return cover(i, i + 2);
         }
         return i + 1;
@@ -348,7 +363,7 @@ final class ParameterParser {
             set(Field.REPS_MAX, at(i + 3).value);
             return cover(i, i + 3);
         }
-        if (PO.equals(p.text)) {
+        if (isPo(p)) {
             // «три по пять по сто»: повторы уже названы, второе «по» — вес.
             boolean weight = current != null && current.has(Field.REPS) && !current.has(Field.KG) && editing == null;
             set(weight ? Field.KG : Field.REPS, n.value);
@@ -366,7 +381,7 @@ final class ParameterParser {
         var p = at(k);
         var n = at(k + 1);
         if (p != null && p.isQuantity(Unit.KG)) return true;
-        return p != null && p.is(Kind.PREPOSITION) && (PO.equals(p.text) || WEIGHT_PREPOSITIONS.contains(p.text))
+        return p != null && p.is(Kind.PREPOSITION) && (isPo(p) || WEIGHT_PREPOSITIONS.contains(p.text))
                 && n != null && (n.isQuantity(Unit.KG) || n.is(Kind.NUMBER) && !pairFollows(k + 1));
     }
 
@@ -374,7 +389,7 @@ final class ParameterParser {
     private boolean pairFollows(int numberIndex) {
         var p = at(numberIndex + 1);
         var b = at(numberIndex + 2);
-        return p != null && p.is(Kind.PREPOSITION) && (NA.equals(p.text) || TIMES.contains(p.text) || PO.equals(p.text))
+        return p != null && p.is(Kind.PREPOSITION) && (NA.equals(p.text) || TIMES.contains(p.text) || isPo(p))
                 && b != null && b.is(Kind.NUMBER);
     }
 
@@ -392,6 +407,8 @@ final class ParameterParser {
         lines.add(current);
         return current;
     }
+
+    private static boolean isPo(Token t) { return PO.contains(t.text); }
 
     private Token at(int i) { return i < tokens.size() ? tokens.get(i) : null; }
 

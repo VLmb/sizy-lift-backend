@@ -39,6 +39,8 @@ public final class ExerciseDictionary {
     /** Слова короче сравниваются по звучанию: «т» и «д» — не одно и то же. */
     private static final int MIN_PHONETIC = 3;
     private static final double PHONETIC_SIMILARITY = 0.9;
+    /** Неточное совпадение звучания — только для основ от этой длины. */
+    private static final int MIN_FUZZY_SOUND = 6;
     /** Слово меньшей похожести в балл кандидата не идёт: «тренажер» не похож на «тяга». */
     private static final double MIN_SIMILARITY = 0.5;
     private static final String VOICED = "бвгджзо";
@@ -177,14 +179,19 @@ public final class ExerciseDictionary {
     }
 
     /**
-     * Число исправлений, при котором слово считается тем же, или -1. Сначала звучание: распознавание
-     * путает звонкие и глухие и удвоенные буквы («гаг» вместо «гакк»), такая ошибка допустима даже
-     * в коротком слове и стоит одно исправление. Иначе — буквы с допуском по длине.
+     * Число исправлений, при котором слово считается тем же, или -1. Сначала буквы с допуском по длине,
+     * затем звучание: распознавание путает звонкие и глухие и удвоенные буквы («гаг» вместо «гакк»),
+     * поэтому совпадение по звучанию допустимо даже в коротком слове и стоит хотя бы одно исправление.
      */
     static int similarEdits(String key, String spoken) {
-        if (key.length() >= MIN_PHONETIC && spoken.length() >= MIN_PHONETIC && phonetic(key).equals(phonetic(spoken))) return 1;
-        int d = distance(key, spoken);
-        return d <= allowed(key, spoken) ? d : -1;
+        if (key.length() < MIN_PHONETIC || spoken.length() < MIN_PHONETIC) return -1;
+        int letters = distance(key, spoken);
+        if (letters <= allowed(key, spoken)) return letters;
+        // По звучанию: «загибание» и «сгибание» после оглушения отличаются одной буквой. Короткие слова —
+        // только при полном совпадении звучания: иначе «приз» становится «брусья» (прис ≈ прус).
+        int sound = distance(phonetic(key), phonetic(spoken));
+        int allowedSound = Math.min(key.length(), spoken.length()) < MIN_FUZZY_SOUND ? 0 : allowed(key, spoken);
+        return sound <= allowedSound ? Math.max(sound, 1) : -1;
     }
 
     /** Ключ звучания: оглушение, «о» как «а», без мягкого знака, без удвоенных букв. */

@@ -35,6 +35,7 @@ final class Lexicon {
             Map.entry(List.of("эр", "пэ", "е"), entry(Kind.RPE)),
             Map.entry(List.of("эр", "пе", "е"), entry(Kind.RPE)),
             Map.entry(List.of("р", "п", "е"), entry(Kind.RPE)),
+            Map.entry(List.of("рп", "е"), entry(Kind.RPE)),
             Map.entry(List.of("эр", "ай", "эр"), entry(Kind.RIR)),
             Map.entry(List.of("на", "каждую", "сторону"), entry(Kind.EACH_SIDE)),
             Map.entry(List.of("на", "каждую", "ногу"), entry(Kind.EACH_SIDE)),
@@ -51,11 +52,12 @@ final class Lexicon {
     private static final Map<String, Entry> STEMS = new HashMap<>();
 
     static {
-        exact(entry(Kind.PREPOSITION), "по", "на", "с", "со", "х", "x", "в", "во", "до", "от", "к", "за", "из", "у", "при");
-        exact(entry(Kind.RPE), "rpe", "рпе", "эрпе", "эрпэе", "эрпээ");
+        exact(entry(Kind.PREPOSITION), "по", "под", "на", "с", "со", "х", "x", "в", "во", "до", "от", "к", "за", "из", "у", "при");
+        exact(entry(Kind.RPE), "rpe", "рпе", "рпэ", "рпи", "эрпе", "эрпэе", "эрпээ");
         exact(entry(Kind.RIR), "rir", "рир");
         exact(entry(Kind.CORRECTION), "нет", "вернее", "точнее", "ой", "стоп");
         exact(entry(Kind.RESERVE), "запасе");
+        exact(entry(Kind.EVERYWHERE), "везде");
         exact(entry(Kind.LAST), "последний", "последнем", "последнюю", "последнего");
         exact(entry(Kind.FIRST), "первый", "первом", "первую");
         exact(entry(Kind.FILLER), "потом", "дальше", "затем", "далее", "после", "этого", "следом", "следующее",
