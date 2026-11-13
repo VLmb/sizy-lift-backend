@@ -48,15 +48,20 @@ public final class WorkoutTextParser {
         dropCorrected(slots);
         var leading = slots.getFirst();
         var unrecognized = new ArrayList<String>();
-        if (leading.hasParameters() && slots.size() > 1 && !slots.get(1).hasParameters()) {
+        boolean moved = leading.hasParameters() && slots.size() > 1 && !slots.get(1).hasParameters();
+        if (moved) {
             // «Три по пять — присед»: параметры перед первым названием.
             slots.get(1).params.addAll(0, leading.params);
-        } else if (leading.hasParameters()) {
-            unrecognized.add(text.text(leading.params.getFirst().from, leading.params.getLast().to));
-        } else {
+        } else if (!leading.hasParameters()) {
             unrecognized.addAll(ParameterParser.parse(leading.params, text, null).unrecognized());
         }
         var items = new ArrayList<Item>();
+        if (leading.hasParameters() && !moved) {
+            // Подходы без названия («начнём со… пять по три на сто сорок»): не теряем, упражнение выберет тренер.
+            var params = ParameterParser.parse(leading.params, text, null);
+            items.add(new Item(null, null, null, "", Confidence.LOW, params.lines(), params.restSeconds(),
+                    params.unrecognized(), params.issues(), List.of()));
+        }
         for (var slot : slots.subList(1, slots.size())) items.add(item(slot, text));
         return new ParsedWorkout(items, unrecognized);
     }
@@ -73,9 +78,11 @@ public final class WorkoutTextParser {
                 current = new Slot(m, tokens.get(i).from, tokens.get(m.end() - 1).to, tokens.subList(i, m.end()));
                 slots.add(current);
                 i = m.end();
-            } else if (t.is(Kind.WORD) && nameSlot(current, tokens, i)) {
+            } else if (t.is(Kind.WORD) && nameStart(current, tokens, i) >= 0) {
+                int start = nameStart(current, tokens, i);
                 int end = unknownNameEnd(tokens, i);
-                current = new Slot(null, t.from, tokens.get(end - 1).to, tokens.subList(i, end));
+                if (start < i) current.params.removeLast();
+                current = new Slot(null, tokens.get(start).from, tokens.get(end - 1).to, tokens.subList(start, end));
                 slots.add(current);
                 i = end;
             } else {
@@ -87,17 +94,23 @@ public final class WorkoutTextParser {
     }
 
     /**
-     * Неизвестные слова — название нового упражнения, если за ними идут параметры, а перед ними
-     * начало фразы, связка или параметры предыдущего. Сразу за названием («жим лёжа с паузой 3 по 3»)
-     * и после предлога это уточнение, а не название.
+     * Начало названия нового упражнения или -1. Неизвестные слова — название, если за ними идут параметры,
+     * а перед ними начало фразы, связка или параметры предыдущего. Сразу за названием
+     * («жим лёжа с паузой 3 по 3») это уточнение. После предлога — тоже уточнение, кроме случая, когда
+     * у предыдущего упражнения уже есть подходы и перед предлогом связка: «…до отказа, и с гантелями по 22 кг»
+     * — распознавание потеряло слово «шраги», и подходы нельзя приписать подтягиваниям.
      */
-    private static boolean nameSlot(Slot current, List<Token> tokens, int i) {
-        if (i > 0 && tokens.get(i - 1).is(Kind.PREPOSITION)) return false;
+    private static int nameStart(Slot current, List<Token> tokens, int i) {
         int j = unknownNameEnd(tokens, i);
         while (j < tokens.size() && tokens.get(j).isNoise()) j++;
-        if (j >= tokens.size() || !ParameterParser.startsParameters(tokens.get(j))) return false;
-        if (current.leading() || current.hasParameters()) return true;
-        return current.params.stream().anyMatch(p -> p.is(Kind.FILLER) || p.is(Kind.SEPARATOR));
+        if (j >= tokens.size() || !ParameterParser.startsParameters(tokens.get(j))) return -1;
+        if (i > 0 && tokens.get(i - 1).is(Kind.PREPOSITION)) {
+            var before = i > 1 ? tokens.get(i - 2) : null;
+            boolean afterBreak = before != null && (before.is(Kind.FILLER) || before.is(Kind.SEPARATOR));
+            return afterBreak && !current.leading() && current.hasParameters() ? i - 1 : -1;
+        }
+        if (current.leading() || current.hasParameters()) return i;
+        return current.params.stream().anyMatch(p -> p.is(Kind.FILLER) || p.is(Kind.SEPARATOR)) ? i : -1;
     }
 
     /** Название — слова подряд, внутри могут быть предлоги: «жим арнольда», «тяга с резиной». */

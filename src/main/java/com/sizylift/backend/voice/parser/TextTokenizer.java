@@ -100,12 +100,13 @@ final class TextTokenizer {
             j = i + 1;
             while (j < words.size()) {
                 var n = RussianNumerals.find(words.get(j));
+                if (n == null) n = RussianNumerals.digits(words.get(j));
                 if (n == null || !RussianNumerals.joins(last, n.order())) break;
                 value += n.value();
                 last = n.order();
                 j++;
             }
-            if (last != Order.THOUSAND && last != Order.FRACTION && j < words.size()) {
+            if (last != Order.THOUSAND && last != Order.STANDALONE && j < words.size()) {
                 var t = RussianNumerals.find(words.get(j));
                 if (t != null && t.order() == Order.THOUSAND) {
                     value *= t.value();
@@ -144,7 +145,16 @@ final class TextTokenizer {
             var t = in.get(i);
             var next = i + 1 < in.size() ? in.get(i + 1) : null;
             var after = i + 2 < in.size() ? in.get(i + 2) : null;
-            if (t.is(Kind.NUMBER) && next != null && next.is(Kind.UNIT)) {
+            if (mode(t) && next != null && next.is(Kind.UNIT) && next.unit == Unit.SETS) {
+                // «рабочие подходы» — просто отметка режима.
+                out.add(merged(t, next, t.kind));
+                i++;
+            } else if (t.is(Kind.NUMBER) && mode(next) && after != null && after.is(Kind.UNIT) && after.unit == Unit.SETS) {
+                // «три рабочих подхода»: режим, затем 3 подхода.
+                out.add(next);
+                out.add(quantity(t, after, Unit.SETS, t.value * after.value));
+                i += 2;
+            } else if (t.is(Kind.NUMBER) && next != null && next.is(Kind.UNIT)) {
                 out.add(quantity(t, next, next.unit, t.value * next.value));
                 i++;
             } else if (t.is(Kind.NUMBER) && next != null && next.is(Kind.MONTH)) {
@@ -164,6 +174,8 @@ final class TextTokenizer {
         }
         return out;
     }
+
+    private static boolean mode(Token t) { return t != null && (t.is(Kind.WORKING) || t.is(Kind.WARMUP)); }
 
     private static boolean measured(Unit unit) { return unit == Unit.SECONDS || unit == Unit.METERS; }
 

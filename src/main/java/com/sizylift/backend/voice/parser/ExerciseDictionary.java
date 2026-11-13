@@ -36,6 +36,15 @@ public final class ExerciseDictionary {
     private static final int MIN_FUZZY_TWO = 8;
     private static final int MAX_EDITS = 2;
     private static final int MAX_CANDIDATES = 3;
+    /** Слова короче сравниваются по звучанию: «т» и «д» — не одно и то же. */
+    private static final int MIN_PHONETIC = 3;
+    private static final double PHONETIC_SIMILARITY = 0.9;
+    /** Слово меньшей похожести в балл кандидата не идёт: «тренажер» не похож на «тяга». */
+    private static final double MIN_SIMILARITY = 0.5;
+    private static final String VOICED = "бвгджзо";
+    private static final String VOICELESS = "пфктшса";
+    private static final char SOFT_SIGN = 'ь';
+    private static final char HARD_SIGN = 'ъ';
 
     private static final class Node {
         final Map<String, Node> children = new HashMap<>();
@@ -124,28 +133,70 @@ public final class ExerciseDictionary {
         if (!t.is(Kind.WORD)) return;
         for (var child : node.children.entrySet()) {
             if (child.getKey().equals(t.stem)) continue;
-            int d = distance(child.getKey(), t.stem);
-            if (d <= allowed(child.getKey(), t.stem) && edits + d <= MAX_EDITS) {
+            int d = similarEdits(child.getKey(), t.stem);
+            if (d >= 0 && edits + d <= MAX_EDITS) {
                 walk(child.getValue(), tokens, pos + 1, edits + d, true, best, bestNode);
             }
         }
     }
 
-    /** Ближайшие упражнения для нераспознанного названия: по числу совпавших основ. */
+    /**
+     * Ближайшие упражнения для нераспознанного названия. Балл варианта — сумма похожести слов,
+     * делённая на длину длинного из двух названий: «грудной тренажер» ближе к «гребной тренажёр»
+     * (два похожих слова из двух), чем к «жим от груди в тренажёре» (два из трёх).
+     */
     List<Exercise> candidates(List<String> stems) {
-        record Scored(Exercise e, int score) { }
+        record Scored(Exercise e, double score) { }
         var scored = new ArrayList<Scored>();
         for (var e : exercises) {
-            var known = e.aliases().stream().flatMap(a -> stems(a).stream()).toList();
-            int score = 0;
-            for (var s : stems) {
-                if (known.stream().anyMatch(k -> distance(k, s) <= allowed(k, s))) score++;
-            }
-            if (score > 0) scored.add(new Scored(e, score));
+            double best = 0;
+            for (var alias : e.aliases()) best = Math.max(best, aliasScore(stems, stems(alias)));
+            if (best > 0) scored.add(new Scored(e, best));
         }
         return scored.stream()
-                .sorted(Comparator.comparingInt(Scored::score).reversed().thenComparingInt(s -> s.e().name().length()))
+                .sorted(Comparator.comparingDouble(Scored::score).reversed().thenComparingInt(s -> s.e().name().length()))
                 .limit(MAX_CANDIDATES).map(Scored::e).toList();
+    }
+
+    private static double aliasScore(List<String> spoken, List<String> alias) {
+        if (spoken.isEmpty() || alias.isEmpty()) return 0;
+        double sum = 0;
+        for (var s : spoken) {
+            double best = 0;
+            for (var a : alias) best = Math.max(best, similarity(s, a));
+            if (best >= MIN_SIMILARITY) sum += best;
+        }
+        return sum / Math.max(spoken.size(), alias.size());
+    }
+
+    /** 1 — одинаковые основы, ниже — доля совпавших букв; одинаковое звучание почти равно совпадению. */
+    private static double similarity(String a, String b) {
+        if (a.equals(b)) return 1;
+        if (a.length() >= MIN_PHONETIC && phonetic(a).equals(phonetic(b))) return PHONETIC_SIMILARITY;
+        return 1 - (double) distance(a, b) / Math.max(a.length(), b.length());
+    }
+
+    /**
+     * Число исправлений, при котором слово считается тем же, или -1. Сначала звучание: распознавание
+     * путает звонкие и глухие и удвоенные буквы («гаг» вместо «гакк»), такая ошибка допустима даже
+     * в коротком слове и стоит одно исправление. Иначе — буквы с допуском по длине.
+     */
+    static int similarEdits(String key, String spoken) {
+        if (key.length() >= MIN_PHONETIC && spoken.length() >= MIN_PHONETIC && phonetic(key).equals(phonetic(spoken))) return 1;
+        int d = distance(key, spoken);
+        return d <= allowed(key, spoken) ? d : -1;
+    }
+
+    /** Ключ звучания: оглушение, «о» как «а», без мягкого знака, без удвоенных букв. */
+    static String phonetic(String stem) {
+        var b = new StringBuilder();
+        for (char c : stem.toCharArray()) {
+            int k = VOICED.indexOf(c);
+            char p = k >= 0 ? VOICELESS.charAt(k) : c;
+            if (p == SOFT_SIGN || p == HARD_SIGN) continue;
+            if (b.isEmpty() || b.charAt(b.length() - 1) != p) b.append(p);
+        }
+        return b.toString();
     }
 
     private static int allowed(String a, String b) {

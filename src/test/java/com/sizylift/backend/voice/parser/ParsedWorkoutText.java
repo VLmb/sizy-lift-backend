@@ -25,7 +25,7 @@ final class ParsedWorkoutText {
 
     private static String item(Item item) {
         var parts = new ArrayList<String>();
-        parts.add(item.exerciseId() == null ? "? " + item.spoken()
+        parts.add(item.exerciseId() == null ? "? " + (item.spoken().isEmpty() ? "(без названия)" : item.spoken())
                 : (item.confidence() == Confidence.HIGH ? "" : "~") + item.exerciseName());
         if (!item.lines().isEmpty()) parts.add(item.lines().stream().map(ParsedWorkoutText::line).collect(Collectors.joining(" ; ")));
         if (item.restSeconds() != null) parts.add("rest=" + item.restSeconds());
