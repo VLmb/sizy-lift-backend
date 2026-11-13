@@ -16,7 +16,7 @@ import com.sizylift.backend.voice.parser.Token.Unit;
  * в ней уже заполнено — начинается новая строка: так «80 на 5, 85 на 3» дают две строки.
  */
 final class ParameterParser {
-    enum Field { COUNT, REPS, KG, PERCENT, SECONDS, METERS, RPE, RIR }
+    enum Field { COUNT, REPS, REPS_MAX, KG, PERCENT, SECONDS, METERS, RPE, RIR }
 
     record Result(List<SetLine> lines, Integer restSeconds, List<String> unrecognized, List<String> issues) { }
 
@@ -24,6 +24,11 @@ final class ParameterParser {
     private static final Set<String> WEIGHT_PREPOSITIONS = Set.of("на", "с", "со");
     private static final Set<String> TIMES = Set.of("х", "x");
     private static final String NA = "на";
+    private static final String V = "в";
+    private static final String OT = "от";
+    private static final String DO = "до";
+    /** «по 12–15»: шире диапазон повторов не диктуют, иначе это два разных числа. */
+    private static final double MAX_RANGE_SPAN = 10;
     private static final String WARMUP = "warmup";
     private static final String WORKING = "working";
     private static final String EACH_SIDE_NOTE = "на каждую сторону";
@@ -32,7 +37,8 @@ final class ParameterParser {
     private static final int SECONDS_PER_MINUTE = 60;
     /** Больше подходов одной строкой не диктуют: «12 на 5» — это вес, а не подходы. */
     private static final double MAX_SETS = 10;
-    private static final Set<Field> STRENGTH = EnumSet.of(Field.COUNT, Field.REPS, Field.KG, Field.PERCENT, Field.RPE, Field.RIR);
+    private static final Set<Field> STRENGTH = EnumSet.of(Field.COUNT, Field.REPS, Field.REPS_MAX, Field.KG, Field.PERCENT,
+            Field.RPE, Field.RIR);
     private static final Map<String, Set<Field>> ALLOWED = Map.of(
             "weight_reps", STRENGTH,
             "added_weight_reps", STRENGTH,
@@ -48,6 +54,15 @@ final class ParameterParser {
         String type;
         String note;
         boolean has(Field f) { return values[f.ordinal()] != null || f == Field.REPS && toFailure; }
+
+        Line copy() {
+            var c = new Line();
+            System.arraycopy(values, 0, c.values, 0, values.length);
+            c.toFailure = toFailure;
+            c.type = type;
+            c.note = note;
+            return c;
+        }
     }
 
     private final List<Token> tokens;
@@ -55,6 +70,11 @@ final class ParameterParser {
     private final String resultType;
     private final List<Line> lines = new ArrayList<>();
     private Line current;
+    /**
+     * Строка, значения которой заменяются, а не начинают новую строку: после «нет, на 150» или
+     * «последний — с блином 10». Действует до знака препинания или связки.
+     */
+    private Line editing;
     private String mode;
     private Integer rest;
 
@@ -87,12 +107,16 @@ final class ParameterParser {
     private int step(int i) {
         var t = tokens.get(i);
         return switch (t.kind) {
-            case SEPARATOR, FILLER, PERCENT_BASE, MONTH -> cover(i, i);
+            case SEPARATOR, FILLER -> { editing = null; yield cover(i, i); }
+            case PERCENT_BASE, MONTH, WEIGHT_WORD -> cover(i, i);
             case WARMUP -> { mode = WARMUP; current = null; yield cover(i, i); }
             case WORKING -> { mode = WORKING; current = null; yield cover(i, i); }
-            case CORRECTION -> { if (!lines.isEmpty()) lines.removeLast(); current = null; yield cover(i, i); }
+            case CORRECTION -> correction(i);
+            case LAST, FIRST -> single(i, t.is(Kind.FIRST));
+            case RESERVE -> reserve(i);
             case TO_FAILURE -> { line(Field.REPS).toFailure = true; yield cover(i, i); }
-            case EACH_SIDE -> { (current == null ? newLine() : current).note = EACH_SIDE_NOTE; yield cover(i, i); }
+            case EACH_SIDE -> { noteLine().note = EACH_SIDE_NOTE; yield cover(i, i); }
+            case NOTE -> { noteLine().note = t.text; yield cover(i, i); }
             case RPE, RIR -> score(i, t.is(Kind.RPE) ? Field.RPE : Field.RIR);
             case REST, PAUSE -> rest(i);
             case QUANTITY -> quantity(i);
@@ -101,6 +125,63 @@ final class ParameterParser {
             default -> i + 1;
         };
     }
+
+    /**
+     * «нет, на 150» — заменить одно значение в последней строке; «нет, давай 5 по 3» — строка
+     * отменяется целиком и диктуется заново.
+     */
+    private int correction(int i) {
+        int j = i + 1;
+        while (at(j) != null && (at(j).is(Kind.FILLER) || at(j).is(Kind.SEPARATOR))) j++;
+        cover(i, j - 1);
+        if (singleValue(j) && current != null) {
+            editing = current;
+            return j;
+        }
+        if (!lines.isEmpty()) lines.removeLast();
+        current = null;
+        return j;
+    }
+
+    /** С позиции — одно значение (вес или проценты), а не новая строка подходов. */
+    private boolean singleValue(int j) {
+        var a = at(j);
+        if (a == null) return false;
+        if (a.isQuantity(Unit.KG) || a.isQuantity(Unit.PERCENT)) return true;
+        return a.is(Kind.PREPOSITION) && WEIGHT_PREPOSITIONS.contains(a.text) && at(j + 1) != null
+                && (at(j + 1).is(Kind.NUMBER) && !pairFollows(j + 1) || at(j + 1).isQuantity(Unit.KG));
+    }
+
+    /** «три до отказа, последний с блином 10»: один подход отделяется в свою строку и получает значения. */
+    private int single(int i, boolean first) {
+        int end = at(i + 1) != null && at(i + 1).is(Kind.UNIT) && at(i + 1).unit == Unit.SETS ? i + 1 : i;
+        if (current == null || current.values[Field.COUNT.ordinal()] == null || current.values[Field.COUNT.ordinal()] < 2) {
+            return i + 1;
+        }
+        var one = current.copy();
+        one.values[Field.COUNT.ordinal()] = 1.0;
+        current.values[Field.COUNT.ordinal()] -= 1;
+        lines.add(lines.indexOf(current) + (first ? 0 : 1), one);
+        current = one;
+        editing = one;
+        return cover(i, end);
+    }
+
+    /** «в запасе два» после «в». */
+    private int reserve(int i) {
+        var n = at(i + 1);
+        if (n == null || !(n.is(Kind.NUMBER) || n.isQuantity(Unit.REPS))) return i + 1;
+        set(Field.RIR, n.value);
+        return cover(i, i + 1);
+    }
+
+    /** «два повтора в запасе», «два в запасе». */
+    private boolean reserveFollows(int k) {
+        return at(k) != null && at(k).is(Kind.PREPOSITION) && V.equals(at(k).text) && at(k + 1) != null
+                && at(k + 1).is(Kind.RESERVE);
+    }
+
+    private Line noteLine() { return editing != null ? editing : current == null ? newLine() : current; }
 
     private int score(int i, Field field) {
         var n = at(i + 1);
@@ -141,11 +222,13 @@ final class ParameterParser {
         var q = tokens.get(i);
         switch (q.unit) {
             case SETS -> {
+                var po = at(i + 1);
+                if (po != null && po.is(Kind.PREPOSITION) && PO.equals(po.text)) startSpec();
                 set(Field.COUNT, q.value);
                 var p = at(i + 1);
                 var v = at(i + 2);
                 if (p != null && p.is(Kind.PREPOSITION) && PO.equals(p.text) && v != null) {
-                    if (v.is(Kind.NUMBER)) { set(Field.REPS, v.value); return cover(i, i + 2); }
+                    if (v.is(Kind.NUMBER)) { set(Field.REPS, v.value); return range(i, i + 3, v.value); }
                     if (v.is(Kind.QUANTITY)) { cover(i, i + 1); return quantity(i + 2); }
                 }
             }
@@ -159,9 +242,22 @@ final class ParameterParser {
                 }
                 set(Field.SECONDS, q.value);
             }
-            case REPS -> set(Field.REPS, q.value);
+            case REPS -> {
+                if (reserveFollows(i + 1)) { set(Field.RIR, q.value); return cover(i, i + 2); }
+                set(Field.REPS, q.value);
+            }
             case KG -> set(Field.KG, q.value);
-            case PERCENT -> set(Field.PERCENT, q.value);
+            case PERCENT -> {
+                // «70 процентов на 3» — пара, как «80 на 5».
+                var p = at(i + 1);
+                var b = at(i + 2);
+                if (p != null && p.is(Kind.PREPOSITION) && NA.equals(p.text) && b != null
+                        && (b.is(Kind.NUMBER) || b.isQuantity(Unit.REPS))) {
+                    pair(Field.PERCENT, q.value, b.value);
+                    return cover(i, i + 2);
+                }
+                set(Field.PERCENT, q.value);
+            }
             case METERS -> set(Field.METERS, q.value);
         }
         return cover(i, i);
@@ -172,13 +268,23 @@ final class ParameterParser {
         var a = tokens.get(i);
         var p = at(i + 1);
         var b = at(i + 2);
+        if (p != null && p.is(Kind.TO_FAILURE)) {
+            // «три до отказа», «три по максимуму».
+            startSpec();
+            set(Field.COUNT, a.value);
+            line(Field.REPS).toFailure = true;
+            return cover(i, i + 1);
+        }
+        if (reserveFollows(i + 1)) { set(Field.RIR, a.value); return cover(i, i + 2); }
         if (p == null || !p.is(Kind.PREPOSITION) || b == null) return i + 1;
         if ((PO.equals(p.text) || TIMES.contains(p.text)) && b.is(Kind.NUMBER)) {
+            startSpec();
             set(Field.COUNT, a.value);
             set(Field.REPS, b.value);
-            return cover(i, i + 2);
+            return range(i, i + 3, b.value);
         }
         if (PO.equals(p.text) && b.is(Kind.QUANTITY)) {
+            startSpec();
             set(Field.COUNT, a.value);
             cover(i, i + 1);
             return quantity(i + 2);
@@ -190,13 +296,39 @@ final class ParameterParser {
             return cover(i, i + 2);
         }
         if (NA.equals(p.text) && (b.is(Kind.NUMBER) || b.isQuantity(Unit.REPS))) {
-            if (current == null || current.has(Field.KG) || current.has(Field.REPS)) newLine();
-            current.values[Field.KG.ordinal()] = a.value;
-            current.values[Field.REPS.ordinal()] = b.value;
-            current.pair = true;
+            pair(Field.KG, a.value, b.value);
             return cover(i, i + 2);
         }
         return i + 1;
+    }
+
+    /** Пара «значение на повторы» — своя строка подходов. */
+    private void pair(Field value, double v, double reps) {
+        if (editing == null && (current == null || current.has(value) || current.has(Field.REPS))) newLine();
+        var l = editing != null ? editing : current;
+        l.values[value.ordinal()] = v;
+        l.values[Field.REPS.ordinal()] = reps;
+        l.pair = true;
+    }
+
+    /** «N по M» начинает новую строку, если в текущей уже есть подходы или повторы. */
+    private void startSpec() {
+        if (editing == null && current != null && (current.has(Field.COUNT) || current.has(Field.REPS))) newLine();
+    }
+
+    /**
+     * Покрывает шаблон с {@code from} до {@code k - 1}. «по 12–15», «по двенадцать пятнадцать»: если на {@code k}
+     * сразу за повторами большее число, оно — верхняя граница, если только само не начинает «N по M».
+     */
+    private int range(int from, int k, double reps) {
+        var c = at(k);
+        boolean number = c != null && (c.is(Kind.NUMBER) || c.isQuantity(Unit.REPS));
+        if (!number || c.value <= reps || c.value - reps > MAX_RANGE_SPAN || c.value != Math.rint(c.value)
+                || c.is(Kind.NUMBER) && pairFollows(k) && !NA.equals(at(k + 1).text)) {
+            return cover(from, k - 1);
+        }
+        set(Field.REPS_MAX, c.value);
+        return cover(from, k);
     }
 
     /** «по 5» — повторы; «на 60», «с 80» — вес; перед величиной или RPE предлог просто покрывается. */
@@ -204,13 +336,23 @@ final class ParameterParser {
         var p = tokens.get(i);
         var n = at(i + 1);
         if (n == null) return i + 1;
-        if (n.is(Kind.QUANTITY) || n.is(Kind.RPE) || n.is(Kind.RIR) || n.is(Kind.TO_FAILURE)) return cover(i, i);
+        if (n.is(Kind.QUANTITY) || n.is(Kind.RPE) || n.is(Kind.RIR) || n.is(Kind.TO_FAILURE) || n.is(Kind.RESERVE)) {
+            return cover(i, i);
+        }
         if (!n.is(Kind.NUMBER)) return i + 1;
+        var to = at(i + 2);
+        if (OT.equals(p.text) && to != null && to.is(Kind.PREPOSITION) && DO.equals(to.text)
+                && at(i + 3) != null && at(i + 3).is(Kind.NUMBER)) {
+            // «от 12 до 15».
+            set(Field.REPS, n.value);
+            set(Field.REPS_MAX, at(i + 3).value);
+            return cover(i, i + 3);
+        }
         if (PO.equals(p.text)) {
             // «три по пять по сто»: повторы уже названы, второе «по» — вес.
-            boolean weight = current != null && current.has(Field.REPS) && !current.has(Field.KG);
+            boolean weight = current != null && current.has(Field.REPS) && !current.has(Field.KG) && editing == null;
             set(weight ? Field.KG : Field.REPS, n.value);
-            return cover(i, i + 1);
+            return weight ? cover(i, i + 1) : range(i, i + 2, n.value);
         }
         if (WEIGHT_PREPOSITIONS.contains(p.text)) {
             if (pairFollows(i + 1)) return cover(i, i);
@@ -239,6 +381,7 @@ final class ParameterParser {
     private void set(Field f, double value) { line(f).values[f.ordinal()] = value; }
 
     private Line line(Field f) {
+        if (editing != null) return editing;
         if (current == null || current.has(f)) newLine();
         return current;
     }
@@ -282,7 +425,8 @@ final class ParameterParser {
         }
         if (l.pair && l.values[Field.COUNT.ordinal()] == null) l.values[Field.COUNT.ordinal()] = 1.0;
         if (l.toFailure && !allowed.contains(Field.REPS)) { issues.add("до отказа не подходит типу " + resultType); l.toFailure = false; }
-        return new SetLine(integer(l, Field.COUNT), integer(l, Field.REPS), l.toFailure, l.values[Field.KG.ordinal()],
+        return new SetLine(integer(l, Field.COUNT), integer(l, Field.REPS), integer(l, Field.REPS_MAX), l.toFailure,
+                l.values[Field.KG.ordinal()],
                 l.values[Field.PERCENT.ordinal()], integer(l, Field.SECONDS), integer(l, Field.METERS),
                 l.values[Field.RPE.ordinal()], l.values[Field.RIR.ordinal()], l.type, l.note);
     }

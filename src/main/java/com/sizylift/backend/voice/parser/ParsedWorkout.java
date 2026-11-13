@@ -22,9 +22,10 @@ public record ParsedWorkout(List<Item> items, List<String> unrecognized) {
     public record Candidate(String exerciseId, String name) { }
 
     /**
-     * Строка одинаковых подходов: {@code count} подходов (null — число не названо). {@code type} — warmup или
+     * Строка одинаковых подходов: {@code count} подходов (null — число не названо), {@code reps}–{@code repsMax}
+     * — повторы или их диапазон. {@code type} — warmup или
      * working, если это было сказано.
      */
-    public record SetLine(Integer count, Integer reps, boolean toFailure, Double weightKg, Double percent,
+    public record SetLine(Integer count, Integer reps, Integer repsMax, boolean toFailure, Double weightKg, Double percent,
                           Integer seconds, Integer meters, Double rpe, Double rir, String type, String note) { }
 }

@@ -38,7 +38,7 @@ final class ParsedWorkoutText {
         var f = new ArrayList<String>();
         f.add("n=" + (l.count() == null ? "?" : l.count()));
         if (l.toFailure()) f.add("r=AMRAP");
-        else if (l.reps() != null) f.add("r=" + l.reps());
+        else if (l.reps() != null) f.add("r=" + l.reps() + (l.repsMax() == null ? "" : "-" + l.repsMax()));
         if (l.weightKg() != null) f.add("kg=" + ParameterParser.format(l.weightKg()));
         if (l.percent() != null) f.add("pct=" + ParameterParser.format(l.percent()));
         if (l.seconds() != null) f.add("sec=" + l.seconds());

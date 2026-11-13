@@ -19,6 +19,7 @@ final class TextTokenizer {
     private static final Pattern SEPARATORS = Pattern.compile("[,.;:!?…—–]");
     private static final String HALF_PREFIX = "пол";
     private static final String WITH = "с";
+    private static final String PO = "по";
     private static final int MAX_PHRASE = 3;
 
     /** Исходные слова фразы: по ним собирается текст дырок. */
@@ -118,7 +119,9 @@ final class TextTokenizer {
             value += RussianNumerals.addition(words.get(j + 1));
             j += 2;
         }
-        var t = new Token(i, j, String.join(" ", words.subList(i, j)), null, Kind.NUMBER);
+        // У однословного числительного есть основа: «тяга гантели одной рукой» должна найтись в словаре.
+        var stem = j == i + 1 && !DIGITS.matcher(w).matches() ? RussianStemmer.stem(w) : null;
+        var t = new Token(i, j, String.join(" ", words.subList(i, j)), stem, Kind.NUMBER);
         t.value = value;
         out.add(t);
         return j;
@@ -164,15 +167,25 @@ final class TextTokenizer {
                 boolean inverted = next != null && next.is(Kind.NUMBER) && (after == null || !after.is(Kind.UNIT));
                 out.add(inverted ? quantity(t, next, t.unit, t.value * next.value) : quantity(t, t, t.unit, t.value));
                 if (inverted) i++;
-            } else if (t.is(Kind.WEIGHT_WORD) && next != null && next.is(Kind.NUMBER)) {
-                boolean kg = after != null && after.is(Kind.UNIT) && after.unit == Unit.KG;
-                out.add(quantity(t, kg ? after : next, Unit.KG, next.value));
-                i += kg ? 2 : 1;
+            } else if (t.is(Kind.WEIGHT_WORD) && weightNumber(in, i + 1) > 0) {
+                // «с блином 20», «гантели по 10 кг»: вес — число после слова, «по» между ними допустимо.
+                int n = weightNumber(in, i + 1);
+                var last = n + 1 < in.size() && in.get(n + 1).is(Kind.UNIT) && in.get(n + 1).unit == Unit.KG ? n + 1 : n;
+                out.add(quantity(t, in.get(last), Unit.KG, in.get(n).value));
+                i = last;
             } else {
                 out.add(t);
             }
         }
         return out;
+    }
+
+    /** Индекс числа веса после слова-веса (возможно, через «по») или -1. */
+    private static int weightNumber(List<Token> in, int k) {
+        if (k < in.size() && in.get(k).is(Kind.PREPOSITION) && PO.equals(in.get(k).text)) k++;
+        if (k >= in.size() || !in.get(k).is(Kind.NUMBER)) return -1;
+        var unit = k + 1 < in.size() && in.get(k + 1).is(Kind.UNIT) ? in.get(k + 1).unit : null;
+        return unit == null || unit == Unit.KG ? k : -1;
     }
 
     private static boolean mode(Token t) { return t != null && (t.is(Kind.WORKING) || t.is(Kind.WARMUP)); }

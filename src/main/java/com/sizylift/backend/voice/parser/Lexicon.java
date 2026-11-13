@@ -26,17 +26,26 @@ final class Lexicon {
             "у", "по", "под", "над");
 
     /** Многословные термины склеиваются в один токен до разбора. */
-    static final Map<List<String>, Entry> PHRASES = Map.of(
-            List.of("до", "отказа"), entry(Kind.TO_FAILURE),
-            List.of("в", "отказ"), entry(Kind.TO_FAILURE),
-            List.of("эр", "пэ", "е"), entry(Kind.RPE),
-            List.of("эр", "пе", "е"), entry(Kind.RPE),
-            List.of("р", "п", "е"), entry(Kind.RPE),
-            List.of("эр", "ай", "эр"), entry(Kind.RIR),
-            List.of("на", "каждую", "сторону"), entry(Kind.EACH_SIDE),
-            List.of("на", "каждую", "ногу"), entry(Kind.EACH_SIDE),
-            List.of("на", "каждую", "руку"), entry(Kind.EACH_SIDE),
-            List.of("то", "есть"), entry(Kind.CORRECTION));
+    static final Map<List<String>, Entry> PHRASES = Map.ofEntries(
+            Map.entry(List.of("до", "отказа"), entry(Kind.TO_FAILURE)),
+            Map.entry(List.of("в", "отказ"), entry(Kind.TO_FAILURE)),
+            Map.entry(List.of("по", "максимуму"), entry(Kind.TO_FAILURE)),
+            Map.entry(List.of("на", "максимум"), entry(Kind.TO_FAILURE)),
+            Map.entry(List.of("максимум", "раз"), entry(Kind.TO_FAILURE)),
+            Map.entry(List.of("эр", "пэ", "е"), entry(Kind.RPE)),
+            Map.entry(List.of("эр", "пе", "е"), entry(Kind.RPE)),
+            Map.entry(List.of("р", "п", "е"), entry(Kind.RPE)),
+            Map.entry(List.of("эр", "ай", "эр"), entry(Kind.RIR)),
+            Map.entry(List.of("на", "каждую", "сторону"), entry(Kind.EACH_SIDE)),
+            Map.entry(List.of("на", "каждую", "ногу"), entry(Kind.EACH_SIDE)),
+            Map.entry(List.of("на", "каждую", "руку"), entry(Kind.EACH_SIDE)),
+            Map.entry(List.of("вес", "подберет", "сам"), entry(Kind.NOTE)),
+            Map.entry(List.of("вес", "по", "самочувствию"), entry(Kind.NOTE)),
+            Map.entry(List.of("по", "самочувствию"), entry(Kind.NOTE)),
+            Map.entry(List.of("без", "веса"), entry(Kind.FILLER)),
+            Map.entry(List.of("последний", "подход"), entry(Kind.LAST)),
+            Map.entry(List.of("первый", "подход"), entry(Kind.FIRST)),
+            Map.entry(List.of("то", "есть"), entry(Kind.CORRECTION)));
 
     private static final Map<String, Entry> EXACT = new HashMap<>();
     private static final Map<String, Entry> STEMS = new HashMap<>();
@@ -46,13 +55,16 @@ final class Lexicon {
         exact(entry(Kind.RPE), "rpe", "рпе", "эрпе", "эрпэе", "эрпээ");
         exact(entry(Kind.RIR), "rir", "рир");
         exact(entry(Kind.CORRECTION), "нет", "вернее", "точнее", "ой", "стоп");
+        exact(entry(Kind.RESERVE), "запасе");
+        exact(entry(Kind.LAST), "последний", "последнем", "последнюю", "последнего");
+        exact(entry(Kind.FIRST), "первый", "первом", "первую");
         exact(entry(Kind.FILLER), "потом", "дальше", "затем", "далее", "после", "этого", "следом", "следующее",
                 "следующим", "следующий", "и", "а", "еще", "конце", "конец", "начнем", "начинаем", "сначала",
                 "первым", "делом", "закончим", "заканчиваем", "завершим", "упражнение", "упражнения", "сделаем",
                 "делаем", "делать", "сделать", "будет", "будем", "это", "нас", "его", "теперь", "тоже", "также", "пусть",
                 "сделай", "хочу", "давай", "давайте", "нужно", "надо", "можно", "ну", "так", "вот", "э", "ээ", "эм",
                 "мм", "короче", "значит", "типа", "сегодня", "завтра", "послезавтра", "ок", "окей", "хорошо", "ладно",
-                "итак", "как", "обычно", "между", "всего", "все", "по-прежнему", "тренировка", "тренировку", "тренировке", "тренировки",
+                "итак", "как", "обычно", "между", "оставить", "оставляем", "оставь", "оставляй", "держим", "всего", "все", "по-прежнему", "тренировка", "тренировку", "тренировке", "тренировки",
                 "понедельник", "вторник", "среда", "среду", "четверг", "пятница", "пятницу", "суббота", "субботу",
                 "воскресенье", "утром", "вечером");
         exact(entry(Kind.MONTH), "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября",
@@ -68,7 +80,7 @@ final class Lexicon {
         stems(unit(Unit.SETS, 1), "подход", "подхода", "подходов", "подходы", "подходами", "подходик", "подходика",
                 "сет", "сета", "сетов", "сеты");
         stems(unit(Unit.REPS, 1), "повтор", "повтора", "повторов", "повторы", "повторение", "повторения", "повторений",
-                "раз", "раза", "разика", "повторик");
+                "раз", "раза", "разика", "повторик", "шаг", "шага", "шагов", "шаги");
         stems(unit(Unit.KG, 1), "килограмм", "килограмма", "килограммов", "килограммами", "килограм", "кила", "кил");
         stems(unit(Unit.SECONDS, SECONDS_PER_MINUTE), "минута", "минуты", "минут", "минуту", "минуте", "минутой",
                 "минутка", "минутки");
@@ -77,7 +89,10 @@ final class Lexicon {
         stems(unit(Unit.METERS, 1), "метр", "метра", "метров");
         stems(unit(Unit.METERS, METERS_PER_KILOMETER), "километр", "километра", "километров", "километре");
         stems(unit(Unit.PERCENT, 1), "процент", "процента", "процентов", "процентами");
-        stems(entry(Kind.WEIGHT_WORD), "вес", "весом", "блин", "блином", "блинами", "отягощение", "отягощением");
+        // Инвентарь тоже указывает на вес: «гантели по десять», «с гантелей тридцать два».
+        stems(entry(Kind.WEIGHT_WORD), "вес", "весом", "блин", "блином", "блинами", "отягощение", "отягощением",
+                "гантели", "гантель", "гантелью", "гантелей", "гантелями", "гантелька", "гантельки", "штанга", "штангой",
+                "штанги", "гриф", "грифом", "гиря", "гирей", "гири");
         stems(entry(Kind.REST), "отдых", "отдыха", "отдыхом", "отдыхать", "отдыхаем");
         stems(entry(Kind.PAUSE), "пауза", "паузой", "паузы");
         stems(entry(Kind.WARMUP), "разминка", "разминки", "разминочный", "разминочные", "разминочных", "разминочного");

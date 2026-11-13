@@ -35,6 +35,11 @@ public final class WorkoutTextParser {
         boolean leading() { return name == null; }
         boolean unknown() { return match == null && name != null; }
         boolean hasParameters() { return params.stream().anyMatch(ParameterParser::startsParameters); }
+
+        /** Есть числа или «до отказа», а не только отметки вроде «разминка». */
+        boolean hasValues() {
+            return params.stream().anyMatch(p -> p.is(Kind.NUMBER) || p.is(Kind.QUANTITY) || p.is(Kind.TO_FAILURE));
+        }
     }
 
     public ParsedWorkout parse(String phrase) {
@@ -48,15 +53,16 @@ public final class WorkoutTextParser {
         dropCorrected(slots);
         var leading = slots.getFirst();
         var unrecognized = new ArrayList<String>();
-        boolean moved = leading.hasParameters() && slots.size() > 1 && !slots.get(1).hasParameters();
+        // «Три по пять — присед»: параметры перед первым названием; «Разминка — велотренажёр»: только отметка режима.
+        boolean moved = leading.hasParameters() && slots.size() > 1
+                && (!slots.get(1).hasParameters() || !leading.hasValues());
         if (moved) {
-            // «Три по пять — присед»: параметры перед первым названием.
             slots.get(1).params.addAll(0, leading.params);
-        } else if (!leading.hasParameters()) {
+        } else if (!leading.hasValues()) {
             unrecognized.addAll(ParameterParser.parse(leading.params, text, null).unrecognized());
         }
         var items = new ArrayList<Item>();
-        if (leading.hasParameters() && !moved) {
+        if (leading.hasValues() && !moved) {
             // Подходы без названия («начнём со… пять по три на сто сорок»): не теряем, упражнение выберет тренер.
             var params = ParameterParser.parse(leading.params, text, null);
             items.add(new Item(null, null, null, "", Confidence.LOW, params.lines(), params.restSeconds(),
@@ -78,7 +84,7 @@ public final class WorkoutTextParser {
                 current = new Slot(m, tokens.get(i).from, tokens.get(m.end() - 1).to, tokens.subList(i, m.end()));
                 slots.add(current);
                 i = m.end();
-            } else if (t.is(Kind.WORD) && nameStart(current, tokens, i) >= 0) {
+            } else if ((t.is(Kind.WORD) || lostName(tokens, i)) && nameStart(current, tokens, i) >= 0) {
                 int start = nameStart(current, tokens, i);
                 int end = unknownNameEnd(tokens, i);
                 if (start < i) current.params.removeLast();
@@ -111,6 +117,12 @@ public final class WorkoutTextParser {
         }
         if (current.leading() || current.hasParameters()) return i;
         return current.params.stream().anyMatch(p -> p.is(Kind.FILLER) || p.is(Kind.SEPARATOR)) ? i : -1;
+    }
+
+    /** «…до отказа, и с гантелями по 22»: инвентарь после связки и предлога — остаток потерянного названия. */
+    private static boolean lostName(List<Token> tokens, int i) {
+        return tokens.get(i).is(Kind.WEIGHT_WORD) && i > 1 && tokens.get(i - 1).is(Kind.PREPOSITION)
+                && tokens.get(i - 2).is(Kind.FILLER);
     }
 
     /** Название — слова подряд, внутри могут быть предлоги: «жим арнольда», «тяга с резиной». */
