@@ -16,6 +16,8 @@ public final class VoiceParserCli {
     private static final String JSON_FLAG = "--json";
     /** По строке JSON на фразу, без подсказок и пояснений: для скриптов сравнения. */
     private static final String JSONL_FLAG = "--jsonl";
+    /** Нормализованные токены фразы (числа — значениями, слова — основами) для подсчёта ошибок распознавания. */
+    private static final String NORM_FLAG = "--norm";
 
     private VoiceParserCli() { }
 
@@ -25,6 +27,13 @@ public final class VoiceParserCli {
         var mapper = JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
         var parser = new WorkoutTextParser(ExerciseDictionary.system());
         var in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
+        if (args.length > 0 && NORM_FLAG.equals(args[0])) {
+            in.lines().forEach(l -> out.println(String.join(" ", TextTokenizer.tokenize(l).tokens().stream()
+                    .filter(t -> !t.is(Token.Kind.SEPARATOR))
+                    .map(t -> t.is(Token.Kind.NUMBER) ? ParameterParser.format(t.value) : t.stem != null ? t.stem : t.text)
+                    .toList())));
+            return;
+        }
         if (args.length > 0 && JSONL_FLAG.equals(args[0])) {
             var compact = JsonMapper.builder().build();
             in.lines().forEach(l -> out.println(compact.writeValueAsString(parser.parse(l))));
