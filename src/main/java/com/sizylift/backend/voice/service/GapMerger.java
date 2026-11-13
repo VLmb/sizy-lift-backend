@@ -133,7 +133,7 @@ final class GapMerger {
             item.exerciseId = e.id();
             item.exerciseName = e.name();
             item.resultType = e.resultType();
-            item.confidence = "medium";
+            item.confidence = VoiceDraft.MEDIUM;
             item.proposal = null;
             item.lines = SetLineFit.fit(item.lines, e.resultType(), item.issues);
             return true;

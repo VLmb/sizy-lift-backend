@@ -17,6 +17,8 @@ import com.sizylift.backend.voice.parser.ParsedWorkout.SetLine;
 final class VoiceDraft {
     static final String SOURCE_SPOKEN = "spoken";
     static final String SOURCE_MODEL = "model";
+    /** Упражнение выбрано, но с сомнением: приложение показывает пометку «проверьте». */
+    static final String MEDIUM = "medium";
     /** Больше подходов в одной строке не бывает: «тридцать подходов» — ошибка распознавания. */
     private static final int MAX_SETS = 20;
     private static final int MAX_ITEMS = 30;
