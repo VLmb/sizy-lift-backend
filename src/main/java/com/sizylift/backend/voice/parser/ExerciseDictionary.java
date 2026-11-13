@@ -7,11 +7,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.sizylift.backend.voice.parser.Token.Kind;
 
@@ -116,7 +118,9 @@ public final class ExerciseDictionary {
         var bestNode = new Node[1];
         walk(root, tokens, start, 0, false, best, bestNode);
         if (bestNode[0] == null) return null;
-        var hits = List.copyOf(bestNode[0].hits);
+        // Личный синоним добавляется отдельной записью с тем же id: одно упражнение не считается неоднозначностью.
+        var hits = bestNode[0].hits.stream().collect(Collectors.toMap(Exercise::id, e -> e,
+                (first, second) -> first, LinkedHashMap::new)).values().stream().toList();
         return new Match(hits.getFirst(), start, best[0], best[1], hits.size() > 1, hits.subList(1, hits.size()));
     }
 

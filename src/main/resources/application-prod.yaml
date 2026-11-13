@@ -23,6 +23,16 @@ sizylift:
       # Связывается только при включённом импорте; ключ без значения по умолчанию.
       api-key: ${DEEPSEEK_API_KEY}
       url: ${DEEPSEEK_API_URL}
+  voice:
+    enabled: ${VOICE_ENABLED:false}
+    deepgram:
+      # Обязателен только при включённом голосовом вводе.
+      api-key: ${DEEPGRAM_API_KEY}
+      url: ${DEEPGRAM_API_URL}
+    fallback:
+      # Запасная модель — тот же DeepSeek, что у AI-импорта; без ключа просто не вызывается.
+      api-key: ${DEEPSEEK_API_KEY}
+      url: ${DEEPSEEK_API_URL}
   admin:
     keycloak-url: ${KEYCLOAK_ADMIN_URL}
     keycloak-client-id: ${KEYCLOAK_ADMIN_READ_CLIENT_ID}
