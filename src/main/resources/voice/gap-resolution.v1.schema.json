@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["gaps"],
+  "properties": {
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gap", "kind", "match", "newName", "resultType", "note", "sets"],
+        "properties": {
+          "gap": {"type": "string"},
+          "kind": {"type": "string", "enum": ["exercise", "note", "sets", "filler", "unknown"]},
+          "match": {"type": "string"},
+          "newName": {"type": "string"},
+          "resultType": {"type": "string", "enum": ["weight_reps", "added_weight_reps", "duration", "distance_time", "free", ""]},
+          "note": {"type": "string"},
+          "sets": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

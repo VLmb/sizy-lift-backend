@@ -27,6 +27,13 @@ sizylift:
       url: https://api.deepseek.com
       model: deepseek-flash
       timeout: 5m
+  voice:
+    # Голосовой ввод тренировки (docs/voice.md). Остальные значения по умолчанию — в VoiceProperties.
+    enabled: false
+    deepgram:
+      api-key: ""
+    fallback:
+      api-key: ""
   admin:
     keycloak-url: ""
     keycloak-client-id: ""

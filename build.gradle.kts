@@ -84,3 +84,13 @@ tasks.withType<Test> {
     dependsOn(":keycloak-provider:jar")
     maxParallelForks = 1
 }
+
+// Ручная проверка разбора голосовой диктовки, без Spring, базы и Docker:
+// ./gradlew -q voiceParse --console=plain   (--args=--json — полный ответ, --jsonl — строка JSON на фразу, --norm — нормализованные токены)
+tasks.register<JavaExec>("voiceParse") {
+    group = "verification"
+    description = "Разбор продиктованной тренировки из текста в подходы"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.sizylift.backend.voice.parser.VoiceParserCli"
+    standardInput = System.`in`
+}
