@@ -86,7 +86,7 @@ tasks.withType<Test> {
 }
 
 // Ручная проверка разбора голосовой диктовки, без Spring, базы и Docker:
-// ./gradlew -q voiceParse --console=plain   (или --args=--json для полного ответа)
+// ./gradlew -q voiceParse --console=plain   (--args=--json — полный ответ, --args=--jsonl — строка JSON на фразу)
 tasks.register<JavaExec>("voiceParse") {
     group = "verification"
     description = "Разбор продиктованной тренировки из текста в подходы"

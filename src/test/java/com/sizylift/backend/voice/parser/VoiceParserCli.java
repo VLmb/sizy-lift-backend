@@ -14,6 +14,8 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public final class VoiceParserCli {
     private static final String JSON_FLAG = "--json";
+    /** По строке JSON на фразу, без подсказок и пояснений: для скриптов сравнения. */
+    private static final String JSONL_FLAG = "--jsonl";
 
     private VoiceParserCli() { }
 
@@ -23,6 +25,11 @@ public final class VoiceParserCli {
         var mapper = JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
         var parser = new WorkoutTextParser(ExerciseDictionary.system());
         var in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
+        if (args.length > 0 && JSONL_FLAG.equals(args[0])) {
+            var compact = JsonMapper.builder().build();
+            in.lines().forEach(l -> out.println(compact.writeValueAsString(parser.parse(l))));
+            return;
+        }
         out.println("Фраза на строку, пустая строка или Ctrl+D — выход.");
         out.print("> ");
         String line;
