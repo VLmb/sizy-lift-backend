@@ -107,3 +107,6 @@ databaseChangeLog:
   - include:
       file: changes/037-voice-input.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/038-reps-and-drops.sql
+      relativeToChangelogFile: true

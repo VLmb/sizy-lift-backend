@@ -75,7 +75,24 @@ public record WorkoutPayloadV1(
             @Min(0) Integer elevationGainM,
             @Size(max = LONG_TEXT) String note,
             Instant completedAt,
-            UUID sourcePlannedSetId) {
+            UUID sourcePlannedSetId,
+            @Size(max = MAX_DROPS_PER_SET) List<@NotNull @Valid Drop> drops) {
+
+        /** Подход без дропсета: старые клиенты поле не присылают. */
+        public Set(UUID id, int position, String setType, String completionStatus, Integer weightGrams,
+                Integer repetitions, Integer durationMs, Integer distanceM, Integer rpeTenths,
+                Integer averageHeartRateBpm, Integer maximumHeartRateBpm, Integer powerWatts, Integer elevationGainM,
+                String note, Instant completedAt, UUID sourcePlannedSetId) {
+            this(id, position, setType, completionStatus, weightGrams, repetitions, durationMs, distanceM, rpeTenths,
+                    averageHeartRateBpm, maximumHeartRateBpm, powerWatts, elevationGainM, note, completedAt,
+                    sourcePlannedSetId, null);
+        }
+    }
+
+    /** Ступень дропсета: вес снижен, повторы продолжаются без отдыха. Для доп. веса — доп. вес. */
+    public record Drop(
+            @Min(0) Integer weightGrams,
+            @Min(0) Integer repetitions) {
     }
 
     public record PlanSetSnapshot(

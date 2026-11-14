@@ -3,7 +3,7 @@ package com.sizylift.backend.publication.dto.payload;
 /** Допустимые значения и пределы payload v1; перечисления совпадают с CHECK-ограничениями SQLite в приложении. */
 final class PayloadValues {
 
-    static final String RESULT_TYPE = "weight_reps|added_weight_reps|duration|distance_time|free";
+    static final String RESULT_TYPE = "weight_reps|added_weight_reps|reps|duration|distance_time|free";
     static final String SET_TYPE = "warmup|working|top|backoff|drop";
     static final String BLOCK_TYPE = "single|group|circuit|interval|free";
     static final String GROUP_LABEL = "superset|triset|giant_set";
@@ -38,6 +38,8 @@ final class PayloadValues {
     static final int MAX_BLOCKS = 100;
     static final int MAX_EXERCISES_PER_BLOCK = 50;
     static final int MAX_SETS_PER_EXERCISE = 200;
+    /** Ступени дропсета под одним подходом. */
+    static final int MAX_DROPS_PER_SET = 20;
     static final int MAX_PLAN_SNAPSHOTS = 2000;
     static final int MAX_RECORD_EVENTS = 2000;
 

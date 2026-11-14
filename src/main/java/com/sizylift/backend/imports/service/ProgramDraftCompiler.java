@@ -185,6 +185,7 @@ public class ProgramDraftCompiler {
         if (type.equals("duration") && (reps != null || weight != null)
                 || type.equals("free") && (reps != null || weight != null || duration != null || distance != null)
                 || (type.equals("weight_reps") || type.equals("added_weight_reps")) && (duration != null || distance != null)
+                || type.equals("reps") && (weight != null || duration != null || distance != null)
                 || type.equals("distance_time") && (reps != null || weight != null))
             throw ImportFailure.invalid("Тип выбранного упражнения несовместим с подходами. Выберите другое или создайте своё.");
         if (source.setType().isBlank()) notes.add(language.text("Тип подхода в источнике не указан.", "Set type not specified in the source."));

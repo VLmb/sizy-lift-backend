@@ -72,7 +72,8 @@ class SyncChangesApiTest extends PostgresIntegrationTest {
             "exercise", List.of("liftClass"),
             "program", List.of("cycles.[].weeks.[].workouts.[].blocks.[].exercises.[].sets.[]."
                     + "targetPercentOneRmTenths", "sourceProgramId",
-                    "cycles.[].weeks.[].workouts.[].blocks.[].exercises.[].techniqueVideoId"));
+                    "cycles.[].weeks.[].workouts.[].blocks.[].exercises.[].techniqueVideoId"),
+            "workout", List.of("blocks.[].exercises.[].sets.[].drops"));
 
     @Autowired
     MockMvc mvc;

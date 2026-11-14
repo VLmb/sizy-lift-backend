@@ -45,6 +45,7 @@ final class ParameterParser {
     private static final Map<String, Set<Field>> ALLOWED = Map.of(
             "weight_reps", STRENGTH,
             "added_weight_reps", STRENGTH,
+            "reps", EnumSet.of(Field.COUNT, Field.REPS, Field.REPS_MAX, Field.RPE, Field.RIR),
             "duration", EnumSet.of(Field.COUNT, Field.SECONDS, Field.RPE),
             "distance_time", EnumSet.of(Field.COUNT, Field.SECONDS, Field.METERS),
             "free", EnumSet.of(Field.COUNT));

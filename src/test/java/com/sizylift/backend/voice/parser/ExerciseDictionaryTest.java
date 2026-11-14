@@ -13,6 +13,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ExerciseDictionaryTest {
     private static final List<String> SEEDS = List.of("/db/changelog/changes/004-seed-exercise-catalog.sql",
             "/db/changelog/changes/006-seed-exercise-catalog-2026-10-2.sql");
+    /** Упражнения, переведённые в «только повторы» changeset 038. */
+    private static final java.util.Set<String> REPS_ONLY = java.util.Set.of(
+            "14000000-0000-4000-8000-000000000030", "14000000-0000-4000-8000-000000000064",
+            "14000000-0000-4000-8000-000000000066");
     /** Строка упражнения в seed: id, название, короткое, категория, тип. */
     private static final Pattern SEED_ROW = Pattern.compile(
             "\\('(14000000-[0-9a-f-]+)', '([^']*)', '([^']*)', '[^']*', '([a-z_]+)'");
@@ -30,7 +34,7 @@ class ExerciseDictionaryTest {
                 assertThat(e).as(m.group(2)).isNotNull();
                 assertThat(e.name()).isEqualTo(m.group(2));
                 assertThat(e.aliases().get(1)).isEqualTo(m.group(3));
-                assertThat(e.resultType()).isEqualTo(m.group(4));
+                assertThat(e.resultType()).isEqualTo(REPS_ONLY.contains(m.group(1)) ? "reps" : m.group(4));
             }
         }
         assertThat(seeded).isEqualTo(74);
