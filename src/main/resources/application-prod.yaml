@@ -25,6 +25,10 @@ sizylift:
       url: ${DEEPSEEK_API_URL}
   voice:
     enabled: ${VOICE_ENABLED:false}
+    debug:
+      # Отладка (docs/voice-debug.md): текст речи и ответы — в лог, записи — в deploy/voice-debug.
+      enabled: ${VOICE_DEBUG_ENABLED:false}
+      audio-dir: ${VOICE_DEBUG_AUDIO_DIR:}
     deepgram:
       # Обязателен только при включённом голосовом вводе.
       api-key: ${DEEPGRAM_API_KEY}

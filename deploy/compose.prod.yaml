@@ -73,6 +73,8 @@ services:
       VOICE_ENABLED: ${VOICE_ENABLED:-false}
       DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
       DEEPGRAM_API_URL: ${DEEPGRAM_API_URL:-}
+      VOICE_DEBUG_ENABLED: ${VOICE_DEBUG_ENABLED:-false}
+      VOICE_DEBUG_AUDIO_DIR: /app/voice-debug
       ACCOUNT_DELETION_ENABLED: ${ACCOUNT_DELETION_ENABLED:-false}
       KEYCLOAK_ADMIN_URL: http://keycloak:8080
       KEYCLOAK_DELETION_CLIENT_ID: ${KEYCLOAK_DELETION_CLIENT_ID:-}
@@ -86,6 +88,9 @@ services:
       VIDEO_PUBLIC_ENDPOINT: https://${MEDIA_DOMAIN:?Set MEDIA_DOMAIN}
       VIDEO_ACCESS_KEY: ${VIDEO_ACCESS_KEY:?Set VIDEO_ACCESS_KEY}
       VIDEO_SECRET_KEY: ${VIDEO_SECRET_KEY:?Set VIDEO_SECRET_KEY}
+    volumes:
+      # Записи отладки голоса (docs/voice-debug.md); пишутся только при VOICE_DEBUG_ENABLED=true.
+      - ./voice-debug:/app/voice-debug
     networks:
       - default
       - admin-runtime

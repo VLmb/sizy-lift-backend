@@ -151,6 +151,7 @@
 | keyterm-chars | 900 (лимит Deepgram — 500 токенов на все подсказки) |
 | deepgram.model / language / timeout | nova-3 / ru / 15s |
 | fallback.enabled / model / timeout / max-output-tokens | true / deepseek-flash / 4s / 1024 |
+| debug.enabled / audio-dir | false / пусто — отладка, [voice-debug.md](voice-debug.md); в production — `VOICE_DEBUG_ENABLED` |
 
 Production (`deploy/.env`): `VOICE_ENABLED=true`, `DEEPGRAM_API_KEY`, `DEEPGRAM_API_URL=https://api.deepgram.com`;
 запасная модель берёт `DEEPSEEK_API_KEY` и `DEEPSEEK_API_URL` AI-импорта и без ключа не вызывается. Включённая
