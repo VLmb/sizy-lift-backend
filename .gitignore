@@ -10,3 +10,6 @@ build/
 
 __pycache__/
 *.pyc
+
+# Записи отладки голосового ввода (docs/voice-debug.md): голос людей, не коммитить.
+deploy/voice-debug/

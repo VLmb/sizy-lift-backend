@@ -24,8 +24,7 @@ export SIZYLIFT_VOICE_DEBUG_AUDIODIR=$HOME/sizy-voice-debug # необязате
 ./gradlew bootRun 2>&1 | tee backend.log
 ```
 
-При старте — предупреждение `Отладка голосового ввода включена…`. В профиле `prod` отладка не стартует
-(ошибка запуска): там звук и текст не пишутся никуда.
+При старте — предупреждение `Отладка голосового ввода включена…`.
 
 | Параметр | По умолчанию | |
 |---|---|---|
@@ -91,6 +90,36 @@ curl -H "Authorization: Bearer $TOKEN" \
 ```
 
 Папку чистить руками: в ней голос людей.
+
+## На production-сервере
+
+Отладка пишет **всех**, кто диктует: включать на время проверки, пока чужих людей на сервере нет.
+
+1. Из корня репозитория на сервере (как в [deployment.md](deployment.md)): в `deploy/.env` —
+   `VOICE_DEBUG_ENABLED=true`; папка для записей `deploy/voice-debug`, сервер в контейнере работает от uid 1000:
+
+```bash
+mkdir -p deploy/voice-debug && sudo chown 1000:1000 deploy/voice-debug
+```
+
+```bash
+docker compose --env-file deploy/.env -f deploy/compose.prod.yaml up -d --build --wait backend
+```
+
+2. Надиктовать с телефона и с сайта. Лог:
+
+```bash
+docker compose --env-file deploy/.env -f deploy/compose.prod.yaml logs backend | grep "voice\.debug"
+```
+
+3. Забрать записи к себе (с компьютера):
+
+```bash
+scp -r <пользователь>@<сервер>:<путь к репозиторию>/deploy/voice-debug ./voice-debug
+```
+
+4. Выключить: `VOICE_DEBUG_ENABLED=false`, снова та же команда `up`, папку на сервере очистить. Папка в
+   `.gitignore` — записи в этот репозиторий не попадут.
 
 ## Клиенты
 

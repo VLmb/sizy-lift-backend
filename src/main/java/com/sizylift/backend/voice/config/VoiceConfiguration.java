@@ -15,7 +15,6 @@ import com.sizylift.backend.voice.service.VoicePipeline;
 import com.sizylift.backend.voice.service.VoiceTrace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.env.Environment;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -52,16 +51,17 @@ public class VoiceConfiguration {
 
     @Bean
     VoicePipeline voicePipeline(SpeechRecognizer recognizer, GapResolver resolver, ObjectMapper json,
-                                VoiceProperties properties, Environment environment, Clock clock) {
-        return new VoicePipeline(recognizer, resolver, json, trace(properties, environment, json, clock));
+                                VoiceProperties properties, Clock clock) {
+        return new VoicePipeline(recognizer, resolver, json, trace(properties, json, clock));
     }
 
-    /** Отладочная запись слов пользователя — только вне production. */
-    static VoiceTrace trace(VoiceProperties properties, Environment environment, ObjectMapper json, Clock clock) {
+    /**
+     * Отладочная запись слов пользователя (docs/voice-debug.md). Пишет всех, кто диктует: включать на время
+     * проверки, пока на сервере нет чужих людей.
+     */
+    static VoiceTrace trace(VoiceProperties properties, ObjectMapper json, Clock clock) {
         var debug = properties.debug();
         if (!debug.enabled()) return VoiceTrace.NONE;
-        if (environment.matchesProfiles("prod"))
-            throw new IllegalStateException("sizylift.voice.debug.enabled нельзя включать в профиле prod");
         var directory = debug.audioDir().isBlank() ? null : Path.of(debug.audioDir());
         log.warn("Отладка голосового ввода включена: текст речи пишется в лог{}",
                 directory == null ? "" : ", записи сохраняются в " + directory.toAbsolutePath());
