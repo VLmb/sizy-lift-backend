@@ -14,7 +14,7 @@
           "kind": {"type": "string", "enum": ["exercise", "note", "sets", "filler", "unknown"]},
           "match": {"type": "string"},
           "newName": {"type": "string"},
-          "resultType": {"type": "string", "enum": ["weight_reps", "added_weight_reps", "duration", "distance_time", "free", ""]},
+          "resultType": {"type": "string", "enum": ["weight_reps", "added_weight_reps", "reps", "duration", "distance_time", "free", ""]},
           "note": {"type": "string"},
           "sets": {"type": "array", "items": {"type": "string"}}
         }

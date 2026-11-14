@@ -31,7 +31,7 @@ final class GapMerger {
 
     private static final String GAP_PREFIX = "G";
     private static final String ITEM_PREFIX = "E";
-    private static final Set<String> RESULT_TYPES = Set.of("weight_reps", "added_weight_reps", "duration", "distance_time", "free");
+    private static final Set<String> RESULT_TYPES = Set.of("weight_reps", "added_weight_reps", "reps", "duration", "distance_time", "free");
     private static final String FIELD_NAMES = "(n|r|kg|pct|sec|m|rpe|rir|rest|type)";
     private static final Pattern FIELD = Pattern.compile(FIELD_NAMES + "=(\\S+)");
     /** Строка целиком из полей, без лишнего текста. */

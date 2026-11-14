@@ -48,6 +48,7 @@
               "",
               "weight_reps",
               "added_weight_reps",
+              "reps",
               "duration",
               "distance_time",
               "free"

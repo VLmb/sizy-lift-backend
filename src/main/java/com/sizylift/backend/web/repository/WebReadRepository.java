@@ -128,6 +128,7 @@ public class WebReadRepository {
               AND CASE s.result_type
                   WHEN 'weight_reps' THEN s.weight_grams IS NOT NULL OR s.repetitions IS NOT NULL OR s.rpe_tenths IS NOT NULL
                   WHEN 'added_weight_reps' THEN s.weight_grams IS NOT NULL OR s.repetitions IS NOT NULL OR s.rpe_tenths IS NOT NULL
+                  WHEN 'reps' THEN s.repetitions IS NOT NULL OR s.rpe_tenths IS NOT NULL
                   WHEN 'duration' THEN s.duration_ms IS NOT NULL OR s.rpe_tenths IS NOT NULL
                   WHEN 'distance_time' THEN s.duration_ms IS NOT NULL OR s.distance_m IS NOT NULL
                       OR s.average_heart_rate_bpm IS NOT NULL OR s.maximum_heart_rate_bpm IS NOT NULL

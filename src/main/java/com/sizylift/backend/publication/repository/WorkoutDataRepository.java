@@ -6,9 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1.Block;
+import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1.Drop;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1.Exercise;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1.PlanSetSnapshot;
 import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1.RecordEvent;
@@ -16,6 +18,8 @@ import com.sizylift.backend.publication.dto.payload.WorkoutPayloadV1.Set;
 import com.sizylift.backend.publication.repository.Sql.Child;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 import static com.sizylift.backend.publication.repository.Sql.children;
 import static com.sizylift.backend.publication.repository.Sql.date;
@@ -49,8 +53,8 @@ public class WorkoutDataRepository {
             INSERT INTO sizylift.workout_set (user_id, id, workout_id, workout_exercise_id, position, result_type,
                 set_type, completion_status, weight_grams, repetitions, duration_ms, distance_m, rpe_tenths,
                 average_heart_rate_bpm, maximum_heart_rate_bpm, power_watts, elevation_gain_m, note,
-                completed_at, source_planned_set_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                completed_at, source_planned_set_id, drops)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)
             """;
     private static final String INSERT_PLAN_SNAPSHOT = """
             INSERT INTO sizylift.workout_plan_set_snapshot (user_id, id, workout_id, actual_set_id,
@@ -82,7 +86,7 @@ public class WorkoutDataRepository {
     private static final String SELECT_SETS = """
             SELECT id, workout_exercise_id, position, set_type, completion_status, weight_grams, repetitions,
                 duration_ms, distance_m, rpe_tenths, average_heart_rate_bpm, maximum_heart_rate_bpm, power_watts,
-                elevation_gain_m, note, completed_at, source_planned_set_id
+                elevation_gain_m, note, completed_at, source_planned_set_id, drops
             FROM sizylift.workout_set WHERE user_id = ? AND workout_id = ? ORDER BY position, id
             """;
     private static final String SELECT_PLAN_SNAPSHOTS = """
@@ -96,10 +100,14 @@ public class WorkoutDataRepository {
             FROM sizylift.workout_record_event WHERE user_id = ? AND workout_id = ? ORDER BY created_at, id
             """;
 
-    private final JdbcTemplate jdbc;
+    private static final TypeReference<List<Drop>> DROPS = new TypeReference<>() { };
 
-    public WorkoutDataRepository(JdbcTemplate jdbc) {
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper json;
+
+    public WorkoutDataRepository(JdbcTemplate jdbc, ObjectMapper json) {
         this.jdbc = jdbc;
+        this.json = json;
     }
 
     public void insert(UUID userId, UUID workoutId, WorkoutPayloadV1 workout) {
@@ -108,14 +116,14 @@ public class WorkoutDataRepository {
                 workout.plannedWorkoutId(), timestamp(workout.updatedAt()));
         Sql.batch(jdbc, INSERT_BLOCK, blockRows(userId, workoutId, workout));
         Sql.batch(jdbc, INSERT_EXERCISE, exerciseRows(userId, workoutId, workout));
-        Sql.batch(jdbc, INSERT_SET, setRows(userId, workoutId, workout));
+        Sql.batch(jdbc, INSERT_SET, setRows(userId, workoutId, workout, this::dropsJson));
         Sql.batch(jdbc, INSERT_PLAN_SNAPSHOT, planSnapshotRows(userId, workoutId, workout));
         Sql.batch(jdbc, INSERT_RECORD_EVENT, recordEventRows(userId, workoutId, workout));
     }
 
     /** Тренировка в формате payload v1, как её публикует приложение. */
     public Optional<WorkoutPayloadV1> find(UUID userId, UUID workoutId) {
-        var sets = Sql.byParent(jdbc.query(SELECT_SETS, WorkoutDataRepository::set, userId, workoutId));
+        var sets = Sql.byParent(jdbc.query(SELECT_SETS, this::set, userId, workoutId));
         var exercises = Sql.byParent(jdbc.query(SELECT_EXERCISES, (row, n) -> exercise(row, sets), userId,
                 workoutId));
         var blocks = jdbc.query(SELECT_BLOCKS, (row, n) -> block(row, exercises), userId, workoutId);
@@ -154,14 +162,26 @@ public class WorkoutDataRepository {
                 exercise.planComment()};
     }
 
-    private static List<Object[]> setRows(UUID userId, UUID workoutId, WorkoutPayloadV1 workout) {
+    /** {@code workout_set.drops}: JSON-массив ступеней или NULL, если дропсета нет. */
+    private String dropsJson(List<Drop> drops) {
+        return drops == null || drops.isEmpty() ? null : json.writeValueAsString(drops);
+    }
+
+    private List<Drop> drops(ResultSet row) throws SQLException {
+        var value = row.getString("drops");
+        return value == null ? null : json.readValue(value, DROPS);
+    }
+
+    private static List<Object[]> setRows(UUID userId, UUID workoutId, WorkoutPayloadV1 workout,
+            Function<List<Drop>, String> drops) {
         return workout.blocks().stream()
                 .flatMap(block -> block.exercises().stream())
                 .flatMap(exercise -> exercise.sets().stream().map(set -> new Object[] {userId, set.id(), workoutId,
                         exercise.id(), set.position(), exercise.resultType(), set.setType(), set.completionStatus(),
                         set.weightGrams(), set.repetitions(), set.durationMs(), set.distanceM(), set.rpeTenths(),
                         set.averageHeartRateBpm(), set.maximumHeartRateBpm(), set.powerWatts(),
-                        set.elevationGainM(), set.note(), timestamp(set.completedAt()), set.sourcePlannedSetId()}))
+                        set.elevationGainM(), set.note(), timestamp(set.completedAt()), set.sourcePlannedSetId(),
+                        drops.apply(set.drops())}))
                 .toList();
     }
 
@@ -199,13 +219,14 @@ public class WorkoutDataRepository {
                 row.getString("actual_comment"), row.getString("plan_comment"), children(sets, id)));
     }
 
-    private static Child<UUID, Set> set(ResultSet row, int rowNumber) throws SQLException {
+    private Child<UUID, Set> set(ResultSet row, int rowNumber) throws SQLException {
         return new Child<>(uuid(row, "workout_exercise_id"), new Set(uuid(row, "id"), row.getInt("position"),
                 row.getString("set_type"), row.getString("completion_status"), integer(row, "weight_grams"),
                 integer(row, "repetitions"), integer(row, "duration_ms"), integer(row, "distance_m"),
                 integer(row, "rpe_tenths"), integer(row, "average_heart_rate_bpm"),
                 integer(row, "maximum_heart_rate_bpm"), integer(row, "power_watts"), integer(row, "elevation_gain_m"),
-                row.getString("note"), instant(row, "completed_at"), uuid(row, "source_planned_set_id")));
+                row.getString("note"), instant(row, "completed_at"), uuid(row, "source_planned_set_id"),
+                drops(row)));
     }
 
     private static PlanSetSnapshot planSnapshot(ResultSet row, int rowNumber) throws SQLException {

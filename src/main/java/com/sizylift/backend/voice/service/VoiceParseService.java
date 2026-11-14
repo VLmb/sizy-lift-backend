@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class VoiceParseService {
-    private static final Set<String> RESULT_TYPES = Set.of("weight_reps", "added_weight_reps", "duration", "distance_time", "free");
+    private static final Set<String> RESULT_TYPES = Set.of("weight_reps", "added_weight_reps", "reps", "duration", "distance_time", "free");
     private static final String AUDIO = "audio/";
     /** Без явного типа звука Deepgram определяет формат сам; m4a с iOS иногда приходит как video/mp4. */
     private static final Set<String> AUDIO_CONTAINERS = Set.of("application/octet-stream", "video/mp4", "video/webm");

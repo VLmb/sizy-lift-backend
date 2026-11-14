@@ -703,7 +703,7 @@
       "name": "Отжимания от пола",
       "shortName": "Отжимания",
       "movementCategoryId": "11000000-0000-4000-8000-000000000017",
-      "resultType": "added_weight_reps",
+      "resultType": "reps",
       "isSbd": false,
       "note": null,
       "muscles": [
@@ -1315,7 +1315,7 @@
       "name": "Скручивания",
       "shortName": "Скручивания",
       "movementCategoryId": "11000000-0000-4000-8000-000000000001",
-      "resultType": "added_weight_reps",
+      "resultType": "reps",
       "isSbd": false,
       "note": null,
       "muscles": [
@@ -1351,7 +1351,7 @@
       "name": "Подъём ног в висе",
       "shortName": "Подъём ног",
       "movementCategoryId": "11000000-0000-4000-8000-000000000001",
-      "resultType": "added_weight_reps",
+      "resultType": "reps",
       "isSbd": false,
       "note": null,
       "muscles": [
