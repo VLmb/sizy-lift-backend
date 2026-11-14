@@ -110,15 +110,46 @@ body#keycloak-bg {
   right: 0;
   top: 0;
 }
-#login-select-toggle {
-  font-size: 13px;
-  min-height: 36px;
-  padding: 6px 10px;
-  background: transparent;
-}
+/* Язык: тихая плашка «Русский ⌄» по размеру текста, как переключатель на сайте. */
 .pf-v5-c-login__main-header-utilities .pf-v5-c-form-control {
+  --pf-v5-c-form-control--before--BorderStyle: none;
+  --pf-v5-c-form-control--after--BorderStyle: none;
+  width: auto;
   min-height: 36px;
+  border: 1px solid #2c2c2c;
+  border-radius: 10px;
+  background: var(--sizy-surface);
+}
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control:hover {
+  border-color: #3a3a3a;
+}
+#login-select-toggle {
+  appearance: none;
+  min-height: 34px;
+  padding: 6px 32px 6px 12px;
+  border: 0;
   background: transparent;
+  color: var(--sizy-text);
+  font: 600 14px/1.2 DIN, Arial, sans-serif;
+  cursor: pointer;
+}
+#login-select-toggle option {
+  background: var(--sizy-surface);
+  color: var(--sizy-text);
+}
+#login-select-toggle:focus-visible {
+  outline: 2px solid var(--sizy-bronze);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control__utilities {
+  right: 12px;
+  pointer-events: none;
+}
+.pf-v5-c-login__main-header-utilities .pf-v5-c-form-control__toggle-icon {
+  --pf-v5-c-form-control__toggle-icon--Color: var(--sizy-muted);
+  color: var(--sizy-muted);
+  font-size: 12px;
 }
 .sizy-intro {
   margin: 0 0 28px;
