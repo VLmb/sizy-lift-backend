@@ -23,18 +23,33 @@ public class VoicePipeline {
     private final SpeechRecognizer recognizer;
     private final GapResolver resolver;
     private final ObjectMapper json;
+    private final VoiceTrace trace;
 
     public VoicePipeline(SpeechRecognizer recognizer, GapResolver resolver, ObjectMapper json) {
+        this(recognizer, resolver, json, VoiceTrace.NONE);
+    }
+
+    public VoicePipeline(SpeechRecognizer recognizer, GapResolver resolver, ObjectMapper json, VoiceTrace trace) {
         this.recognizer = recognizer;
         this.resolver = resolver;
         this.json = json;
+        this.trace = trace;
     }
 
     public Outcome run(UUID requestId, UUID ownerId, byte[] audio, String contentType, VoiceCatalog catalog) {
         long start = System.nanoTime();
-        var text = recognizer.transcribe(audio, contentType, catalog.keyterms());
+        trace.audio(requestId, audio, contentType);
+        String text;
+        try {
+            text = recognizer.transcribe(audio, contentType, catalog.keyterms());
+        } catch (RuntimeException e) {
+            trace.failed(requestId, e);
+            throw e;
+        }
         long recognized = System.nanoTime();
+        trace.transcript(requestId, text, catalog.keyterms(), recognized - start);
         var outcome = fromText(requestId, ownerId, text, catalog);
+        trace.response(requestId, outcome.response(), outcome.fallback());
         return new Outcome(outcome.response(), recognized - start, outcome.parseNanos(), outcome.fallbackNanos(),
                 outcome.fallback(), outcome.inputTokens(), outcome.outputTokens());
     }
@@ -46,12 +61,15 @@ public class VoicePipeline {
                 .toResponse(requestId, ownerId, false), 0, System.nanoTime() - start, 0, Fallback.SKIPPED, 0, 0);
         var draft = VoiceDraft.of(new WorkoutTextParser(catalog.dictionary()).parse(text));
         long parsed = System.nanoTime();
+        trace.parsed(requestId, draft.toResponse(requestId, ownerId, true));
         if (!draft.hasGaps()) return outcome(draft, requestId, ownerId, parsed - start, 0, Fallback.SKIPPED, null);
         if (!resolver.enabled()) return outcome(draft, requestId, ownerId, parsed - start, 0, Fallback.DISABLED, null);
         var gaps = GapMerger.gaps(draft);
         try {
-            var result = resolver.resolve(GapMerger.render(text, draft, gaps, catalog));
+            var input = GapMerger.render(text, draft, gaps, catalog);
+            var result = resolver.resolve(input);
             if (result == null) throw new GapResolver.Unavailable();
+            trace.fallback(requestId, input, result.arguments());
             int resolved = GapMerger.apply(json, result.arguments(), gaps, draft, catalog);
             var fallback = resolved == gaps.size() ? Fallback.RESOLVED : resolved > 0 ? Fallback.PARTIAL : Fallback.UNRESOLVED;
             return outcome(draft, requestId, ownerId, parsed - start, System.nanoTime() - parsed, fallback, result);
