@@ -36,8 +36,8 @@ public record VoiceCatalog(ExerciseDictionary dictionary, List<Entry> entries, L
 
     private static final String ALIAS_PREFIX = "c";
     /**
-     * Слова параметров, которые распознавание чаще всего путает, и типы подходов. Идут первыми: короткие, а без
-     * них «топсет» и «бэкофф» распознаются как случайные слова.
+     * Слова параметров, которые распознавание чаще всего путает, и типы подходов. Идут после названий, но место
+     * под них в бюджете подсказок зарезервировано: без них «топсет» и «бэкофф» распознаются как случайные слова.
      */
     private static final List<String> PARAMETER_TERMS = List.of("подходов", "повторений", "килограмм", "до отказа", "RPE",
             "разминка", "рабочие", "топсет", "бэкофф");
@@ -65,11 +65,14 @@ public record VoiceCatalog(ExerciseDictionary dictionary, List<Entry> entries, L
         for (var s : system) exercises.add(exercise(s, systemAliases.getOrDefault(s.id(), List.of())));
         for (var s : system) entries.add(new Entry(ALIAS_PREFIX + (entries.size() + 1), s.id(), s.name(), s.shortName(), s.resultType()));
         for (var s : own) entries.add(new Entry(ALIAS_PREFIX + (entries.size() + 1), s.id(), s.name(), s.shortName(), s.resultType()));
-        var terms = new ArrayList<String>(PARAMETER_TERMS);
+        var terms = new ArrayList<String>();
         own.forEach(s -> terms.add(s.name()));
         userAliases.forEach(a -> terms.add(a.alias()));
         system.forEach(s -> terms.add(s.shortName() == null || s.shortName().isBlank() ? s.name() : s.shortName()));
-        return new VoiceCatalog(new ExerciseDictionary(exercises), List.copyOf(entries), keyterms(terms, keytermChars),
+        int reserved = PARAMETER_TERMS.stream().mapToInt(String::length).sum();
+        var keyterms = new ArrayList<>(keyterms(terms, Math.max(0, keytermChars - reserved)));
+        keyterms.addAll(keyterms(PARAMETER_TERMS, Math.min(reserved, keytermChars)));
+        return new VoiceCatalog(new ExerciseDictionary(exercises), List.copyOf(entries), List.copyOf(keyterms),
                 prompt(sources, systemAliases, userAliases));
     }
 

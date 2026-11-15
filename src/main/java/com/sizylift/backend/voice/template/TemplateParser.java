@@ -222,10 +222,14 @@ public final class TemplateParser {
 
         boolean said(String number) { return spoken.has(parse(number)); }
 
+        /**
+         * Число подходов. Кроме сказанного — на один меньше сказанного: «три по десять, последний до отказа»
+         * по правилу промпта превращается в 2 подхода и 1 отдельный.
+         */
         Integer integer(String text, Pattern format, int fallback, int max) {
             if (text == null) return null;
             var m = format.matcher(text);
-            if (!m.matches() || !said(m.group(1))) {
+            if (!m.matches() || !(said(m.group(1)) || spoken.has(parse(m.group(1)) + 1))) {
                 reject("кол", text);
                 return null;
             }
