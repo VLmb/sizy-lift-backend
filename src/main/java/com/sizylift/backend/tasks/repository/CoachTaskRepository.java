@@ -13,16 +13,18 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** Задачи тренера (changeset 021). Всё — только через активную связь вызывающего тренера. */
+/**
+ * Задачи тренера (changeset 021, 040). Задача подопечного видна, пока связь активна; общая (без связи) — всегда.
+ */
 @Repository
 public class CoachTaskRepository {
 
     private static final String COLUMNS = """
             SELECT t.id, l.athlete_user_id, ap.display_name, t.text, t.due_on, t.done_at, t.created_at, t.updated_at
             FROM sizylift.coach_task t
-            JOIN sizylift.coaching_link l ON l.id = t.link_id
+            LEFT JOIN sizylift.coaching_link l ON l.id = t.link_id
             LEFT JOIN sizylift.athlete_profile ap ON ap.user_id = l.athlete_user_id
-            WHERE l.coach_user_id = ? AND l.ended_at IS NULL
+            WHERE t.coach_user_id = ? AND (t.link_id IS NULL OR l.ended_at IS NULL)
             """;
     /** Открытые — по сроку (без срока в конце), затем по созданию; сделанные — от последних. */
     private static final String LIST = COLUMNS + """
@@ -39,19 +41,20 @@ public class CoachTaskRepository {
             WHERE coach_user_id = ? AND athlete_user_id = ? AND ended_at IS NULL
             """;
     private static final String INSERT = """
-            INSERT INTO sizylift.coach_task (link_id, text, due_on, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+            INSERT INTO sizylift.coach_task (coach_user_id, link_id, text, due_on, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             RETURNING id
             """;
     private static final String UPDATE = """
             UPDATE sizylift.coach_task t
             SET text = ?, due_on = ?, done_at = ?, updated_at = ?
-            FROM sizylift.coaching_link l
-            WHERE l.id = t.link_id AND l.coach_user_id = ? AND l.ended_at IS NULL AND t.id = ?
+            WHERE t.coach_user_id = ? AND t.id = ? AND (t.link_id IS NULL OR EXISTS (
+                SELECT 1 FROM sizylift.coaching_link l WHERE l.id = t.link_id AND l.ended_at IS NULL))
             """;
     private static final String DELETE = """
             DELETE FROM sizylift.coach_task t
-            USING sizylift.coaching_link l
-            WHERE l.id = t.link_id AND l.coach_user_id = ? AND l.ended_at IS NULL AND t.id = ?
+            WHERE t.coach_user_id = ? AND t.id = ? AND (t.link_id IS NULL OR EXISTS (
+                SELECT 1 FROM sizylift.coaching_link l WHERE l.id = t.link_id AND l.ended_at IS NULL))
             """;
 
     private final JdbcTemplate jdbc;
@@ -77,8 +80,10 @@ public class CoachTaskRepository {
                 .findFirst();
     }
 
-    public UUID insert(UUID linkId, String text, LocalDate dueOn, Instant now) {
-        return jdbc.queryForObject(INSERT, UUID.class, linkId, text, dueOn, Timestamp.from(now), Timestamp.from(now));
+    /** {@code linkId} — {@code null} у общей задачи без подопечного. */
+    public UUID insert(UUID coachId, UUID linkId, String text, LocalDate dueOn, Instant now) {
+        return jdbc.queryForObject(INSERT, UUID.class, coachId, linkId, text, dueOn, Timestamp.from(now),
+                Timestamp.from(now));
     }
 
     public boolean update(UUID coachId, TaskRow task, Instant now) {

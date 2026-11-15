@@ -35,6 +35,12 @@ public class ProgramDataRepository {
                                           source_program_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
+    private static final String SELECT_AUTHORED_DRAFTS = """
+            SELECT a.aggregate_id FROM sizylift.published_aggregate a
+            JOIN sizylift.program p ON p.user_id = a.user_id AND p.id = a.aggregate_id
+            WHERE a.user_id = ? AND a.type = 'program' AND a.author_user_id = ? AND NOT a.deleted
+              AND p.status = 'draft'
+            """;
     private static final String INSERT_CYCLE = """
             INSERT INTO sizylift.program_cycle (user_id, id, program_id, name, position) VALUES (?, ?, ?, ?, ?)
             """;
@@ -127,6 +133,11 @@ public class ProgramDataRepository {
                 row.getString("description"), date(row, "start_date"), row.getString("status"),
                 instant(row, "updated_at"), cycles, row.getObject("source_program_id", UUID.class)), userId,
                 programId));
+    }
+
+    /** Неудалённые программы-черновики владельца, которые пишет {@code authorId} (тихие черновики тренера). */
+    public List<UUID> authoredDrafts(UUID userId, UUID authorId) {
+        return jdbc.query(SELECT_AUTHORED_DRAFTS, (row, n) -> row.getObject(1, UUID.class), userId, authorId);
     }
 
     public void delete(UUID userId, UUID programId) {

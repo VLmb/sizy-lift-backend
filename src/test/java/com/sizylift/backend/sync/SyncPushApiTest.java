@@ -410,6 +410,65 @@ class SyncPushApiTest extends PostgresIntegrationTest {
                 Long.class, userId())).isZero();
     }
 
+    @Test
+    void profileUnderANewIdCompetesWithTheStoredProfileInsteadOfReplacingIt() throws Exception {
+        var webProfile = UUID.randomUUID();
+        var deviceProfile = UUID.randomUUID();
+        push(profile(webProfile, T12, WEB, "Мария"));
+
+        var stale = push(profile(deviceProfile, T10, PHONE, null)).get(0);
+
+        assertThat(stale.get("status").asString()).isEqualTo("superseded");
+        assertThat(profileName()).isEqualTo("Мария");
+        assertThat(profileState(webProfile).get("deleted")).isEqualTo(false);
+    }
+
+    @Test
+    void laterProfileUnderANewIdRetiresTheOldOne() throws Exception {
+        var webProfile = UUID.randomUUID();
+        var deviceProfile = UUID.randomUUID();
+        push(profile(webProfile, T10, WEB, "Мария"));
+
+        var newer = push(profile(deviceProfile, T12, PHONE, "Маша")).get(0);
+
+        assertThat(newer.get("status").asString()).isEqualTo("accepted");
+        assertThat(profileName()).isEqualTo("Маша");
+        assertThat(profileState(webProfile).get("deleted")).isEqualTo(true);
+        assertThat(profileState(deviceProfile).get("deleted")).isEqualTo(false);
+    }
+
+    private Map<String, Object> profile(UUID profileId, Instant changedAt, String clientId, String name)
+            throws Exception {
+        ObjectNode payload;
+        try (var input = new ClassPathResource("publication/athlete_profile.v1.json").getInputStream()) {
+            payload = (ObjectNode) json.readTree(input);
+        }
+        payload.put("displayName", name);
+        payload.put("updatedAt", changedAt.toString());
+        var item = new HashMap<String, Object>();
+        item.put("type", "athlete_profile");
+        item.put("id", profileId);
+        item.put("baseRevision", 0);
+        item.put("changedAt", changedAt.toString());
+        item.put("clientId", clientId);
+        item.put("clientVersion", 1);
+        item.put("schemaVersion", 1);
+        item.put("deleted", false);
+        item.put("payload", payload);
+        return item;
+    }
+
+    private String profileName() {
+        return jdbc.queryForObject("SELECT display_name FROM sizylift.athlete_profile WHERE user_id = ?",
+                String.class, userId());
+    }
+
+    private Map<String, Object> profileState(UUID profileId) {
+        return jdbc.queryForMap("""
+                SELECT deleted FROM sizylift.published_aggregate WHERE user_id = ? AND type = ? AND aggregate_id = ?
+                """, userId(), "athlete_profile", profileId);
+    }
+
     @SafeVarargs
     private JsonNode push(Map<String, Object>... items) throws Exception {
         var body = send(Map.of("items", List.of(items))).andExpect(status().isOk())

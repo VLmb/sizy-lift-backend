@@ -54,6 +54,20 @@ public class PublishedAggregateRepository {
             WHERE user_id = ? AND type = ? AND author_user_id = ?
             RETURNING aggregate_id, revision, deleted
             """;
+    private static final String SELECT_OTHER_LIVE = """
+            SELECT aggregate_id, version, revision, changed_at, source_client_id, source_version, deleted,
+                   author_user_id
+            FROM sizylift.published_aggregate
+            WHERE user_id = ? AND type = ? AND aggregate_id <> ? AND revision > 0 AND NOT deleted
+            ORDER BY changed_at DESC NULLS LAST
+            FOR UPDATE
+            """;
+    private static final String RETIRE = """
+            UPDATE sizylift.published_aggregate
+            SET revision = nextval('sizylift.aggregate_revision_seq'), deleted = true, received_at = now()
+            WHERE user_id = ? AND type = ? AND aggregate_id = ?
+            RETURNING revision
+            """;
     private static final String SELECT_CLIENT_VERSION = """
             SELECT version FROM sizylift.aggregate_client_version
             WHERE user_id = ? AND type = ? AND aggregate_id = ? AND client_id = ?
@@ -111,6 +125,23 @@ public class PublishedAggregateRepository {
     }
 
     public record TransferredAggregate(UUID aggregateId, long revision, boolean deleted) {
+    }
+
+    /**
+     * Живые агрегаты типа у владельца, кроме {@code aggregateId}, самый свежий первым. Нужны для агрегатов,
+     * которых у пользователя ровно один (профиль спортсмена), но id которых выбирает клиент.
+     */
+    public List<OtherAggregate> lockOtherLive(UUID userId, String type, UUID aggregateId) {
+        return jdbc.query(SELECT_OTHER_LIVE, (row, n) -> new OtherAggregate(
+                row.getObject("aggregate_id", UUID.class), state(row, n)), userId, type, aggregateId);
+    }
+
+    public record OtherAggregate(UUID aggregateId, AggregateState state) {
+    }
+
+    /** Помечает агрегат удалённым, не трогая данные: их уже заменил одноимённый агрегат с другим id. */
+    public long retire(UUID userId, String type, UUID aggregateId) {
+        return jdbc.queryForObject(RETIRE, Long.class, userId, type, aggregateId);
     }
 
     /** Последняя обработанная правка клиента по агрегату ({@code 0}, если клиент его не писал). */

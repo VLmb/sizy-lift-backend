@@ -53,12 +53,14 @@ public class CoachTaskService {
 
     @Transactional
     public TaskResponse create(UUID coachId, CreateTaskRequest request) {
-        if (request == null || request.athleteId() == null) {
+        if (request == null) {
             throw new InvalidTask();
         }
         var text = validText(request.text());
-        var link = tasks.activeLink(coachId, request.athleteId()).orElseThrow(TaskNotFound::new);
-        var id = tasks.insert(link, text, request.dueOn(), calendar.now());
+        // Без подопечного — общая задача-напоминание тренеру.
+        var link = request.athleteId() == null ? null
+                : tasks.activeLink(coachId, request.athleteId()).orElseThrow(TaskNotFound::new);
+        var id = tasks.insert(coachId, link, text, request.dueOn(), calendar.now());
         return found(coachId, id);
     }
 

@@ -25,7 +25,8 @@ public class CoachingRepository {
     private static final String COACH_MODE = "SELECT coach_enabled FROM sizylift.user_account WHERE id = ?";
     private static final String LOCK_ACCOUNT = "SELECT id FROM sizylift.user_account WHERE id = ? FOR UPDATE";
     private static final String INSERT_INVITE = """
-            INSERT INTO sizylift.coaching_invite (coach_user_id, token_hash, expires_at, program_id) VALUES (?, ?, ?, ?)
+            INSERT INTO sizylift.coaching_invite (coach_user_id, token_hash, expires_at, program_id, name)
+            VALUES (?, ?, ?, ?, ?)
             """;
     private static final String SELECT_INVITE = """
             SELECT id, coach_user_id, expires_at, accepted_at, revoked_at, program_id FROM sizylift.coaching_invite
@@ -63,7 +64,7 @@ public class CoachingRepository {
             """;
 
     private static final String PENDING_INVITES = """
-            SELECT id, created_at, expires_at FROM sizylift.coaching_invite
+            SELECT id, created_at, expires_at, name FROM sizylift.coaching_invite
             WHERE coach_user_id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
             ORDER BY created_at DESC
             """;
@@ -72,12 +73,13 @@ public class CoachingRepository {
             WHERE coach_user_id = ? AND id = ? AND accepted_at IS NULL
             """;
 
-    public record PendingInvite(UUID id, Instant createdAt, Instant expiresAt) {
+    /** {@code name} — как тренер назвал приглашение; {@code null}, если не называл. */
+    public record PendingInvite(UUID id, Instant createdAt, Instant expiresAt, String name) {
     }
 
     public List<PendingInvite> pendingInvites(UUID coachId) {
         return jdbc.query(PENDING_INVITES, (row, n) -> new PendingInvite(row.getObject("id", UUID.class),
-                instant(row, "created_at"), instant(row, "expires_at")), coachId);
+                instant(row, "created_at"), instant(row, "expires_at"), row.getString("name")), coachId);
     }
 
     public boolean revokeInvite(UUID coachId, UUID id) {
@@ -106,8 +108,8 @@ public class CoachingRepository {
         jdbc.query(LOCK_ACCOUNT, (row, n) -> null, userId);
     }
 
-    public void insertInvite(UUID coachId, byte[] tokenHash, Instant expiresAt, UUID programId) {
-        jdbc.update(INSERT_INVITE, coachId, tokenHash, expiresAt.atOffset(ZoneOffset.UTC), programId);
+    public void insertInvite(UUID coachId, byte[] tokenHash, Instant expiresAt, UUID programId, String name) {
+        jdbc.update(INSERT_INVITE, coachId, tokenHash, expiresAt.atOffset(ZoneOffset.UTC), programId, name);
     }
 
     /**

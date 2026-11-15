@@ -60,6 +60,8 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
                     "/opt/keycloak/data/import/realm-sizylift.json")
             .withCopyFileToContainer(MountableFile.forHostPath("keycloak/themes/sizy"),
                     "/opt/keycloak/themes/sizy")
+            .withCopyFileToContainer(MountableFile.forHostPath("keycloak/password-blacklists"),
+                    "/opt/keycloak/data/password-blacklists")
             .withCopyFileToContainer(MountableFile.forHostPath("keycloak-provider/build/libs/sizy-keycloak-provider.jar"),
                     "/opt/keycloak/providers/sizy-keycloak-provider.jar")
             .withExposedPorts(8080, 9000)

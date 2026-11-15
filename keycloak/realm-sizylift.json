@@ -16,7 +16,7 @@
   "failureFactor": 10,
   "waitIncrementSeconds": 60,
   "maxFailureWaitSeconds": 900,
-  "passwordPolicy": "length(10) and maxLength(128) and notUsername and notEmail",
+  "passwordPolicy": "length(10) and maxLength(128) and notUsername and notEmail and passwordBlacklist(sizy-common.txt)",
   "internationalizationEnabled": true,
   "supportedLocales": [
     "ru",

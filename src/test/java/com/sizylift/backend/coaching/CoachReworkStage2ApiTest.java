@@ -155,6 +155,28 @@ class CoachReworkStage2ApiTest extends CoachWorkspaceApiSupport {
         call(coach, get(path)).andExpect(status().isNotFound());
     }
 
+    @Test
+    void endingTheLinkDiscardsSilentDraftsAndKeepsActiveProgramsActive() throws Exception {
+        var linkId = link(coach, athlete);
+        var draftId = UUID.randomUUID();
+        var draft = withFreshIds("program");
+        draft.put("status", "draft");
+        push(coach, item("program", draftId, athleteId, 0, 1, draft));
+        var activeId = UUID.randomUUID();
+        var active = withFreshIds("program");
+        active.put("status", "active");
+        push(coach, item("program", activeId, athleteId, 0, 1, active));
+
+        call(athlete, org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                "/api/v2/coaching/links/" + linkId)).andExpect(status().isNoContent());
+
+        var own = body(call(athlete, get("/api/v2/web/programs")).andExpect(status().isOk())).get("programs");
+        assertThat(own).as("тихий черновик не стал программой подопечного").hasSize(1);
+        assertThat(own.get(0).get("id").asString()).isEqualTo(activeId.toString());
+        assertThat(own.get(0).get("status").asString()).isEqualTo("active");
+        assertThat(own.get(0).get("authorId").isNull()).isTrue();
+    }
+
     private Map<String, Object> copy(UUID athlete) throws Exception {
         var program = withFreshIds("program");
         program.put("status", "draft");

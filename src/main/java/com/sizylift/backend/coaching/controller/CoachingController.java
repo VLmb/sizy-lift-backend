@@ -65,7 +65,8 @@ public class CoachingController {
     @ResponseStatus(HttpStatus.CREATED)
     public InviteResponse createInvite(@AuthenticationPrincipal Jwt jwt,
                                        @RequestBody(required = false) CreateInviteRequest request) {
-        var invite = coaching.createInvite(userId(jwt), request == null ? null : request.programId());
+        var invite = coaching.createInvite(userId(jwt), request == null ? null : request.programId(),
+                request == null ? null : request.name());
         return new InviteResponse(invite.token(), invite.expiresAt());
     }
 

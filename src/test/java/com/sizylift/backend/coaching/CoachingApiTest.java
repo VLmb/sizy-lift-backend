@@ -81,6 +81,20 @@ class CoachingApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void inviteNameIsStoredOnTheServerForThePendingList() throws Exception {
+        invite(coach);
+        call(coach, post("/api/v2/coaching/invites").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"  Мария  \"}")).andExpect(status().isCreated());
+        call(coach, post("/api/v2/coaching/invites").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"" + "я".repeat(201) + "\"}")).andExpect(status().isBadRequest());
+
+        var pending = body(call(coach, get("/api/v2/coaching/invites")).andExpect(status().isOk()));
+        var names = new java.util.ArrayList<String>();
+        pending.forEach(invite -> names.add(invite.get("name").isNull() ? null : invite.get("name").asString()));
+        assertThat(names).containsExactlyInAnyOrder("Мария", null);
+    }
+
+    @Test
     void athleteSeesWhoInvitesAndWhatTheCoachWillSee() throws Exception {
         var token = invite(coach);
         var profile = fixture("athlete_profile");
