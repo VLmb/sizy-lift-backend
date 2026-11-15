@@ -92,7 +92,17 @@ public final class TemplateParser {
                 skipped.add("строка: " + text);
             }
         }
-        return new Result(items.stream().map(Draft::item).toList(), List.copyOf(skipped));
+        for (var d : items) {
+            if (d.empty()) skipped.add("пустое упражнение: " + (d.name != null ? d.name : d.spoken));
+        }
+        return new Result(items.stream().filter(d -> !d.empty()).map(Draft::item).toList(), List.copyOf(skipped));
+    }
+
+    /** Подход «один, без значений» — то же, что ничего не сказано. */
+    private static boolean blank(Line l) {
+        return (l.count() == null || l.count() == 1) && l.reps() == null && l.weightKg() == null && l.percent() == null
+                && l.rpe() == null && l.durationSeconds() == null && l.distanceMeters() == null && l.type() == null
+                && l.note() == null && l.restSeconds() == null;
     }
 
     private static final class Draft {
@@ -106,6 +116,12 @@ public final class TemplateParser {
         final List<Line> lines = new ArrayList<>();
         final List<String> comments = new ArrayList<>();
         final List<String> issues = new ArrayList<>();
+
+        /**
+         * Упражнение без единого значения и без комментария — упомянуто, но не задано («потом пойдём на жим»):
+         * в тренировку не попадает.
+         */
+        boolean empty() { return comments.isEmpty() && lines.stream().allMatch(TemplateParser::blank); }
 
         Item item() {
             var rests = lines.stream().map(Line::restSeconds).collect(HashSet<Integer>::new, HashSet::add, HashSet::addAll);
