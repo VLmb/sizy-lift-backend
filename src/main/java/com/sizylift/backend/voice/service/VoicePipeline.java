@@ -115,7 +115,7 @@ public class VoicePipeline {
             throw failure;
         }
         long normalized = System.nanoTime();
-        var parsed = TemplateParser.parse(result.template(), text, catalog);
+        var parsed = TemplateParser.parse(result.template(), catalog);
         trace.template(requestId, result.template(), parsed.skipped(), result.inputTokens(), result.cachedInputTokens(),
                 result.outputTokens());
         var response = new ParseResponse(requestId, ownerId, true, parsed.items(), List.of());

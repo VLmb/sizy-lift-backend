@@ -15,13 +15,12 @@ import com.sizylift.backend.voice.dto.VoiceDtos.Candidate;
 import com.sizylift.backend.voice.dto.VoiceDtos.Item;
 import com.sizylift.backend.voice.dto.VoiceDtos.Line;
 import com.sizylift.backend.voice.dto.VoiceDtos.Proposal;
-import com.sizylift.backend.voice.parser.TextFacts;
 import com.sizylift.backend.voice.service.VoiceCatalog;
 
 /**
  * Строгий разборщик шаблона модели (docs/voice.md, «Разбор шаблоном»). Никакой живой речи: строки с метками,
  * ключи с фиксированным форматом значений. Что не по формату — пропускается и попадает в {@link Result#skipped},
- * без угадывания. Каждое число сверяется с фразой: модель могла его выдумать.
+ * без угадывания.
  */
 public final class TemplateParser {
     static final String HIGH = "high";
@@ -35,17 +34,16 @@ public final class TemplateParser {
     private static final int MAX_REPS = 1000;
     private static final double MAX_WEIGHT = 1000;
     private static final double MAX_RPE = 10;
-    /** Неявная единица: «по минуте», «один подход» — во фразе нет числа 1. */
-    private static final double IMPLICIT = 1;
-    private static final double EPSILON = 1e-6;
+    private static final int SECONDS_IN_MINUTE = 60;
+    private static final int SECONDS_IN_HOUR = 3600;
+    private static final int METERS_IN_KILOMETER = 1000;
 
     private static final Pattern EXERCISE = Pattern.compile(
             "^упражнение\\s*:\\s*(.+?)\\s*(?:\\|\\s*тип\\s*=\\s*([а-яё_]+)\\s*)?(\\|\\s*новое\\s*)?$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern SET = Pattern.compile("^подход\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern COMMENT = Pattern.compile("^комментарий\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    /** Заметка — последним ключом: её текст может содержать «|» и «=». */
+    /** Заметка — ключ, текст которого может содержать «|» и «=». */
     private static final String NOTE_KEY = "заметка";
-    private static final Pattern NOTE = Pattern.compile("(?:^|\\|)\\s*" + NOTE_KEY + "\\s*=\\s*(.*)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern PAIR = Pattern.compile("^([а-яёa-z_]+)\\s*=\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final String NUMBER = "(\\d+(?:[.,]\\d+)?)";
     private static final Pattern COUNT = Pattern.compile("^(\\d{1,2})$");
@@ -71,8 +69,7 @@ public final class TemplateParser {
 
     private TemplateParser() { }
 
-    public static Result parse(String template, String phrase, VoiceCatalog catalog) {
-        var spoken = new Spoken(phrase);
+    public static Result parse(String template, VoiceCatalog catalog) {
         var skipped = new ArrayList<String>();
         var items = new ArrayList<Draft>();
         Draft current = null;
@@ -86,7 +83,7 @@ public final class TemplateParser {
                 items.add(current);
             } else if ((m = SET.matcher(text)).matches() && current != null) {
                 if (current.lines.size() < MAX_LINES) {
-                    var line = set(m.group(1), current, spoken, skipped);
+                    var line = set(m.group(1), current, skipped);
                     if (line != null) current.lines.add(line);
                 }
             } else if ((m = COMMENT.matcher(text)).matches() && current != null) {
@@ -149,30 +146,29 @@ public final class TemplateParser {
         d.confidence = confidence;
     }
 
-    /** Подход; null — строка без единого значения. */
-    private static Line set(String body, Draft d, Spoken spoken, List<String> skipped) {
-        String note = null;
-        var noteMatch = NOTE.matcher(body);
-        if (noteMatch.find()) {
-            note = noteMatch.group(1).strip();
-            body = body.substring(0, noteMatch.start());
-            if (note.isEmpty()) note = null;
-        }
+    /**
+     * Подход; null — строка без единого значения. Ключи — в любом порядке; заметка — тоже ключ: её текст идёт до
+     * следующего « | известный_ключ=», поэтому в нём могут быть «|» и «=».
+     */
+    private static Line set(String body, Draft d, List<String> skipped) {
         var allowed = TemplateVocabulary.keysFor(d.resultType);
         var common = TemplateVocabulary.commonKeys().stream().map(TemplateVocabulary::key).collect(Collectors.toSet());
         var label = d.name != null ? d.name : d.spoken;
         var values = new LinkedHashMap<String, String>();
+        StringBuilder note = null;
+        boolean inNote = false;
         for (var part : body.split("\\|")) {
             var text = part.strip();
-            if (text.isEmpty()) continue;
             var m = PAIR.matcher(text);
-            if (!m.matches()) {
-                skipped.add(label + ": «" + text + "»");
+            var k = m.matches() ? m.group(1).toLowerCase(Locale.ROOT) : null;
+            if (k == null || !FORMATS.containsKey(k)) {
+                if (inNote) note.append(" | ").append(text);
+                else if (!text.isEmpty()) skipped.add(label + ": «" + text + "»");
                 continue;
             }
-            var k = m.group(1).toLowerCase(Locale.ROOT);
-            if (!FORMATS.containsKey(k) || !TemplateVocabulary.allKeys().contains(k)) {
-                skipped.add(label + ": неизвестный ключ «" + text + "»");
+            inNote = NOTE_KEY.equals(k);
+            if (inNote) {
+                note = new StringBuilder(m.group(2).strip());
                 continue;
             }
             if (!common.contains(k) && !allowed.contains(k)) {
@@ -181,14 +177,14 @@ public final class TemplateParser {
             }
             values.putIfAbsent(k, m.group(2).strip());
         }
-        var line = new Values(label, spoken, skipped);
-        Integer count = line.integer(values.get("кол"), COUNT, 1, MAX_SETS);
+        var line = new Values(label, skipped);
+        Integer count = line.count(values.get("кол"));
         Integer reps = null;
         Integer repsMax = null;
         var repsText = values.get("повт");
         if (repsText != null) {
             var m = REPS.matcher(repsText);
-            if (m.matches() && line.said(m.group(1)) && (m.group(2) == null || line.said(m.group(2)))) {
+            if (m.matches()) {
                 reps = bounded(Integer.parseInt(m.group(1)), MAX_REPS);
                 repsMax = m.group(2) == null ? null : bounded(Integer.parseInt(m.group(2)), MAX_REPS);
                 if (reps != null && repsMax != null && repsMax <= reps) repsMax = null;
@@ -196,51 +192,47 @@ public final class TemplateParser {
                 line.reject("повт", repsText);
             }
         }
-        Double weight = line.decimal(values.containsKey("вес") ? values.get("вес") : values.get("доп_вес"),
-                values.containsKey("вес") ? "вес" : "доп_вес", KG, MAX_WEIGHT);
+        var weightKey = values.containsKey("вес") ? "вес" : "доп_вес";
+        Double weight = line.decimal(values.get(weightKey), weightKey, KG, MAX_WEIGHT);
         Double percent = line.decimal(values.get("процент"), "процент", PERCENT, MAX_WEIGHT);
         Double rpe = line.rpe(values.get("rpe"));
-        Integer seconds = line.seconds(values.get("время"), "время");
+        Integer seconds = line.seconds(values.get("время"), "время", false);
         Integer meters = line.meters(values.get("дистанция"));
-        Integer rest = line.seconds(values.get("отдых"), "отдых");
+        // «Без отдыха» — отдых 0: значение, а не «не сказано».
+        Integer rest = line.seconds(values.get("отдых"), "отдых", true);
         String type = null;
         var typeText = values.get("тип");
         if (typeText != null) {
             type = TemplateVocabulary.setType(typeText).orElse(null);
             if (type == null) line.reject("тип", typeText);
         }
+        var noteText = note == null || note.toString().isBlank() ? null : note.toString().strip();
         if (reps == null && weight == null && percent == null && rpe == null && seconds == null && meters == null
-                && note == null && type == null && rest == null && values.get("кол") == null) {
+                && noteText == null && type == null && rest == null && values.get("кол") == null) {
             return null;
         }
-        return new Line(count, reps, repsMax, false, weight, percent, seconds, meters, rpe, null, type, note, rest);
+        return new Line(count, reps, repsMax, false, weight, percent, seconds, meters, rpe, null, type, noteText, rest);
     }
 
-    /** Значения одной строки подходов: формат, пределы и сверка с фразой. */
-    private record Values(String exercise, Spoken spoken, List<String> skipped) {
+    /** Значения одной строки подходов: формат и пределы. Неверное — в {@code skipped}, без угадывания. */
+    private record Values(String exercise, List<String> skipped) {
         void reject(String key, String value) { skipped.add(exercise + ": " + key + "=" + value); }
 
-        boolean said(String number) { return spoken.has(parse(number)); }
-
-        /**
-         * Число подходов. Кроме сказанного — на один меньше сказанного: «три по десять, последний до отказа»
-         * по правилу промпта превращается в 2 подхода и 1 отдельный.
-         */
-        Integer integer(String text, Pattern format, int fallback, int max) {
+        Integer count(String text) {
             if (text == null) return null;
-            var m = format.matcher(text);
-            if (!m.matches() || !(said(m.group(1)) || spoken.has(parse(m.group(1)) + 1))) {
+            var m = COUNT.matcher(text);
+            if (!m.matches()) {
                 reject("кол", text);
                 return null;
             }
             var value = Integer.parseInt(m.group(1));
-            return value < fallback || value > max ? null : value;
+            return value < 1 || value > MAX_SETS ? null : value;
         }
 
         Double decimal(String text, String key, Pattern format, double max) {
             if (text == null) return null;
             var m = format.matcher(text.toLowerCase(Locale.ROOT));
-            if (!m.matches() || !said(m.group(1))) {
+            if (!m.matches()) {
                 reject(key, text);
                 return null;
             }
@@ -248,7 +240,6 @@ public final class TemplateParser {
             return value <= 0 || value > max ? null : value;
         }
 
-        /** RPE 10 — «до отказа», «на максимум»: числа 10 во фразе может не быть. */
         Double rpe(String text) {
             if (text == null) return null;
             var m = PLAIN.matcher(text);
@@ -257,56 +248,33 @@ public final class TemplateParser {
                 return null;
             }
             var value = parse(m.group(1));
-            boolean failure = Math.abs(value - MAX_RPE) < EPSILON && spoken.failure();
-            if (!failure && !spoken.has(value)) {
-                reject("RPE", text);
-                return null;
-            }
             return value < 1 || value > MAX_RPE ? null : value;
         }
 
-        Integer seconds(String text, String key) {
+        Integer seconds(String text, String key, boolean zero) {
             if (text == null) return null;
             var m = TIME.matcher(text.toLowerCase(Locale.ROOT));
-            if (!m.matches() || !said(m.group(1))) {
+            if (!m.matches()) {
                 reject(key, text);
                 return null;
             }
             var value = parse(m.group(1));
             var unit = m.group(2);
-            int factor = unit.startsWith("мин") ? 60 : "ч".equals(unit) ? 3600 : 1;
+            int factor = unit.startsWith("мин") ? SECONDS_IN_MINUTE : "ч".equals(unit) ? SECONDS_IN_HOUR : 1;
             var total = (int) Math.round(value * factor);
-            return total <= 0 ? null : total;
+            return total < 0 || total == 0 && !zero ? null : total;
         }
 
         Integer meters(String text) {
             if (text == null) return null;
             var m = DISTANCE.matcher(text.toLowerCase(Locale.ROOT));
-            if (!m.matches() || !said(m.group(1))) {
+            if (!m.matches()) {
                 reject("дистанция", text);
                 return null;
             }
-            var total = (int) Math.round(parse(m.group(1)) * ("км".equals(m.group(2)) ? 1000 : 1));
+            var total = (int) Math.round(parse(m.group(1)) * ("км".equals(m.group(2)) ? METERS_IN_KILOMETER : 1));
             return total <= 0 ? null : total;
         }
-    }
-
-    /** Что сказано во фразе: числа (словами и цифрами) и было ли «до отказа». */
-    private static final class Spoken {
-        private final List<Double> numbers;
-        private final boolean failure;
-
-        Spoken(String phrase) {
-            numbers = TextFacts.numbers(phrase);
-            var lower = phrase.toLowerCase(Locale.ROOT);
-            failure = lower.contains("отказ") || lower.contains("максимум");
-        }
-
-        boolean has(double value) {
-            return Math.abs(value - IMPLICIT) < EPSILON || numbers.stream().anyMatch(n -> Math.abs(n - value) < EPSILON);
-        }
-
-        boolean failure() { return failure; }
     }
 
     private static Integer bounded(int value, int max) { return value < 1 || value > max ? null : value; }

@@ -54,9 +54,8 @@ class TemplateVocabularyTest {
     @Test
     void promptExampleIsParsedWithoutSkips() {
         var rules = TemplatePrompt.rules();
-        var phrase = rules.substring(rules.indexOf("Фраза: «") + 8, rules.indexOf("»\nШаблон:"));
         var template = rules.substring(rules.indexOf("Шаблон:\n") + 8, rules.indexOf("\n\nКАТАЛОГ"));
-        var result = TemplateParser.parse(template, phrase, VoiceTestCatalog.system());
+        var result = TemplateParser.parse(template, VoiceTestCatalog.system());
         assertThat(result.skipped()).isEmpty();
         assertThat(result.items()).extracting(i -> i.exerciseName())
                 .containsExactly("Жим гантелей лёжа", "Молотки с гантелями", "Бег на улице");
