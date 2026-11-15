@@ -84,6 +84,16 @@ public class VoiceDebugTrace implements VoiceTrace {
     }
 
     @Override
+    public void template(UUID requestId, String template, List<String> skipped, int input, int cached, int output) {
+        var record = record(requestId);
+        record.put("template", template);
+        record.put("templateSkipped", skipped);
+        record.put("templateTokens", Map.of("input", input, "cached", cached, "output", output));
+        log.info("voice {} template (tokens {}/{} cached/{} out):\n{}", requestId, input, cached, output, template);
+        if (!skipped.isEmpty()) log.info("voice {} template skipped: {}", requestId, skipped);
+    }
+
+    @Override
     public void response(UUID requestId, ParseResponse response, VoicePipeline.Fallback fallback) {
         var record = record(requestId);
         record.put("fallback", fallback.name());

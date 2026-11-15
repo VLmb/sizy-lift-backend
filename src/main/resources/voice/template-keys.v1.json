@@ -1,0 +1,18 @@
+{
+  "_comment": "Словарь шаблона разбора моделью (docs/voice.md, «Разбор шаблоном»). Из него собираются списки в промпте (template-prompt.v1.txt) и его же читает строгий разборщик (TemplateParser). Формат значения каждого ключа задан в коде (TemplateParser.FORMATS); тест TemplateVocabularyTest сверяет словарь, промпт и код.",
+  "exerciseTypes": [
+    {"resultType": "weight_reps", "word": "вес_повторы", "description": "вес и повторы", "keys": ["повт", "вес", "процент", "RPE"]},
+    {"resultType": "added_weight_reps", "word": "доп_вес_повторы", "description": "дополнительный вес к своему весу и повторы", "keys": ["повт", "доп_вес", "RPE"]},
+    {"resultType": "reps", "word": "повторы", "description": "только повторы", "keys": ["повт", "RPE"]},
+    {"resultType": "duration", "word": "время", "description": "время", "keys": ["время"]},
+    {"resultType": "distance_time", "word": "дистанция_время", "description": "дистанция и время", "keys": ["дистанция", "время"]},
+    {"resultType": "free", "word": "свободное", "description": "без чисел", "keys": []}
+  ],
+  "commonKeys": ["кол", "тип", "отдых", "заметка"],
+  "setTypes": [
+    {"value": "warmup", "word": "разминка", "spoken": ["разминка", "разминочный", "разогрев"]},
+    {"value": "top", "word": "топсет", "spoken": ["топсет", "топ-сет", "тяжёлый подход"]},
+    {"value": "backoff", "word": "бэкофф", "spoken": ["бэкофф", "бекофф", "бэк-офф", "облегчённые подходы после топсета"]},
+    {"value": "working", "word": "рабочий", "spoken": ["рабочие", "рабочих"], "default": true}
+  ]
+}

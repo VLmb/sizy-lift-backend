@@ -25,6 +25,8 @@ sizylift:
       url: ${DEEPSEEK_API_URL}
   voice:
     enabled: ${VOICE_ENABLED:false}
+    # Кто разбирает текст речи (docs/voice.md, «Разбор шаблоном»): algorithm или model (DeepSeek → шаблон).
+    parser: ${VOICE_PARSER:algorithm}
     debug:
       # Отладка (docs/voice-debug.md): текст речи и ответы — в лог, записи — в deploy/voice-debug.
       enabled: ${VOICE_DEBUG_ENABLED:false}

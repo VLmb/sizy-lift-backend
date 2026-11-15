@@ -14,7 +14,7 @@ import com.sizylift.backend.voice.parser.ExerciseDictionary;
  * Упражнения, которые можно назвать в диктовке: системные с синонимами, свои упражнения владельца и вызывающего
  * и личные синонимы вызывающего. Из него собираются словарь разбора, подсказки распознавания и каталог для модели.
  */
-public record VoiceCatalog(ExerciseDictionary dictionary, List<Entry> entries, List<String> keyterms) {
+public record VoiceCatalog(ExerciseDictionary dictionary, List<Entry> entries, List<String> keyterms, Prompt prompt) {
     /** {@code alias} — короткий id для модели (c1, c2…): длинный UUID она может исказить. */
     public record Entry(String alias, UUID id, String name, String shortName, String resultType) { }
 
@@ -23,9 +23,24 @@ public record VoiceCatalog(ExerciseDictionary dictionary, List<Entry> entries, L
 
     public record UserAlias(UUID exerciseId, String alias) { }
 
+    /**
+     * Каталог для инструкции модели (docs/voice.md, «Разбор шаблоном»): системные упражнения с типом и
+     * разговорными вариантами, свои упражнения, личные синонимы «как говорит» → название. Системная часть
+     * одинакова у всех запросов и идёт первой: её модель берёт из кэша.
+     */
+    public record Prompt(List<PromptExercise> system, List<PromptExercise> own, List<PromptAlias> aliases) { }
+
+    public record PromptExercise(String name, String resultType, List<String> variants) { }
+
+    public record PromptAlias(String spoken, String name) { }
+
     private static final String ALIAS_PREFIX = "c";
-    /** Слова параметров, которые распознавание чаще всего путает. */
-    private static final List<String> PARAMETER_TERMS = List.of("подходов", "повторений", "килограмм", "до отказа", "RPE");
+    /**
+     * Слова параметров, которые распознавание чаще всего путает, и типы подходов. Идут после названий, но место
+     * под них в бюджете подсказок зарезервировано: без них «топсет» и «бэкофф» распознаются как случайные слова.
+     */
+    private static final List<String> PARAMETER_TERMS = List.of("подходов", "повторений", "килограмм", "до отказа", "RPE",
+            "разминка", "рабочие", "топсет", "бэкофф");
 
     public Optional<Entry> byAlias(String alias) { return entries.stream().filter(e -> e.alias().equals(alias)).findFirst(); }
 
@@ -54,8 +69,28 @@ public record VoiceCatalog(ExerciseDictionary dictionary, List<Entry> entries, L
         own.forEach(s -> terms.add(s.name()));
         userAliases.forEach(a -> terms.add(a.alias()));
         system.forEach(s -> terms.add(s.shortName() == null || s.shortName().isBlank() ? s.name() : s.shortName()));
-        terms.addAll(PARAMETER_TERMS);
-        return new VoiceCatalog(new ExerciseDictionary(exercises), List.copyOf(entries), keyterms(terms, keytermChars));
+        int reserved = PARAMETER_TERMS.stream().mapToInt(String::length).sum();
+        var keyterms = new ArrayList<>(keyterms(terms, Math.max(0, keytermChars - reserved)));
+        keyterms.addAll(keyterms(PARAMETER_TERMS, Math.min(reserved, keytermChars)));
+        return new VoiceCatalog(new ExerciseDictionary(exercises), List.copyOf(entries), List.copyOf(keyterms),
+                prompt(sources, systemAliases, userAliases));
+    }
+
+    private static Prompt prompt(List<Source> sources, Map<UUID, List<String>> systemAliases, List<UserAlias> userAliases) {
+        var system = new ArrayList<PromptExercise>();
+        var own = new ArrayList<PromptExercise>();
+        for (var s : sources) {
+            var variants = new ArrayList<String>();
+            if (s.shortName() != null && !s.shortName().isBlank() && !s.shortName().equalsIgnoreCase(s.name())) variants.add(s.shortName());
+            if (!s.own()) variants.addAll(systemAliases.getOrDefault(s.id(), List.of()));
+            (s.own() ? own : system).add(new PromptExercise(s.name(), s.resultType(), List.copyOf(variants)));
+        }
+        var aliases = new ArrayList<PromptAlias>();
+        for (var a : userAliases) {
+            sources.stream().filter(s -> s.id().equals(a.exerciseId())).findFirst()
+                    .ifPresent(s -> aliases.add(new PromptAlias(a.alias(), s.name())));
+        }
+        return new Prompt(List.copyOf(system), List.copyOf(own), List.copyOf(aliases));
     }
 
     private static ExerciseDictionary.Exercise exercise(Source s, List<String> synonyms) {

@@ -23,6 +23,8 @@ public interface VoiceTrace {
 
     /** Вход и ответ запасной модели (только если она вызывалась). */
     default void fallback(UUID requestId, String input, String arguments) { }
+    /** Разбор моделью: шаблон, что из него отброшено, токены (всего, из кэша, ответа). */
+    default void template(UUID requestId, String template, List<String> skipped, int input, int cached, int output) { }
 
     /** Итог, который уходит клиенту. */
     default void response(UUID requestId, ParseResponse response, VoicePipeline.Fallback fallback) { }
