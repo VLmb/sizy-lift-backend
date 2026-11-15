@@ -40,7 +40,7 @@ class ExerciseCatalogContractTest extends PostgresIntegrationTest {
 
         var exercises = jdbc.queryForList("""
                 SELECT e.id::text AS id, e.name, e.short_name, e.movement_category_id::text AS category,
-                       e.result_type, e.lift_class = 'sbd' AS is_sbd, e.note,
+                       e.result_type, e.lift_class, e.lift_class = 'sbd' AS is_sbd, e.note,
                        (SELECT string_agg(m.muscle_group_id::text || ':' || m.role, ',' ORDER BY m.role, m.muscle_group_id)
                         FROM sizylift.exercise_muscle m WHERE m.exercise_id = e.id) AS muscles,
                        (SELECT string_agg(q.equipment_id::text, ',' ORDER BY q.equipment_id)
@@ -56,6 +56,7 @@ class ExerciseCatalogContractTest extends PostgresIntegrationTest {
             assertThat(row.get("short_name")).isEqualTo(text(expected.get("shortName")));
             assertThat(row.get("category")).isEqualTo(text(expected.get("movementCategoryId")));
             assertThat(row.get("result_type")).isEqualTo(expected.get("resultType").asString());
+            assertThat(row.get("lift_class")).isEqualTo(expected.get("liftClass").asString());
             assertThat(row.get("is_sbd")).isEqualTo(expected.get("isSbd").asBoolean());
             assertThat(row.get("note")).isEqualTo(text(expected.get("note")));
             assertThat(row.get("muscles")).isEqualTo(joined(expected.get("muscles").valueStream()

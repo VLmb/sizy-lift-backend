@@ -39,6 +39,9 @@ class LiftClassMigrationTest extends PostgresIntegrationTest {
             "14000000-0000-4000-8000-000000000008", "14000000-0000-4000-8000-000000000012",
             "14000000-0000-4000-8000-000000000015", "14000000-0000-4000-8000-000000000016",
             "14000000-0000-4000-8000-000000000031", "14000000-0000-4000-8000-000000000047");
+    /** «Базовые» упражнения, добавленные каталогом 2026.11.2 (changeset 039): румынская тяга с гантелями, гудморнинг. */
+    static final Set<String> BASIC_ADDED_LATER = Set.of(
+            "14000000-0000-4000-8000-000000000077", "14000000-0000-4000-8000-000000000080");
 
     @Test
     void mapsIsSbdAndMarksTheSystemCatalogThenRollsBack() throws Exception {
@@ -62,7 +65,8 @@ class LiftClassMigrationTest extends PostgresIntegrationTest {
                     .containsEntry(ownSbdDuration.toString(), "other");
             var system = systemClasses(connection);
             assertThat(keys(system, "sbd")).isEqualTo(SBD);
-            assertThat(keys(system, "basic")).isEqualTo(BASIC);
+            assertThat(keys(system, "basic")).containsAll(BASIC).containsAll(BASIC_ADDED_LATER)
+                    .hasSize(BASIC.size() + BASIC_ADDED_LATER.size());
             assertThat(system).hasSizeGreaterThan(SBD.size() + BASIC.size());
             assertThat(hasColumn(connection, "exercise", "is_sbd")).isFalse();
             assertThat(hasColumn(connection, "planned_set", "target_percent_one_rm_tenths")).isTrue();
