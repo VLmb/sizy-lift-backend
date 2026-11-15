@@ -35,19 +35,22 @@ public final class VoiceDtos {
      * варианты выбора, {@code proposal} — предложение создать своё. {@code confidence}: high, medium (показать
      * пометку «проверьте»), low (не найдено). {@code restSeconds} — отдых для всех подходов упражнения.
      * {@code notes} — заметки к упражнению; {@code issues} — названные значения, которые не подходят его типу.
+     * {@code comment} — указание ко всему упражнению («следи за спиной»), только при разборе моделью
+     * (docs/voice.md, «Разбор шаблоном»); иначе null.
      */
     public record Item(UUID exerciseId, String exerciseName, String resultType, String spoken, String confidence,
                        Integer restSeconds, List<Line> lines, List<String> notes, List<String> unrecognized,
-                       List<String> issues, List<Candidate> candidates, Proposal proposal) { }
+                       List<String> issues, List<Candidate> candidates, Proposal proposal, String comment) { }
 
     /**
      * Строка одинаковых подходов: {@code count} подходов (null — число не названо, вставить один и выделить).
      * {@code reps}–{@code repsMax} — повторы или диапазон; {@code toFailure} — до отказа. {@code type} —
-     * warmup или working, если сказано. null в любом поле — «не названо», ничего не подставлять.
+     * warmup, working, top или backoff, если сказано. {@code restSeconds} — отдых после каждого подхода строки
+     * (у алгоритма — отдых упражнения). null в любом поле — «не названо», ничего не подставлять.
      */
     public record Line(Integer count, Integer reps, Integer repsMax, boolean toFailure, Double weightKg,
                        Double percent, Integer durationSeconds, Integer distanceMeters, Double rpe, Double rir,
-                       String type, String note) { }
+                       String type, String note, Integer restSeconds) { }
 
     public record Candidate(UUID exerciseId, String name) { }
 

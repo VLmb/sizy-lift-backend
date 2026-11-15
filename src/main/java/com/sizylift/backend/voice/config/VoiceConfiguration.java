@@ -6,9 +6,11 @@ import java.time.Clock;
 import java.time.Duration;
 
 import com.sizylift.backend.voice.model.DeepSeekGapResolver;
+import com.sizylift.backend.voice.model.DeepSeekTemplateNormalizer;
 import com.sizylift.backend.voice.model.DeepgramSpeechRecognizer;
 import com.sizylift.backend.voice.model.GapResolver;
 import com.sizylift.backend.voice.model.SpeechRecognizer;
+import com.sizylift.backend.voice.model.TemplateNormalizer;
 import com.sizylift.backend.voice.service.VoiceDebugTrace;
 import com.sizylift.backend.voice.service.VoiceFailure;
 import com.sizylift.backend.voice.service.VoicePipeline;
@@ -52,7 +54,22 @@ public class VoiceConfiguration {
     @Bean
     VoicePipeline voicePipeline(SpeechRecognizer recognizer, GapResolver resolver, ObjectMapper json,
                                 VoiceProperties properties, Clock clock) {
-        return new VoicePipeline(recognizer, resolver, json, trace(properties, json, clock));
+        return new VoicePipeline(recognizer, resolver, json, trace(properties, json, clock), properties.parser(),
+                normalizer(properties, json));
+    }
+
+    /**
+     * Модель шаблона — только при {@code parser=model}: тот же DeepSeek, что у запасной модели. Без ключа —
+     * ошибка старта: иначе каждая диктовка падала бы.
+     */
+    static TemplateNormalizer normalizer(VoiceProperties properties, ObjectMapper json) {
+        if (!properties.enabled() || properties.parser() != VoiceProperties.Parser.MODEL) return null;
+        var fallback = properties.fallback();
+        if (fallback.apiKey().isBlank()) throw new IllegalArgumentException("Для разбора моделью нужен ключ DeepSeek");
+        var template = properties.template();
+        log.info("Голосовой ввод: разбор моделью шаблона ({})", fallback.model());
+        return new DeepSeekTemplateNormalizer(client(template.timeout()), json, fallback.apiKey(), fallback.url(),
+                fallback.model(), template.maxOutputTokens());
     }
 
     /**

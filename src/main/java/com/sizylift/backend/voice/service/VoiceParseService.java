@@ -97,7 +97,9 @@ public class VoiceParseService {
         }
         metrics.stage("recognition", outcome.recognitionNanos());
         metrics.stage("parse", outcome.parseNanos());
-        if (outcome.fallbackNanos() > 0) metrics.stage("fallback", outcome.fallbackNanos());
+        if (outcome.fallbackNanos() > 0) {
+            metrics.stage(outcome.fallback() == VoicePipeline.Fallback.TEMPLATE ? "template" : "fallback", outcome.fallbackNanos());
+        }
         metrics.stage("total", System.nanoTime() - start);
         metrics.fallback(outcome.fallback(), outcome.inputTokens(), outcome.outputTokens());
         metrics.outcome(outcome.response().speechDetected() ? "ok" : "no_speech");

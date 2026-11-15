@@ -79,19 +79,20 @@ final class VoiceDraft {
 
     private static Item item(DraftItem d) {
         var issues = new ArrayList<>(d.issues);
-        var lines = d.lines.stream().limit(MAX_LINES).map(l -> line(l, issues)).toList();
+        var lines = d.lines.stream().limit(MAX_LINES).map(l -> line(l, d.restSeconds, issues)).toList();
         return new Item(d.exerciseId, d.exerciseName, d.resultType, d.spoken, d.confidence, d.restSeconds, lines,
-                List.copyOf(d.notes), List.copyOf(d.unrecognized), issues, d.candidates, d.proposal);
+                List.copyOf(d.notes), List.copyOf(d.unrecognized), issues, d.candidates, d.proposal, null);
     }
 
-    private static Line line(SetLine l, List<String> issues) {
+    /** Отдых алгоритм знает только на упражнение: он же — у каждой строки подходов. */
+    private static Line line(SetLine l, Integer restSeconds, List<String> issues) {
         var count = l.count();
         if (count != null && (count < 1 || count > MAX_SETS)) {
             issues.add("n=" + count + " — слишком много подходов");
             count = null;
         }
         return new Line(count, l.reps(), l.repsMax(), l.toFailure(), l.weightKg(), l.percent(), l.seconds(), l.meters(),
-                l.rpe(), l.rir(), l.type(), l.note());
+                l.rpe(), l.rir(), l.type(), l.note(), restSeconds);
     }
 
     static String capitalized(String s) {

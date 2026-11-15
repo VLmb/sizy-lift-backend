@@ -42,6 +42,8 @@ voice <id> transcript (820 ms): «Присед 3 по 5 на 100, отдых 2 �
 voice <id> parsed: {…}                    ← разбор текста без модели
 voice <id> fallback input: …               ← только если остались дырки: что ушло в DeepSeek
 voice <id> fallback answer: …              ←   и что он ответил
+voice <id> template (tokens …):           ← при parser=model: шаблон от DeepSeek
+voice <id> template skipped: […]           ←   что строгий разборщик отбросил
 voice <id> response (fallback SKIPPED): {…} ← что получил клиент
 ```
 

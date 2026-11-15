@@ -87,6 +87,24 @@ public final class ExerciseDictionary {
 
     public List<Exercise> exercises() { return exercises; }
 
+    /** Упражнение по названию целиком; {@code exact} — без опечаток и без второго упражнения с тем же вариантом. */
+    public record Found(Exercise exercise, boolean exact) { }
+
+    /**
+     * Поиск по названию из шаблона модели: совпадение должно покрыть название целиком (с вариантами, личными
+     * синонимами и опечатками, как при разборе речи). Иначе null.
+     */
+    public Found find(String name) {
+        var tokens = TextTokenizer.tokenize(name).tokens().stream().filter(t -> !t.is(Kind.SEPARATOR)).toList();
+        if (tokens.isEmpty()) return null;
+        var m = match(tokens, 0);
+        if (m == null || m.end() < tokens.size()) return null;
+        return new Found(m.exercise(), m.edits() == 0 && !m.ambiguous());
+    }
+
+    /** Ближайшие упражнения для названия, которого нет в словаре. */
+    public List<Exercise> similar(String name) { return candidates(stems(name)); }
+
     /**
      * Цепочка основ варианта без предлогов. Однословный вариант, совпадающий со служебным словом
      * («Разминка»), в поиск не попадает: иначе «разминка 40 на 10» стала бы упражнением.
