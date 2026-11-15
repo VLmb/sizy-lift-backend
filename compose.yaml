@@ -62,6 +62,7 @@ services:
     volumes:
       - ./keycloak/realm-sizylift.json:/opt/keycloak/data/import/realm-sizylift.json:ro
       - ./keycloak/themes/sizy:/opt/keycloak/themes/sizy:ro
+      - ./keycloak/password-blacklists:/opt/keycloak/data/password-blacklists:ro
       - type: bind
         source: ./keycloak-provider/build/libs/sizy-keycloak-provider.jar
         target: /opt/keycloak/providers/sizy-keycloak-provider.jar

@@ -14,7 +14,9 @@
         <div id="kc-form">
           <div id="kc-form-wrapper">
             <#if realm.password>
-                <form id="kc-form-login" class="${properties.kcFormClass!}" onsubmit="login.disabled = true; return true;" action="${url.loginAction}" method="post" novalidate="novalidate">
+                <form id="kc-form-login" class="${properties.kcFormClass!}" onsubmit="if ((this.username &amp;&amp; !this.username.value.trim()) || !this.password.value) { document.getElementById('sizy-login-empty').hidden = false; return false; } login.disabled = true; return true;" action="${url.loginAction}" method="post" novalidate="novalidate">
+                    <#-- Sizy: пустая форма не уходит на сервер с ответом «неверный пароль» (B-24). -->
+                    <p id="sizy-login-empty" class="${properties.kcInputErrorMessageClass!}" role="alert" hidden>${msg("sizyLoginEmpty")}</p>
                     <#if !usernameHidden??>
                         <#assign label>
                             <#if !realm.loginWithEmailAllowed>${msg("username")}<#elseif !realm.registrationEmailAsUsername>${msg("usernameOrEmail")}<#else>${msg("email")}</#if>

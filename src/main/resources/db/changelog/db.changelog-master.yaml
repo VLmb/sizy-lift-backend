@@ -113,3 +113,9 @@ databaseChangeLog:
   - include:
       file: changes/039-exercise-catalog-2026-11-2.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/040-coach-task-without-athlete.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/041-coaching-invite-name.sql
+      relativeToChangelogFile: true

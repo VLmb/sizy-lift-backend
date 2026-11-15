@@ -35,6 +35,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class CoachingService {
 
     static final Duration INVITE_TTL = Duration.ofDays(7);
+    static final int MAX_INVITE_NAME = 200;
 
     private final CoachingRepository coaching;
     private final PublishedAggregateRepository aggregates;
@@ -77,11 +78,18 @@ public class CoachingService {
     }
 
     public CreatedInvite createInvite(UUID coachId) {
-        return createInvite(coachId, null);
+        return createInvite(coachId, null, null);
     }
 
-    /** {@code programId} — необязательная своя программа тренера (CR-02); чужая или удалённая — 404. */
-    public CreatedInvite createInvite(UUID coachId, UUID programId) {
+    /**
+     * {@code programId} — необязательная своя программа тренера (CR-02); чужая или удалённая — 404.
+     * {@code name} — необязательное имя приглашения для списка ожидающих.
+     */
+    public CreatedInvite createInvite(UUID coachId, UUID programId, String name) {
+        var label = name == null || name.isBlank() ? null : name.strip();
+        if (label != null && label.length() > MAX_INVITE_NAME) {
+            throw new CoachingExceptions.InvalidRequest();
+        }
         if (!coaching.coachEnabled(coachId)) {
             throw new CoachingExceptions.Forbidden();
         }
@@ -90,7 +98,7 @@ public class CoachingService {
         }
         var token = tokens.generate();
         var expiresAt = clock.instant().plus(INVITE_TTL);
-        coaching.insertInvite(coachId, tokens.hash(token), expiresAt, programId);
+        coaching.insertInvite(coachId, tokens.hash(token), expiresAt, programId, label);
         metrics.count(Event.INVITE_CREATED);
         return new CreatedInvite(token, expiresAt);
     }
@@ -202,7 +210,8 @@ public class CoachingService {
 
     /**
      * Разрыв любой стороной: тренеру — {@code revoke} по всем данным подопечного, программы тренера переходят
-     * подопечному (автор сбрасывается, новая ревизия в его ленту). Повторный разрыв ничего не меняет.
+     * подопечному (автор сбрасывается, новая ревизия в его ленту), тихие черновики тренера удаляются.
+     * Повторный разрыв ничего не меняет.
      */
     public void end(UUID callerId, UUID linkId) {
         var found = participantLink(callerId, linkId);
@@ -213,6 +222,7 @@ public class CoachingService {
                 return;
             }
             coaching.endLink(linkId);
+            programs.discardDrafts(link.coachId(), link.athleteId());
             var operations = new ArrayList<Operation>();
             var archived = archives.heads(link.athleteId());
             for (var program : aggregates.transferToOwner(link.athleteId(), AggregateType.PROGRAM, link.coachId())) {

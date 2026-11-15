@@ -28,4 +28,9 @@ public final class CoachingExceptions {
     @ResponseStatus(HttpStatus.CONFLICT)
     public static class Conflict extends RuntimeException {
     }
+
+    /** Недопустимые данные запроса: например, слишком длинное имя приглашения. */
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public static class InvalidRequest extends RuntimeException {
+    }
 }

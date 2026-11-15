@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
+import com.sizylift.backend.publication.repository.ProgramDataRepository;
+import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
 import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.publication.service.PayloadReader;
 import com.sizylift.backend.sync.dto.SyncPushRequest.Item;
@@ -36,12 +38,30 @@ public class CoachProgramCopies {
     private final SyncPushService sync;
     private final ObjectMapper json;
     private final Clock clock;
+    private final ProgramDataRepository programData;
+    private final PublishedAggregateRepository aggregates;
 
-    CoachProgramCopies(PayloadReader payloads, SyncPushService sync, ObjectMapper json, Clock clock) {
+    CoachProgramCopies(PayloadReader payloads, SyncPushService sync, ObjectMapper json, Clock clock,
+                       ProgramDataRepository programData, PublishedAggregateRepository aggregates) {
         this.payloads = payloads;
         this.sync = sync;
         this.json = json;
         this.clock = clock;
+        this.programData = programData;
+        this.aggregates = aggregates;
+    }
+
+    /**
+     * Разрыв связи: тихие черновики тренера подопечный не видел, поэтому они не становятся его программами, а
+     * удаляются. Агрегат помечается удалённым, но автор остаётся тренером — передачу и ленты делает вызывающий.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void discardDrafts(UUID coachId, UUID athleteId) {
+        for (var id : programData.authoredDrafts(athleteId, coachId)) {
+            aggregates.lock(athleteId, AggregateType.PROGRAM, id);
+            programData.delete(athleteId, id);
+            aggregates.retire(athleteId, AggregateType.PROGRAM, id);
+        }
     }
 
     /** Своя неудалённая программа тренера. */

@@ -40,6 +40,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class SyncPushService {
 
     static final int SCHEMA_VERSION = 1;
+    /** Агрегаты, которых у пользователя не больше одного, хотя id выбирает клиент (одна строка на сервере). */
+    private static final java.util.Set<String> SINGLE_PER_USER = java.util.Set.of(AggregateType.ATHLETE_PROFILE);
     private static final Logger log = LoggerFactory.getLogger(SyncPushService.class);
 
     private final Map<String, AggregatePublisher<?>> publishers;
@@ -238,6 +240,15 @@ public class SyncPushService {
                         state.revision());
                 return ItemResult.of(item, ItemStatus.SUPERSEDED, state.revision());
             }
+            var rivals = rivals(ownerId, item);
+            if (rivals.stream().anyMatch(rival -> !arbiter.incomingWins(changedAt, rival.state()))) {
+                arbiter.incomingLost(ownerId, item.type(), item.id(), item.payload(), changedAt, item.clientId(),
+                        rivals.getFirst().state().revision());
+                return ItemResult.of(item, ItemStatus.SUPERSEDED, state.revision());
+            }
+            var replacedRivals = rivals.stream()
+                    .map(rival -> arbiter.captureStored(ownerId, item.type(), rival.aggregateId(), rival.state()))
+                    .toList();
             var lost = conflict && state.exists() ? arbiter.captureStored(ownerId, item.type(), item.id(), state)
                     : null;
             var before = dependents.capture(ownerId, item.type(), item.id());
@@ -251,6 +262,11 @@ public class SyncPushService {
             if (lost != null) {
                 arbiter.storedLost(lost, revision);
             }
+            for (var rival : replacedRivals) {
+                var retired = aggregates.retire(ownerId, item.type(), rival.aggregateId());
+                arbiter.storedLost(rival, revision);
+                feed.changed(AggregateChange.byServer(ownerId, item.type(), rival.aggregateId(), retired, true));
+            }
             for (var copy : effects.copies()) {
                 feed.changed(AggregateChange.byServer(ownerId, AggregateType.EXERCISE, copy.id(), copy.revision(),
                         false));
@@ -263,6 +279,18 @@ public class SyncPushService {
                     deleted, !state.exists() || state.deleted()));
             return ItemResult.accepted(item, revision, effects.payloadRewritten());
         });
+    }
+
+    /**
+     * Профиль у пользователя один, но его id выбирает клиент: профиль под новым id конкурирует с уже
+     * сохранённым по {@code changedAt}, как правка того же агрегата. Иначе пустой профиль нового устройства
+     * молча заменял заполненный.
+     */
+    private List<PublishedAggregateRepository.OtherAggregate> rivals(UUID ownerId, Item item) {
+        if (item.deleted() || !SINGLE_PER_USER.contains(item.type())) {
+            return List.of();
+        }
+        return aggregates.lockOtherLive(ownerId, item.type(), item.id());
     }
 
     /** Кто пишет, чьи данные и что. */

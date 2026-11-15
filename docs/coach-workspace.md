@@ -171,19 +171,19 @@ changeset `039`); часть названий выше с тех пор пере
 
 ## 5. Задачи тренера
 
-Задачи тренер заводит **только вручную**, по конкретному подопечному. Видит только тренер. Сортировку подопечных
+Задачи тренер заводит **только вручную** — по подопечному или общие, без подопечного (напоминания себе). Видит только тренер. Сортировку подопечных
 не меняют.
 
 **Схема (changeset `021-coach-task`):** таблица `coach_task`: `id`, `link_id → coaching_link ON DELETE CASCADE`,
-`text` (1–500 символов), `due_on date`, `done_at`, `created_at`, `updated_at`. После разрыва связи задачи
-не видны.
+`text` (1–500 символов), `due_on date`, `done_at`, `created_at`, `updated_at`; changeset `040` добавил
+`coach_user_id` и сделал `link_id` необязательным (общая задача). После разрыва связи задачи подопечного не видны.
 
 ### API `/api/v2/web/tasks`
 
 - `GET /api/v2/web/tasks?athleteId=&status=open|done|all` (по умолчанию `open`) →
   `{ "tasks": [ { "id", "athleteId", "athleteName", "text", "dueOn", "doneAt", "createdAt", "updatedAt" } ] }`;
   порядок: открытые — по `dueOn` (без срока — в конце), затем по `createdAt`; сделанные — по `doneAt` по убыванию;
-- `POST /api/v2/web/tasks` `{ "athleteId", "text", "dueOn"? }` → задача, `201`;
+- `POST /api/v2/web/tasks` `{ "athleteId"?, "text", "dueOn"? }` → задача, `201`; без `athleteId` — общая задача;
 - `PATCH /api/v2/web/tasks/{id}` `{ "text"?, "dueOn"?, "done"? }` → задача (`dueOn: null` снимает срок);
 - `DELETE /api/v2/web/tasks/{id}` → `204`.
 

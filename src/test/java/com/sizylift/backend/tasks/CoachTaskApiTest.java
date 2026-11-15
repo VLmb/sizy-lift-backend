@@ -53,8 +53,18 @@ class CoachTaskApiTest extends CoachWorkspaceApiSupport {
         postJson(coach, "/api/v2/web/tasks", request(athleteId, "   ", null)).andExpect(status().isBadRequest());
         postJson(coach, "/api/v2/web/tasks", request(athleteId, "я".repeat(MAX_TEXT + 1), null))
                 .andExpect(status().isBadRequest());
-        postJson(coach, "/api/v2/web/tasks", request(null, "Текст", null)).andExpect(status().isBadRequest());
         create(athleteId, "я".repeat(MAX_TEXT), null);
+    }
+
+    @Test
+    void generalTaskWithoutAthleteBelongsToTheCoachOnly() throws Exception {
+        var task = create(null, "Купить блины", null);
+
+        assertThat(task.get("athleteId").isNull()).isTrue();
+        assertThat(ids(list(""))).contains(id(task));
+        assertThat(ids(list("?athleteId=" + athleteId))).doesNotContain(id(task));
+        update(id(task), Map.of("done", true));
+        assertThat(ids(list("?status=done"))).contains(id(task));
     }
 
     @Test

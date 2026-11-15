@@ -37,8 +37,11 @@ public final class CoachingDtos {
                                         List<String> coachSeesWithHealthAccess) {
     }
 
-    /** Создание приглашения; {@code programId} — необязательная своя программа тренера (CR-02). */
-    public record CreateInviteRequest(UUID programId) {
+    /**
+     * Создание приглашения; {@code programId} — необязательная своя программа тренера (CR-02), {@code name} —
+     * необязательное имя приглашения для списка ожидающих (до 200 символов).
+     */
+    public record CreateInviteRequest(UUID programId, String name) {
     }
 
     /**
