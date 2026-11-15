@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,7 +43,9 @@ public final class TemplateParser {
             "^упражнение\\s*:\\s*(.+?)\\s*(?:\\|\\s*тип\\s*=\\s*([а-яё_]+)\\s*)?(\\|\\s*новое\\s*)?$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern SET = Pattern.compile("^подход\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern COMMENT = Pattern.compile("^комментарий\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    private static final Pattern NOTE = Pattern.compile("(?:^|\\|)\\s*заметка\\s*=\\s*(.*)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** Заметка — последним ключом: её текст может содержать «|» и «=». */
+    private static final String NOTE_KEY = "заметка";
+    private static final Pattern NOTE = Pattern.compile("(?:^|\\|)\\s*" + NOTE_KEY + "\\s*=\\s*(.*)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern PAIR = Pattern.compile("^([а-яёa-z_]+)\\s*=\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final String NUMBER = "(\\d+(?:[.,]\\d+)?)";
     private static final Pattern COUNT = Pattern.compile("^(\\d{1,2})$");
@@ -54,19 +56,15 @@ public final class TemplateParser {
     private static final Pattern TIME = Pattern.compile("^" + NUMBER + "\\s*(с|сек|мин|ч)\\.?$");
     private static final Pattern DISTANCE = Pattern.compile("^" + NUMBER + "\\s*(м|км)\\.?$");
 
-    /** Тип подхода в шаблоне → значение приложения. */
-    private static final Map<String, String> SET_TYPES = Map.of("разминка", "warmup", "рабочий", "working",
-            "топсет", "top", "бэкофф", "backoff", "бекофф", "backoff");
+    /** Как читается значение ключа. Ключи и их допустимость по типам — в словаре {@link TemplateVocabulary}. */
+    enum Format { COUNT, REPS, KILOGRAMS, PERCENT, RPE, TIME, DISTANCE, SET_TYPE, NOTE }
 
-    /** Ключи, которые может нести подход упражнения каждого типа; тип, отдых и заметка — у всех. */
-    private static final Map<String, Set<String>> KEYS = Map.of(
-            "weight_reps", Set.of("повт", "вес", "процент", "rpe"),
-            "added_weight_reps", Set.of("повт", "доп_вес", "rpe"),
-            "reps", Set.of("повт", "rpe"),
-            "duration", Set.of("время"),
-            "distance_time", Set.of("дистанция", "время"),
-            "free", Set.of());
-    private static final Set<String> COMMON = Set.of("кол", "тип", "отдых");
+    /** Формат каждого ключа словаря; тест сверяет, что ключей без формата и форматов без ключа нет. */
+    static final Map<String, Format> FORMATS = Map.ofEntries(
+            Map.entry("кол", Format.COUNT), Map.entry("повт", Format.REPS), Map.entry("вес", Format.KILOGRAMS),
+            Map.entry("доп_вес", Format.KILOGRAMS), Map.entry("процент", Format.PERCENT), Map.entry("rpe", Format.RPE),
+            Map.entry("время", Format.TIME), Map.entry("дистанция", Format.DISTANCE), Map.entry("тип", Format.SET_TYPE),
+            Map.entry("отдых", Format.TIME), Map.entry(NOTE_KEY, Format.NOTE));
 
     /** {@code skipped} — что не по формату, не подходит типу или чего нет во фразе: для отладки и метрик. */
     public record Result(List<Item> items, List<String> skipped) { }
@@ -160,8 +158,8 @@ public final class TemplateParser {
             body = body.substring(0, noteMatch.start());
             if (note.isEmpty()) note = null;
         }
-        var allowed = KEYS.getOrDefault(d.resultType == null ? "" : d.resultType, Set.of("повт", "вес", "доп_вес", "процент",
-                "rpe", "время", "дистанция"));
+        var allowed = TemplateVocabulary.keysFor(d.resultType);
+        var common = TemplateVocabulary.commonKeys().stream().map(TemplateVocabulary::key).collect(Collectors.toSet());
         var label = d.name != null ? d.name : d.spoken;
         var values = new LinkedHashMap<String, String>();
         for (var part : body.split("\\|")) {
@@ -173,7 +171,11 @@ public final class TemplateParser {
                 continue;
             }
             var k = m.group(1).toLowerCase(Locale.ROOT);
-            if (!COMMON.contains(k) && !allowed.contains(k)) {
+            if (!FORMATS.containsKey(k) || !TemplateVocabulary.allKeys().contains(k)) {
+                skipped.add(label + ": неизвестный ключ «" + text + "»");
+                continue;
+            }
+            if (!common.contains(k) && !allowed.contains(k)) {
                 d.issues.add(text + " — не подходит типу упражнения");
                 continue;
             }
@@ -204,7 +206,7 @@ public final class TemplateParser {
         String type = null;
         var typeText = values.get("тип");
         if (typeText != null) {
-            type = SET_TYPES.get(typeText.toLowerCase(Locale.ROOT).replace('ё', 'е').replace("-", "").replace(" ", ""));
+            type = TemplateVocabulary.setType(typeText).orElse(null);
             if (type == null) line.reject("тип", typeText);
         }
         if (reps == null && weight == null && percent == null && rpe == null && seconds == null && meters == null
@@ -312,10 +314,7 @@ public final class TemplateParser {
     }
 
     private static String templateType(String type) {
-        if (type == null) return null;
-        var t = type.toLowerCase(Locale.ROOT).replace('ё', 'е');
-        return TemplatePrompt.TYPES.entrySet().stream().filter(e -> e.getValue().replace('ё', 'е').equals(t))
-                .map(Map.Entry::getKey).findFirst().orElse(null);
+        return type == null ? null : TemplateVocabulary.resultType(type).orElse(null);
     }
 
     private static String capitalized(String s) {
