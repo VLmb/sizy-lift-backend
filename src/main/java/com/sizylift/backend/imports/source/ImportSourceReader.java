@@ -37,6 +37,9 @@ public class ImportSourceReader {
     private final ImportProperties limits;
     private final SheetImportService sheets;
 
+    /** Имя для проверок формата скачанной книги Google: те же, что у загруженного XLSX. */
+    private static final String GOOGLE_BOOK = "google-sheets.xlsx";
+
     public ImportSourceReader(ImportProperties limits, SheetImportService sheets) {
         this.limits = limits;
         this.sheets = sheets;
@@ -45,10 +48,44 @@ public class ImportSourceReader {
     public Source read(ImportSession session) {
         return switch (session.sourceKind()) {
             case "text" -> text(session.sourceText());
-            case "sheet" -> csv(sheets.fetch(session.sourceText()));
+            case "sheet" -> sheet(session.sourceText());
             case "file" -> file(session.sourceName(), session.sourceBytes());
             default -> throw ImportFailure.invalid("Неизвестный тип источника.");
         };
+    }
+
+    /**
+     * Ссылка Google Sheets — вся книга, как загруженный XLSX: несколько вкладок попадут в выбор листов. Названия
+     * листов — полные, как в таблице (выгрузка XLSX обрезает их до 31 символа). Если книгу скачать нельзя —
+     * одна вкладка CSV, как раньше.
+     */
+    private Source sheet(String url) {
+        SheetImportService.Book book;
+        try {
+            book = sheets.fetchBook(url, limits.maxFileBytes());
+        } catch (SheetImportService.UnavailableSheet e) {
+            return csv(sheets.fetch(url));
+        }
+        return withNames(file(GOOGLE_BOOK, book.xlsx()), book.names());
+    }
+
+    /** Название листа из книги — начало полного названия вкладки: подставляется первое подходящее по порядку. */
+    private static Source withNames(Source source, List<String> names) {
+        if (names.isEmpty()) return source;
+        var free = new ArrayList<>(names);
+        var items = new ArrayList<SourceItem>(source.items().size());
+        for (var item : source.items()) {
+            if (item.ref().matches("sheet:\\d+")) {
+                var full = free.stream().filter(name -> name.startsWith(item.text())).findFirst();
+                if (full.isPresent()) {
+                    free.remove(full.get());
+                    items.add(new SourceItem(item.ref(), full.get()));
+                    continue;
+                }
+            }
+            items.add(item);
+        }
+        return new Source(List.copyOf(items), source.language());
     }
 
     public Source text(String text) {
@@ -115,8 +152,15 @@ public class ImportSourceReader {
                     checkSize(result);
                 }
             }
-            return bounded(result);
+            // Объём книги проверяется после выбора листов: в модель уходят только они.
+            return bounded(result, true, false);
         }
+    }
+
+    /** Объём того, что уйдёт в модель; для книги — после выбора листов. */
+    public void checkSize(Source source) {
+        long chars = source.items().stream().mapToLong(item -> item.text().length() + item.ref().length()).sum();
+        if (chars > limits.maxSourceChars()) throw ImportFailure.invalid("Источник слишком большой. Выберите меньше листов.");
     }
 
     private Source csv(String text) {
@@ -195,13 +239,17 @@ public class ImportSourceReader {
     }
 
     private Source bounded(List<SourceItem> items, boolean limitCellSize) {
+        return bounded(items, limitCellSize, true);
+    }
+
+    private Source bounded(List<SourceItem> items, boolean limitCellSize, boolean limitChars) {
         if (items.size() > limits.maxCells()) throw ImportFailure.invalid("В источнике слишком много строк или ячеек.");
         if (limitCellSize && items.stream().anyMatch(item -> item.text().length() > MAX_CELL_CHARS))
             throw ImportFailure.invalid("В строке или ячейке больше 4000 символов.");
         if (items.isEmpty()) throw ImportFailure.invalid("В источнике нет данных.");
-        long chars = items.stream().mapToLong(item -> item.text().length() + item.ref().length()).sum();
-        if (chars > limits.maxSourceChars()) throw ImportFailure.invalid("Источник слишком большой. Выберите нужные листы.");
-        return new Source(List.copyOf(items));
+        var source = new Source(List.copyOf(items));
+        if (limitChars) checkSize(source);
+        return source;
     }
 
     private void checkSize(List<SourceItem> items) {

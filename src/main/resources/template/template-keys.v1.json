@@ -1,0 +1,19 @@
+{
+  "_comment": "Словарь шаблона разбора моделью — общий для голосового ввода (docs/voice.md, «Разбор шаблоном») и AI-импорта программ (docs/imports.md). Из него собираются списки в промптах (voice/template-prompt.v1.txt, imports/understand-, match-, weeks-prompt.v1.txt), его же читает разбор строки подхода (SetLine). importKeys и setTypes со scopes=[import] есть только в импорте: в диктовке RIR и дроп-сет записываются заметкой. Формат значения каждого ключа задан в коде (SetLine.FORMATS); тесты сверяют словарь, промпты и код.",
+  "exerciseTypes": [
+    {"resultType": "weight_reps", "word": "вес_повторы", "description": "вес и повторы", "keys": ["повт", "вес", "процент", "RPE"], "importKeys": ["RIR"]},
+    {"resultType": "added_weight_reps", "word": "доп_вес_повторы", "description": "дополнительный вес к своему весу и повторы", "keys": ["повт", "доп_вес", "RPE"], "importKeys": ["RIR"]},
+    {"resultType": "reps", "word": "повторы", "description": "только повторы", "keys": ["повт", "RPE"], "importKeys": ["RIR"]},
+    {"resultType": "duration", "word": "время", "description": "время", "keys": ["время"], "importKeys": ["RPE"]},
+    {"resultType": "distance_time", "word": "дистанция_время", "description": "дистанция и время", "keys": ["дистанция", "время"], "importKeys": ["RPE"]},
+    {"resultType": "free", "word": "свободное", "description": "без чисел", "keys": []}
+  ],
+  "commonKeys": ["кол", "тип", "отдых", "заметка"],
+  "setTypes": [
+    {"value": "warmup", "word": "разминка", "spoken": ["разминка", "разминочный", "разогрев"]},
+    {"value": "top", "word": "топсет", "spoken": ["топсет", "топ-сет", "тяжёлый подход"]},
+    {"value": "backoff", "word": "бэкофф", "spoken": ["бэкофф", "бекофф", "бэк-офф", "облегчённые подходы после топсета"]},
+    {"value": "drop", "word": "дроп", "spoken": ["дроп", "дроп-сет", "дропсет"], "scopes": ["import"]},
+    {"value": "working", "word": "рабочий", "spoken": ["рабочие", "рабочих"], "default": true}
+  ]
+}

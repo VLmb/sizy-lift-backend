@@ -10,7 +10,6 @@ import java.util.concurrent.Executors;
 import com.sizylift.backend.CoachWorkspaceApiSupport;
 import com.sizylift.backend.imports.dto.ImportDtos.Commit;
 import com.sizylift.backend.imports.dto.ImportDtos.Receipt;
-import com.sizylift.backend.imports.model.ModelInputRenderer;
 import com.sizylift.backend.imports.model.ProgramParserModel;
 import com.sizylift.backend.imports.service.ImportCommitService;
 import com.sizylift.backend.imports.service.ImportService;
@@ -31,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {"sizylift.imports.enabled=true", "sizylift.imports.worker-enabled=false",
@@ -70,18 +70,16 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(sessions.language(id)).isEqualTo("en");
         assertThat(sessions.find(id).orElseThrow().name()).isEqualTo("Imported program");
         when(parser.parse(any(), any())).thenAnswer(call -> {
-            var input = call.getArgument(0, ProgramParserModel.Input.class);
-            assertThat(input.source().language()).isEqualTo("en");
-            assertThat(ModelInputRenderer.render(input)).contains("ЯЗЫК ИНТЕРФЕЙСА\nen\n");
-            var output = draft(matched("text:1"));
-            firstItem(output).put("sets", new java.util.ArrayList<>(List.of("n=3 r=8-12 kg=100 | Личная заметка")));
-            return result(input, output);
+            var sent = call.getArgument(0, ProgramParserModel.Request.class);
+            assertThat(sent.input().source().language()).isEqualTo("en");
+            assertThat(sent.user()).contains("ЯЗЫК ИНТЕРФЕЙСА\nen\n");
+            return result(draftWithSet("Подход: кол=3 | повт=8-12 | вес=100 кг | заметка=Личная заметка", matched()));
         });
         assertThat(worker.processOne()).isTrue();
         assertThat(sessions.find(id).orElseThrow().normalized().language()).isEqualTo("en");
         var preview = view(owner, id);
         assertThat(preview.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0/note").asString())
-                .contains("Reps: 8-12", "Личная заметка", "Set type not specified in the source.");
+                .contains("Reps: 8-12", "Личная заметка").doesNotContain("Set type not specified");
         // Повтор после смены языка не создаёт новую сессию и не меняет первый выбор.
         body.remove("language");
         postJson(owner, BASE, body).andExpect(status().isAccepted());
@@ -177,7 +175,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void importsTextUsingTheCatalogAndSavesAProgramOnlyOnCommit() throws Exception {
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched("text:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         var user = userId(owner);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.program WHERE user_id=?", Integer.class, user)).isZero();
@@ -199,12 +197,12 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.program WHERE user_id=?", Integer.class, user)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT normalized IS NULL AND source_text IS NULL AND history='[]'::jsonb FROM sizylift.import_session WHERE id=?",
                 Boolean.class, id)).isTrue();
-        verify(parser, times(1)).parse(any(), any());
+        verify(parser, times(2)).parse(any(), any());
     }
 
     @Test
     void clarificationReplaysTheOriginalSourceAndAllAnswersAndDeduplicatesTheAnswer() throws Exception {
-        when(parser.parse(any(), any())).thenAnswer(reply(clarification("От какого веса считать снижение?"), draft(matched("text:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(clarification("От какого веса считать снижение?"), draft(matched())));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         var first = view(owner, id);
@@ -215,15 +213,16 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         postJson(owner, BASE + "/" + id + "/clarifications", answer).andExpect(status().isAccepted());
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
-        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
-        verify(parser, times(2)).parse(captor.capture(), any());
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
+        // Вопрос, понимание после ответа и недели.
+        verify(parser, times(3)).parse(captor.capture(), any());
         var requests = captor.getAllValues();
-        assertThat(requests.get(1).source()).isEqualTo(requests.get(0).source());
-        assertThat(requests.get(1).catalog()).isEqualTo(requests.get(0).catalog());
-        assertThat(requests.get(1).history()).hasSize(1);
-        assertThat(requests.get(1).history().getFirst().answer()).isEqualTo("От первого рабочего подхода");
-        assertThat(requests.get(1).history().getFirst().question()).isEqualTo("От какого веса считать снижение?");
-        assertThat(ModelInputRenderer.render(requests.get(1))).contains("answer:1\tВопрос: От какого веса считать снижение?");
+        assertThat(requests.get(1).input().source()).isEqualTo(requests.get(0).input().source());
+        assertThat(requests.get(1).system()).isEqualTo(requests.get(0).system());
+        assertThat(requests.get(1).input().history()).hasSize(1);
+        assertThat(requests.get(1).input().history().getFirst().answer()).isEqualTo("От первого рабочего подхода");
+        assertThat(requests.get(1).input().history().getFirst().question()).isEqualTo("От какого веса считать снижение?");
+        assertThat(requests.get(1).user()).contains("Вопрос: От какого веса считать снижение?\nОтвет: От первого рабочего подхода");
     }
 
     @Test
@@ -236,10 +235,10 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         postJson(owner, BASE + "/" + first + "/clarifications", Map.of("requestId", UUID.randomUUID(),
                 "version", firstView.get("version").asLong(), "round", 0, "answer", "Ответ только для первого")).andExpect(status().isAccepted());
         doAnswer(call -> {
-            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            var input = call.getArgument(0, ProgramParserModel.Request.class).input();
             assertThat(input.history()).hasSize(1);
             assertThat(input.source().items().getFirst().text()).isEqualTo(TEXT);
-            return result(input, draft(matched("text:1")));
+            return result(draft(matched()));
         }).when(parser).parse(any(), any());
         worker.processOne();
         assertThat(view(owner, second).get("clarificationMessage").asString()).isEqualTo("Уточните второй источник");
@@ -247,7 +246,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void ambiguousExerciseCanBeChosenWithoutCallingTheModelAgain() throws Exception {
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(ambiguous("text:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(ambiguous())));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
@@ -256,7 +255,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
                 .content(json.writeValueAsString(Map.of("version", view.get("version").asLong(), "decisions",
                         List.of(Map.of("key", "e1", "kind", "existing", "exerciseId", SQUAT)))))).andExpect(status().isOk()));
         assertThat(chosen.get("canCommit").asBoolean()).isTrue();
-        verify(parser, times(1)).parse(any(), any());
+        verify(parser, times(3)).parse(any(), any());
     }
 
     @Test
@@ -265,7 +264,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         link(coach, owner);
         var athlete = userId(owner);
         var coachId = userId(coach);
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(custom("e1", "Альфа", "weight_reps"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(custom("Альфа", "вес_повторы"))));
         var id = create(coach, "Альфа 3×5 100 кг @8", athlete, UUID.randomUUID());
         worker.processOne();
         var view = view(coach, id);
@@ -283,7 +282,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void genuineIdCollisionRollsBackEarlierExercisesAndAllFeedEntries() throws Exception {
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(custom("e1", "Альфа", "weight_reps"), custom("e2", "Омега", "weight_reps"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(custom("Альфа", "вес_повторы"), custom("Омега", "вес_повторы"))));
         var id = create(owner, "Альфа и Омега: 3×5 100 кг @8", null, UUID.randomUUID());
         worker.processOne();
         var collision = List.of(ProgramDraftCompiler.id(id, "exercise:e1"), ProgramDraftCompiler.id(id, "exercise:e2"))
@@ -302,7 +301,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void concurrentCommitsReturnTheSameProgram() throws Exception {
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched("text:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         long version = view(owner, id).get("version").asLong();
@@ -320,7 +319,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     void revocationAndForeignAccessCannotReadOrCommitAnImport() throws Exception {
         var coach = newSubject();
         var link = link(coach, owner);
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched("text:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
         var id = create(coach, TEXT, userId(owner), UUID.randomUUID());
         worker.processOne();
         call(owner, get(BASE + "/" + id)).andExpect(status().isNotFound());
@@ -345,7 +344,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var user = userId(owner);
         when(parser.parse(any(), any())).thenAnswer(call -> {
             imports.cancel(user, id);
-            return result(call.getArgument(0, ProgramParserModel.Input.class), draft(matched("text:1")));
+            return result(draft(matched()));
         });
         worker.processOne();
         var view = view(owner, id);
@@ -366,71 +365,63 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void invalidModelOutputIsRetriedOnceAndNeverBecomesAProgram() throws Exception {
-        when(parser.parse(any(), any())).thenReturn(new ProgramParserModel.Result("{}", 100, 10, 0));
+        when(parser.parse(any(), any())).thenReturn(new ProgramParserModel.Result("{}", 100, 10, 0, false));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("queued");
         jdbc.update("UPDATE sizylift.import_session SET next_attempt_at=now() WHERE id=?", id);
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("failed");
-        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
         verify(parser, times(2)).parse(captor.capture(), any());
-        assertThat(captor.getAllValues().get(0).repairMessage()).isEmpty();
-        assertThat(captor.getAllValues().get(1).repairMessage()).contains("Схема");
+        assertThat(captor.getAllValues().get(0).input().repairMessage()).isEmpty();
+        assertThat(captor.getAllValues().get(1).input().repairMessage()).contains("не по шаблону");
     }
 
     @Test
     void aPlanThatDoesNotFitEvenWithoutWeeksFailsWithoutFurtherPaidRepeats() throws Exception {
-        when(parser.parse(any(), any())).thenThrow(com.sizylift.backend.imports.model.ModelFailure.truncated(5000, 32768));
+        when(parser.parse(any(), any())).thenReturn(new ProgramParserModel.Result("Программа: Огромная\nУпражнения:\n- При", 5000, 32768, 0, true));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
         assertThat(view.get("status").asString()).isEqualTo("failed");
         assertThat(view.at("/error/code").asString()).isEqualTo("input_too_large");
-        assertThat(view.get("outputTokens").asLong()).isEqualTo(2 * 32768);
+        assertThat(view.get("outputTokens").asLong()).isEqualTo(32768);
         assertThat(worker.processOne()).isFalse();
-        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
-        verify(parser, times(2)).parse(captor.capture(), any());
-        assertThat(captor.getAllValues()).extracting(input -> input.task().kind())
-                .containsExactly(ProgramParserModel.Task.Kind.PLAN, ProgramParserModel.Task.Kind.PLAN_ONLY);
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
+        verify(parser, times(1)).parse(captor.capture(), any());
+        assertThat(captor.getValue().input().task().kind()).isEqualTo(ProgramParserModel.Task.Kind.UNDERSTAND);
     }
 
     @Test
-    void theRepairAttemptReceivesTheConcreteErrorsAndClarificationsResetThem() throws Exception {
-        var invalid = draft(matched("text:1"));
-        firstItem(invalid).put("sets", List.of("3x5 100kg"));
-        when(parser.parse(any(), any())).thenAnswer(reply(invalid, draft(matched("text:1"))));
+    void aBrokenLineBecomesAWarningInsteadOfAPaidRetry() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draftWithSet("Подход: 3x5 100kg\n" + DEFAULT_SET, matched())));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
-        jdbc.update("UPDATE sizylift.import_session SET next_attempt_at=now() WHERE id=?", id);
-        worker.processOne();
-        assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
-        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
-        verify(parser, times(2)).parse(captor.capture(), any());
-        assertThat(captor.getAllValues().get(1).repairMessage())
-                .contains("weeks[week=1].days[0].blocks[0].items[0].sets[0] «3x5 100kg»", "фрагмент «3x5»");
-        assertThat(jdbc.queryForObject("SELECT repair_hint FROM sizylift.import_session WHERE id=?", String.class, id)).isNull();
+        var view = view(owner, id);
+        assertThat(view.get("status").asString()).isEqualTo("review");
+        assertThat(view.at("/draft/warnings").size()).isEqualTo(1);
+        assertThat(view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets").size()).isEqualTo(3);
+        verify(parser, times(2)).parse(any(), any());
     }
 
     @Test
     void aLargeProgramIsPlannedFirstAndItsWeeksAreParsedInParallel() throws Exception {
         var started = new CountDownLatch(3);
-        var duplicate = exercise("n1", "Присед", "matched", SQUAT_ALIAS, List.of(), "", "", List.of("text:1"));
         var observed = new java.util.concurrent.CopyOnWriteArrayList<JsonNode>();
         var ids = new java.util.concurrent.atomic.AtomicReference<UUID>();
         when(parser.parse(any(), any())).thenAnswer(call -> {
-            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            var input = call.getArgument(0, ProgramParserModel.Request.class).input();
             if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) {
                 observed.add(view(owner, ids.get()).get("progress"));
-                return result(input, plan(List.of(matched("text:1")), 3, 2));
+                return result(plan(List.of(matched()), 3, 2));
             }
             if (input.task().weeks().equals(List.of(1))) observed.add(view(owner, ids.get()).get("progress"));
             started.countDown();
             assertThat(started.await(10, java.util.concurrent.TimeUnit.SECONDS)).as("части разбираются параллельно").isTrue();
             var weeks = input.task().weeks();
-            var extras = weeks.contains(3) ? List.of(duplicate) : List.<Map<String, Object>>of();
-            var exercise = weeks.contains(3) ? duplicate : matched("text:1");
-            return result(input, weeks(weeks, extras, exercise));
+            // Часть повторно объявляет известное упражнение: сервер узнаёт его по названию и не дублирует.
+            return result(weeks(weeks, weeks.contains(3) ? List.of(matched()) : List.of(), matched()));
         });
         var id = create(owner, TEXT, null, UUID.randomUUID());
         ids.set(id);
@@ -445,57 +436,110 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(observed.get(1).get("exercises").asInt()).isEqualTo(1);
         assertThat(view.get("canCommit").asBoolean()).isTrue();
         assertThat(view.at("/draft/exerciseResolutions").size()).isEqualTo(1);
+        assertThat(view.at("/draft/plan").size()).isEqualTo(3);
         var cycles = view.at("/program/cycles");
         assertThat(cycles.size()).isEqualTo(2);
         assertThat(cycles.get(0).get("weeks").size()).isEqualTo(2);
         assertThat(cycles.get(1).at("/weeks/0/workouts/0/blocks/0/exercises/0/exerciseId").asString()).isEqualTo(SQUAT.toString());
-        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
         verify(parser, times(4)).parse(captor.capture(), any());
-        assertThat(captor.getAllValues().stream().filter(input -> input.task().kind() == ProgramParserModel.Task.Kind.WEEKS)
+        assertThat(captor.getAllValues().stream().map(ProgramParserModel.Request::input)
+                .filter(input -> input.task().kind() == ProgramParserModel.Task.Kind.WEEKS)
                 .map(input -> input.task().weeks()).toList()).containsExactlyInAnyOrder(List.of(1), List.of(2), List.of(3));
         assertThat(jdbc.queryForObject("SELECT outline IS NULL FROM sizylift.import_session WHERE id=?", Boolean.class, id)).isTrue();
         assertThat(view.get("outputTokens").asLong()).isEqualTo(4 * 300);
     }
 
     @Test
-    void aTruncatedPartIsSplitAndAnInvalidPartIsRepairedWithoutTheQueue() throws Exception {
+    void aTruncatedPartIsSplitAndAPartWithoutItsWeekIsAskedAgain() throws Exception {
         when(parser.parse(any(), any())).thenAnswer(call -> {
-            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            var input = call.getArgument(0, ProgramParserModel.Request.class).input();
             var weeks = input.task().weeks();
-            if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) return result(input, plan(List.of(matched("text:1")), 2, 1));
-            if (weeks.size() == 2) throw com.sizylift.backend.imports.model.ModelFailure.truncated(1000, 32768);
-            var answer = weeks(weeks, List.of(), matched("text:1"));
-            if (weeks.equals(List.of(2)) && input.repairMessage().isEmpty()) firstItem(answer).put("sets", List.of("5x5"));
-            return result(input, answer);
+            if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) return result(plan(List.of(matched()), 2, 1));
+            if (weeks.size() == 2) return new ProgramParserModel.Result("Тренировки:\nНеделя: 1\nДень: 1", 1000, 32768, 0, true);
+            if (weeks.equals(List.of(2)) && input.repairMessage().isEmpty()) return result("Тренировки:\n");
+            return result(weeks(weeks, List.of(), matched()));
         });
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
-        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
         verify(parser, times(5)).parse(captor.capture(), any());
-        var repaired = captor.getAllValues().stream().filter(input -> input.task().weeks().equals(List.of(2))).toList();
+        var repaired = captor.getAllValues().stream().map(ProgramParserModel.Request::input)
+                .filter(input -> input.task().weeks().equals(List.of(2))).toList();
         assertThat(repaired).hasSize(2);
-        assertThat(repaired.get(1).repairMessage()).contains("weeks[week=2].days[0].blocks[0].items[0].sets[0] «5x5»");
+        assertThat(repaired.get(1).repairMessage()).contains("нет недель 2");
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    void aProgramThatDidNotFitIntoOneAnswerIsReplannedWithoutWeeks() throws Exception {
+    void aWeekThatCouldNotBeParsedIsShownAsFailedAndCanBeParsedAgain() throws Exception {
+        var fixed = new java.util.concurrent.atomic.AtomicBoolean();
         when(parser.parse(any(), any())).thenAnswer(call -> {
-            var input = call.getArgument(0, ProgramParserModel.Input.class);
+            var input = call.getArgument(0, ProgramParserModel.Request.class).input();
+            if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) return result(plan(List.of(matched()), 4, 3));
+            var weeks = new java.util.ArrayList<>(input.task().weeks());
+            if (!fixed.get()) weeks.remove(Integer.valueOf(4));
+            return result(weeks(weeks, List.of(), matched()));
+        });
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        worker.processOne();
+        var partial = view(owner, id);
+        assertThat(partial.get("status").asString()).isEqualTo("review");
+        assertThat(partial.get("canCommit").asBoolean()).isTrue();
+        assertThat(partial.at("/draft/plan/3/status").asString()).isEqualTo("failed");
+        assertThat(partial.at("/program/cycles/1/weeks").size()).isEqualTo(1);
+        fixed.set(true);
+        postJson(owner, BASE + "/" + id + "/weeks/retry", Map.of("version", partial.get("version").asLong()))
+                .andExpect(status().isAccepted());
+        worker.processOne();
+        var complete = view(owner, id);
+        assertThat(complete.get("status").asString()).isEqualTo("review");
+        assertThat(complete.at("/draft/plan/3/status").asString()).isEqualTo("done");
+        assertThat(complete.at("/program/cycles/1/weeks").size()).isEqualTo(2);
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
+        verify(parser, atLeastOnce()).parse(captor.capture(), any());
+        assertThat(captor.getAllValues().getLast().input().task().weeks()).containsExactly(4);
+    }
+
+    @Test
+    void theCatalogStageMatchesOnlyWhatTheDictionaryCouldNotAndThePartsFollowTheRules() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(call -> {
+            var request = call.getArgument(0, ProgramParserModel.Request.class);
+            var input = request.input();
             return switch (input.task().kind()) {
-                case PLAN -> throw com.sizylift.backend.imports.model.ModelFailure.truncated(1000, 32768);
-                case PLAN_ONLY -> result(input, plan(List.of(matched("text:1")), 1, 1));
-                case WEEKS -> result(input, weeks(input.task().weeks(), List.of(), matched("text:1")));
+                case UNDERSTAND -> result("""
+                        Программа: Сила
+                        Правило: вес — у первого упражнения дня
+                        Упражнения:
+                        - Присед со штангой | тип=вес_повторы
+                        - Жим лёжа (объём) | тип=вес_повторы
+                        План:
+                        Неделя: 1 | дни=1
+                        """);
+                case MATCH -> {
+                    assertThat(input.task().exercises()).containsExactly("Жим лёжа (объём) | тип=вес_повторы");
+                    assertThat(request.user()).doesNotContain(TEXT);
+                    yield result("- Жим лёжа (объём) → Жим штанги лёжа | тип=вес_повторы\n");
+                }
+                case WEEKS -> {
+                    assertThat(request.user()).contains("Правило: вес — у первого упражнения дня",
+                            "- Жим лёжа (объём) | тип=вес_повторы");
+                    yield result("Тренировки:\nНеделя: 1\nДень: 1\nУпражнение: Присед со штангой\n" + DEFAULT_SET
+                            + "\nУпражнение: Жим лёжа (объём)\n" + DEFAULT_SET + "\n");
+                }
             };
         });
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
-        assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
-        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        var view = view(owner, id);
+        assertThat(view.get("status").asString()).isEqualTo("review");
+        assertThat(view.at("/draft/exerciseResolutions/0/exerciseId").asString()).isEqualTo(SQUAT.toString());
+        assertThat(view.at("/draft/exerciseResolutions/1/status").asString()).isEqualTo("matched");
+        assertThat(view.at("/draft/rules/0").asString()).isEqualTo("вес — у первого упражнения дня");
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
         verify(parser, times(3)).parse(captor.capture(), any());
-        assertThat(captor.getAllValues()).extracting(input -> input.task().kind()).containsExactly(
-                ProgramParserModel.Task.Kind.PLAN, ProgramParserModel.Task.Kind.PLAN_ONLY, ProgramParserModel.Task.Kind.WEEKS);
+        assertThat(captor.getAllValues()).extracting(request -> request.input().task().kind()).containsExactly(
+                ProgramParserModel.Task.Kind.UNDERSTAND, ProgramParserModel.Task.Kind.MATCH, ProgramParserModel.Task.Kind.WEEKS);
     }
 
     @Test
@@ -503,10 +547,10 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var id = create(owner, TEXT, null, UUID.randomUUID());
         var user = userId(owner);
         when(parser.parse(any(), any())).thenAnswer(call -> {
-            var input = call.getArgument(0, ProgramParserModel.Input.class);
-            if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) return result(input, plan(List.of(matched("text:1")), 1, 1));
+            var input = call.getArgument(0, ProgramParserModel.Request.class).input();
+            if (input.task().kind() != ProgramParserModel.Task.Kind.WEEKS) return result(plan(List.of(matched()), 1, 1));
             imports.cancel(user, id);
-            return result(input, weeks(input.task().weeks(), List.of(), matched("text:1")));
+            return result(weeks(input.task().weeks(), List.of(), matched()));
         });
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("cancelled");
@@ -524,7 +568,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
                 .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt()
                         .jwt(token -> token.issuer(ISSUER).subject(owner).claim("email", owner + "@example.com"))))
                 .andExpect(status().isAccepted()));
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched("csv:1:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
         worker.processOne();
         var id = UUID.fromString(created.get("id").asString());
         assertThat(view(owner, id).get("canCommit").asBoolean()).isTrue();
@@ -532,9 +576,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void missingValuesAndRangesRemainUnknownAndRirIsPreservedAsANote() throws Exception {
-        var draft = draft(matched("text:1"));
-        firstItem(draft).put("sets", List.of("n=3 r=8-12 rir=2 type=working"));
-        when(parser.parse(any(), any())).thenAnswer(reply(draft));
+        when(parser.parse(any(), any())).thenAnswer(reply(draftWithSet("Подход: кол=3 | повт=8-12 | RIR=2", matched())));
         var id = create(owner, "Присед 3×8-12 RIR 2", null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
@@ -547,7 +589,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void ambiguousExerciseCanBecomeACustomExerciseWithAStableId() throws Exception {
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(ambiguous("text:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(ambiguous())));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
         var before = view(owner, id);
@@ -559,7 +601,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(chosen.at("/decisions/e1/exerciseId").asString()).isEqualTo(ProgramDraftCompiler.id(id, "exercise:e1").toString());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE user_id=?", Integer.class, userId(owner))).isZero();
         postJson(owner, BASE + "/" + id + "/commit", Map.of("version", chosen.get("version").asLong())).andExpect(status().isOk());
-        verify(parser, times(1)).parse(any(), any());
+        verify(parser, times(3)).parse(any(), any());
     }
 
     @Test
@@ -577,9 +619,9 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var view = view(owner, id);
         assertThat(view.get("status").asString()).isEqualTo("failed");
         assertThat(view.at("/error/code").asString()).isEqualTo("clarification_limit");
-        var captured = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Input.class);
+        var captured = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
         verify(parser, times(4)).parse(captured.capture(), any());
-        assertThat(captured.getAllValues().getLast().history().stream().map(h -> h.answer()).toList())
+        assertThat(captured.getAllValues().getLast().input().history().stream().map(h -> h.answer()).toList())
                 .containsExactly("Пояснение 0", "Пояснение 1", "Пояснение 2");
     }
 
@@ -603,20 +645,14 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
-    void untrustedCatalogIdsAndInvalidNumericValuesAreRejected() throws Exception {
-        var invalid = draft(matched("text:1"));
-        firstExercise(invalid).put("match", "c99999");
-        when(parser.parse(any(), any())).thenAnswer(reply(invalid));
+    void invalidNumericValuesAreSkippedNotInvented() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draftWithSet("Подход: кол=3 | повт=5 | вес=-987 кг", matched())));
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
-        assertThat(view(owner, id).get("status").asString()).isEqualTo("queued");
-        var invented = draft(matched("text:1"));
-        firstItem(invented).put("sets", List.of("n=3 r=5 kg=-987"));
-        doAnswer(reply(invented)).when(parser).parse(any(), any());
-        jdbc.update("UPDATE sizylift.import_session SET next_attempt_at=now() WHERE id=?", id);
-        worker.processOne();
-        assertThat(view(owner, id).get("status").asString()).isEqualTo("failed");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.program WHERE user_id=?", Integer.class, userId(owner))).isZero();
+        var view = view(owner, id);
+        assertThat(view.get("status").asString()).isEqualTo("review");
+        assertThat(view.at("/draft/warnings").size()).isEqualTo(1);
+        assertThat(view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0/targetWeightGrams").isNull()).isTrue();
     }
 
     @Test
@@ -634,7 +670,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var id = create(owner, TEXT, null, UUID.randomUUID());
         var old = transactions.execute(status -> sessions.claim(java.time.Instant.now(), limits).orElseThrow());
         jdbc.update("UPDATE sizylift.import_session SET lease_until=now()-interval '1 second' WHERE id=?", id);
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched("text:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
         assertThat(worker.processOne()).isTrue();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
         assertThat(sessions.finish(old, "failed", null, Map.of(), "late", "late", 0, 0, 0, java.time.Instant.now())).isFalse();
@@ -643,7 +679,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void numbersWrittenAsWordsCanBeInterpretedByTheModel() throws Exception {
-        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched("text:1"))));
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
         var id = create(owner, "Присед: три подхода по пять повторений со ста килограммами, RPE восемь", null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
@@ -658,7 +694,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         when(parser.parse(any(), any())).thenAnswer(call -> {
             entered.countDown();
             assertThat(release.await(15, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-            return result(call.getArgument(0, ProgramParserModel.Input.class), draft(matched("text:1")));
+            return result(draft(matched()));
         });
         for (int i = 0; i <= limits.concurrentRequests(); i++) create(newSubject(), TEXT, null, UUID.randomUUID());
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -677,6 +713,78 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(worker.processOne()).isFalse();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.import_session WHERE status='review'", Integer.class))
                 .isEqualTo(limits.concurrentRequests() + 1);
+    }
+
+    @Test
+    void theEventStreamSendsTheStateAtOnceAndOnEveryChangeAndClosesWhenTheParseIsDone() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        var stream = call(owner, get(BASE + "/" + id + "/events").accept(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(request().asyncStarted()).andReturn();
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(5))
+                .until(() -> stream.getResponse().getContentAsString().contains("\"status\":\"queued\""));
+        assertThat(stream.getResponse().getContentType()).startsWith(MediaType.TEXT_EVENT_STREAM_VALUE);
+        assertThat(stream.getResponse().getHeader("X-Accel-Buffering")).isEqualTo("no");
+        assertThat(stream.getResponse().getContentAsString()).startsWith("event:state\nid:queued:");
+        worker.processOne();
+        // Разбор закончен: последнее событие — review, после него сервер сам закрывает поток.
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(5))
+                .until(() -> stream.getResponse().getContentAsString().contains("\"status\":\"review\""));
+        mvc.perform(asyncDispatch(stream)).andExpect(status().isOk());
+        var events = stream.getResponse().getContentAsString().split("\n\n");
+        assertThat(events.length).isGreaterThanOrEqualTo(2);
+        assertThat(events[events.length - 1]).contains("\"status\":\"review\"", "\"canCommit\":true");
+
+        // Готовая сессия — одно событие и сразу конец потока; чужая — 404 до начала потока.
+        var settled = call(owner, get(BASE + "/" + id + "/events").accept(MediaType.TEXT_EVENT_STREAM)).andReturn();
+        assertThat(settled.getResponse().getContentAsString()).containsOnlyOnce("event:state").contains("\"status\":\"review\"");
+        call(newSubject(), get(BASE + "/" + id + "/events").accept(MediaType.TEXT_EVENT_STREAM)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aWorkbookWithSeveralProgramsWaitsForSheetsAndSendsOnlyTheChosenOneToTheModel() throws Exception {
+        byte[] bytes;
+        try (var book = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            for (var client : List.of("Иванов", "Петров", "Пустой")) {
+                var sheet = book.createSheet(client);
+                if (client.equals("Пустой")) continue;
+                sheet.createRow(0).createCell(0).setCellValue("Программа: " + client);
+                sheet.createRow(2).createCell(0).setCellValue("Присед 3×5 100 кг");
+            }
+            var output = new java.io.ByteArrayOutputStream();
+            book.write(output); bytes = output.toByteArray();
+        }
+        var metadata = new java.util.HashMap<>(input(null, null, UUID.randomUUID()));
+        metadata.put("source", "file"); metadata.remove("text");
+        var created = body(mvc.perform(multipart(BASE)
+                .file(new MockMultipartFile("file", "clients.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes))
+                .file(new MockMultipartFile("metadata", "", "application/json", json.writeValueAsBytes(metadata)))
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt()
+                        .jwt(token -> token.issuer(ISSUER).subject(owner).claim("email", owner + "@example.com"))))
+                .andExpect(status().isAccepted()));
+        var id = UUID.fromString(created.get("id").asString());
+        assertThat(worker.processOne()).isTrue();
+        var waiting = view(owner, id);
+        assertThat(waiting.get("status").asString()).isEqualTo("sheet_selection");
+        assertThat(waiting.get("sheets").size()).as("пустой лист не предлагается").isEqualTo(2);
+        assertThat(waiting.at("/sheets/1/name").asString()).isEqualTo("Петров");
+        assertThat(waiting.at("/sheets/1/preview/0").asString()).isEqualTo("Программа: Петров");
+        verifyNoInteractions(parser);
+        assertThat(worker.processOne()).as("без выбора листов задание в очереди не появляется").isFalse();
+
+        postJson(owner, BASE + "/" + id + "/sheets", Map.of("version", waiting.get("version").asLong(), "sheets", List.of(7)))
+                .andExpect(status().isBadRequest());
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
+        postJson(owner, BASE + "/" + id + "/sheets", Map.of("version", waiting.get("version").asLong(), "sheets", List.of(1)))
+                .andExpect(status().isAccepted());
+        assertThat(worker.processOne()).isTrue();
+        assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
+        verify(parser, times(2)).parse(captor.capture(), any());
+        var sent = captor.getAllValues().getFirst();
+        assertThat(sent.user()).contains("Программа: Петров").doesNotContain("Иванов");
+        assertThat(jdbc.queryForObject("SELECT normalized::text FROM sizylift.import_session WHERE id=?", String.class, id))
+                .doesNotContain("Иванов");
     }
 
     @Test
@@ -704,18 +812,14 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
                         .jwt(token -> token.issuer(ISSUER).subject(owner).claim("email", owner + "@example.com"))))
                 .andExpect(status().isAccepted()));
         when(parser.parse(any(), any())).thenAnswer(call -> {
-            var input = call.getArgument(0, ProgramParserModel.Input.class);
-            var source = input.source();
+            var source = call.getArgument(0, ProgramParserModel.Request.class).input().source();
             assertThat(source.items()).containsExactly(
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0", "Неделя 1"),
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!A3", "Присед"),
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!B3", "3×5"),
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!C3", "100,5"),
                     new com.sizylift.backend.imports.entity.ImportSession.SourceItem("sheet:0!D3", "75%"));
-            var output = draft(matched("sheet:0!A3"));
-            firstItem(output).put("refs", List.of("sheet:0!A3", "sheet:0!B3", "sheet:0!C3", "sheet:0!D3"));
-            firstItem(output).put("sets", List.of("n=3 r=5 kg=100.5 pct=75"));
-            return result(input, output);
+            return result(draftWithSet("Подход: кол=3 | повт=5 | вес=100.5 кг | процент=75", matched()));
         });
         var id = UUID.fromString(created.get("id").asString());
         worker.processOne();
@@ -746,15 +850,21 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     private JsonNode view(String subject, UUID id) throws Exception {
         return body(call(subject, get(BASE + "/" + id)).andExpect(status().isOk()));
     }
-    /** Ответы по очереди; последний повторяется. alias приседа берётся из каталога, переданного модели. */
-    @SafeVarargs
-    private org.mockito.stubbing.Answer<ProgramParserModel.Result> reply(Map<String, Object>... drafts) {
-        var queue = new java.util.ArrayDeque<>(List.of(drafts));
-        return call -> result(call.getArgument(0, ProgramParserModel.Input.class), queue.size() > 1 ? queue.poll() : queue.peek());
+    /** Ответы по очереди; последний повторяется. Текст передаётся слушателю, как поток настоящей модели. */
+    private org.mockito.stubbing.Answer<ProgramParserModel.Result> reply(String... answers) {
+        var queue = new java.util.ArrayDeque<>(List.of(answers));
+        return call -> {
+            var text = queue.size() > 1 ? queue.poll() : queue.peek();
+            return stream(call, text);
+        };
     }
-    private ProgramParserModel.Result result(ProgramParserModel.Input input, Map<String, Object> draft) {
-        var alias = input.catalog().stream().filter(entry -> entry.id().equals(SQUAT)).findFirst().orElseThrow().alias();
-        var text = json.writeValueAsString(draft).replace("\"" + SQUAT_ALIAS + "\"", "\"" + alias + "\"");
-        return new ProgramParserModel.Result(text, 1000, 300, 100);
+    /** Ответ модели; строки уже переданы слушателю в {@link #stream}. */
+    private static ProgramParserModel.Result result(String text) {
+        return new ProgramParserModel.Result(text, 1000, 300, 100, false);
+    }
+    private static ProgramParserModel.Result stream(org.mockito.invocation.InvocationOnMock call, String text) {
+        var listener = call.getArgument(1, ProgramParserModel.Listener.class);
+        if (listener != null) listener.onText(text);
+        return result(text);
     }
 }

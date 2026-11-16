@@ -5,30 +5,36 @@ import java.nio.charset.StandardCharsets;
 import com.sizylift.backend.imports.config.ImportProperties;
 import com.sizylift.backend.imports.model.ProgramParserModel;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
 /**
- * Верхняя оценка одного вызова модели: один токен на байт контекста, запас на инструкции и схемы,
- * максимальный вывод и пиковый тариф. Это резерв бюджета, а не счёт провайдера.
+ * Оценки одного вызова модели до его отправки. Размер входа в токенах — по числу символов с запасом:
+ * токенайзер DeepSeek на русском тексте и таблицах даёт не меньше двух символов на токен, поэтому оценка сверху.
+ * Резерв бюджета — один токен на байт, максимальный вывод и пиковый тариф: это верхняя граница, а не счёт провайдера.
  */
 @Component
 public class ImportCost {
-    private static final long PROMPT_OVERHEAD_BYTES = 32_768;
-    private static final long MAX_REQUEST_BYTES = 900_000;
+    /** Символов на токен в худшем случае; уточняется по prompt_tokens реальных ответов. */
+    private static final double CHARS_PER_TOKEN = 2.0;
     private static final long MILLION = 1_000_000;
-    private final ObjectMapper json;
     private final ImportProperties limits;
 
-    public ImportCost(ObjectMapper json, ImportProperties limits) { this.json = json; this.limits = limits; }
+    public ImportCost(ImportProperties limits) { this.limits = limits; }
 
-    public long bytes(ProgramParserModel.Input input) {
-        return json.writeValueAsString(input).getBytes(StandardCharsets.UTF_8).length + PROMPT_OVERHEAD_BYTES;
+    public long bytes(ProgramParserModel.Request request) {
+        return (long) request.system().getBytes(StandardCharsets.UTF_8).length + request.user().getBytes(StandardCharsets.UTF_8).length;
     }
 
-    public boolean tooLarge(ProgramParserModel.Input input) { return bytes(input) > MAX_REQUEST_BYTES; }
+    public long tokens(ProgramParserModel.Request request) {
+        return (long) Math.ceil((request.system().length() + request.user().length()) / CHARS_PER_TOKEN);
+    }
 
-    public long micros(ProgramParserModel.Input input) {
-        long micros = Math.addExact(Math.multiplyExact(bytes(input), limits.inputMicrosPerMillion()),
+    /** Вход вместе с максимальным выводом не помещается в контекстное окно модели. */
+    public boolean tooLarge(ProgramParserModel.Request request) {
+        return tokens(request) + limits.maxOutputTokens() > limits.contextTokens();
+    }
+
+    public long micros(ProgramParserModel.Request request) {
+        long micros = Math.addExact(Math.multiplyExact(bytes(request), limits.inputMicrosPerMillion()),
                 Math.multiplyExact((long) limits.maxOutputTokens(), limits.outputMicrosPerMillion()));
         return Math.addExact(micros, MILLION - 1) / MILLION;
     }

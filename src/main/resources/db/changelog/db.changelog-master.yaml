@@ -122,3 +122,6 @@ databaseChangeLog:
   - include:
       file: changes/042-plan-target-calculation.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/043-import-sheet-selection.sql
+      relativeToChangelogFile: true

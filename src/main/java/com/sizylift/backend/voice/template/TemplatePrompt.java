@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
 
+import com.sizylift.backend.template.TemplateVocabulary;
 import com.sizylift.backend.voice.service.VoiceCatalog;
 import org.springframework.core.io.ClassPathResource;
 

@@ -25,7 +25,8 @@ public class ImportConfiguration {
             @Value("${sizylift.imports.deepseek.api-key}") String key,
             @Value("${sizylift.imports.deepseek.url}") String url,
             @Value("${sizylift.imports.deepseek.model}") String model,
-            @Value("${sizylift.imports.deepseek.timeout}") Duration timeout) {
+            @Value("${sizylift.imports.deepseek.timeout}") Duration timeout,
+            @Value("${sizylift.imports.deepseek.plan-effort:low}") String planEffort) {
         if (key.isBlank()) throw new IllegalArgumentException("Для AI-импорта нужен ключ DeepSeek");
         if (timeout.compareTo(properties.lease().minusSeconds(30)) >= 0)
             throw new IllegalArgumentException("Аренда задания должна быть длиннее таймаута модели");
@@ -35,7 +36,7 @@ public class ImportConfiguration {
         factory.setReadTimeout(timeout);
         return new DeepSeekProgramParser(RestClient.builder().requestFactory(factory).requestInterceptor((request, body, execution) ->
                 new BoundedResponse(execution.execute(request, body))), json,
-                key, url, model, properties.maxOutputTokens(), timeout);
+                key, url, model, properties.maxOutputTokens(), timeout, planEffort);
     }
 
     @Bean
@@ -53,7 +54,14 @@ public class ImportConfiguration {
         @Override public org.springframework.http.HttpStatusCode getStatusCode() throws java.io.IOException { return delegate.getStatusCode(); }
         @Override public String getStatusText() throws java.io.IOException { return delegate.getStatusText(); }
         @Override public org.springframework.http.HttpHeaders getHeaders() { return delegate.getHeaders(); }
-        @Override public void close() { delegate.close(); }
+        /**
+         * Без дочитывания: Spring закрывает ответ JDK-клиента, дочитав тело до конца, — для потока это ожидание
+         * всей генерации. Остановка ответа и сторож простоя должны обрывать соединение сразу.
+         */
+        @Override public void close() {
+            try { delegate.getBody().close(); }
+            catch (java.io.IOException ignored) { /* соединение уже закрыто */ }
+        }
         @Override public java.io.InputStream getBody() throws java.io.IOException {
             if (body == null) body = new java.io.FilterInputStream(delegate.getBody()) {
                 private long consumed;

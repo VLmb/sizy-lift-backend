@@ -16,6 +16,9 @@ import java.util.stream.Collectors;
 import com.sizylift.backend.access.service.AccessPolicy;
 import com.sizylift.backend.imports.config.ImportProperties;
 import com.sizylift.backend.imports.dto.ImportDtos.*;
+import com.sizylift.backend.imports.dto.ImportPlan;
+import com.sizylift.backend.imports.source.ImportSourceReader;
+import com.sizylift.backend.imports.source.SourceSheets;
 import com.sizylift.backend.imports.entity.ImportSession;
 import com.sizylift.backend.imports.entity.ImportSession.Clarification;
 import com.sizylift.backend.imports.repository.ImportRepository;
@@ -38,12 +41,14 @@ public class ImportService {
     private final ObjectMapper json;
     private final Clock clock;
     private final ApplicationEventPublisher events;
+    private final ImportSourceReader sourceReader;
 
     public ImportService(ImportRepository sessions, ImportProperties limits, AccessPolicy access,
                          WebReadService reads, ProgramDraftCompiler compiler, ObjectMapper json, Clock clock,
-                         ApplicationEventPublisher events) {
+                         ApplicationEventPublisher events, ImportSourceReader sourceReader) {
         this.sessions = sessions; this.limits = limits; this.access = access; this.reads = reads;
         this.compiler = compiler; this.json = json; this.clock = clock; this.events = events;
+        this.sourceReader = sourceReader;
     }
 
     @Transactional
@@ -119,6 +124,43 @@ public class ImportService {
         return view(updated);
     }
 
+    /**
+     * Листы книги, которые нужно разобрать. Остальные листы стираются из сессии и в модель не уходят: в одном файле
+     * тренера бывают программы разных людей.
+     */
+    @Transactional
+    public View selectSheets(UUID user, UUID id, SelectSheets input) {
+        enabled();
+        var session = owned(user, id, true);
+        if (!session.status().equals("sheet_selection") || session.version() != input.version() || session.normalized() == null)
+            throw ImportFailure.conflict();
+        var available = SourceSheets.list(session.normalized()).stream().map(Sheet::index).collect(Collectors.toSet());
+        var selected = new java.util.HashSet<>(input.sheets());
+        if (!available.containsAll(selected)) throw ImportFailure.invalid("Выберите листы из списка.");
+        var source = SourceSheets.select(session.normalized(), selected);
+        sourceReader.checkSize(source);
+        sessions.selectSheets(id, source, clock.instant());
+        events.publishEvent(new ImportQueued(id));
+        return view(sessions.find(id).orElseThrow());
+    }
+
+    /** Недели, которые не удалось разобрать, — снова в разбор; готовые недели и выбор упражнений сохраняются. */
+    @Transactional
+    public View retryWeeks(UUID user, UUID id, RetryWeeks input) {
+        enabled();
+        var session = owned(user, id, true);
+        var draft = session.output();
+        if (!session.status().equals("review") || session.version() != input.version() || draft == null
+                || !draft.hasFailedWeeks()) throw ImportFailure.conflict();
+        var weeks = draft.plan().stream().map(w -> new ImportPlan.Week(w.number(), w.cycle(), w.name(), w.days().size(),
+                w.days(), w.copyOf())).toList();
+        var outline = new ImportPlan(draft.programDraft().name(), draft.programDraft().description(),
+                draft.exerciseResolutions(), weeks, draft.rules());
+        sessions.retryWeeks(id, outline, clock.instant());
+        events.publishEvent(new ImportQueued(id));
+        return view(sessions.find(id).orElseThrow());
+    }
+
     @Transactional
     public void cancel(UUID user, UUID id) {
         var session = owned(user, id, true);
@@ -156,7 +198,8 @@ public class ImportService {
                 compiled != null, compiled == null ? null : compiled.program(), warnings,
                 session.errorCode() == null ? null : new Failure(session.errorCode(), session.errorMessage()),
                 session.inputTokens(), session.outputTokens(), session.reservedCostMicros(), receipt(session),
-                session.status().equals("processing") ? session.progress() : null);
+                session.status().equals("processing") ? session.progress() : null,
+                session.status().equals("sheet_selection") && session.normalized() != null ? SourceSheets.list(session.normalized()) : null);
     }
 
     public static Receipt receipt(ImportSession session) {
