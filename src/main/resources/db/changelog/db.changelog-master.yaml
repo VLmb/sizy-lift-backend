@@ -119,3 +119,6 @@ databaseChangeLog:
   - include:
       file: changes/041-coaching-invite-name.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/042-import-sheet-selection.sql
+      relativeToChangelogFile: true

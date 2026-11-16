@@ -51,6 +51,12 @@ public class ImportController {
         return imports.answer(accounts.resolve(jwt).id(), id, input);
     }
 
+    @PostMapping("/{id}/sheets")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public View selectSheets(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @Valid @RequestBody SelectSheets input) {
+        return imports.selectSheets(accounts.resolve(jwt).id(), id, input);
+    }
+
     @PostMapping("/{id}/weeks/retry")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public View retryWeeks(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @Valid @RequestBody RetryWeeks input) {

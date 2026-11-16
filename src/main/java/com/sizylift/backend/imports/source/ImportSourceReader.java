@@ -115,8 +115,15 @@ public class ImportSourceReader {
                     checkSize(result);
                 }
             }
-            return bounded(result);
+            // Объём книги проверяется после выбора листов: в модель уходят только они.
+            return bounded(result, true, false);
         }
+    }
+
+    /** Объём того, что уйдёт в модель; для книги — после выбора листов. */
+    public void checkSize(Source source) {
+        long chars = source.items().stream().mapToLong(item -> item.text().length() + item.ref().length()).sum();
+        if (chars > limits.maxSourceChars()) throw ImportFailure.invalid("Источник слишком большой. Выберите меньше листов.");
     }
 
     private Source csv(String text) {
@@ -195,13 +202,17 @@ public class ImportSourceReader {
     }
 
     private Source bounded(List<SourceItem> items, boolean limitCellSize) {
+        return bounded(items, limitCellSize, true);
+    }
+
+    private Source bounded(List<SourceItem> items, boolean limitCellSize, boolean limitChars) {
         if (items.size() > limits.maxCells()) throw ImportFailure.invalid("В источнике слишком много строк или ячеек.");
         if (limitCellSize && items.stream().anyMatch(item -> item.text().length() > MAX_CELL_CHARS))
             throw ImportFailure.invalid("В строке или ячейке больше 4000 символов.");
         if (items.isEmpty()) throw ImportFailure.invalid("В источнике нет данных.");
-        long chars = items.stream().mapToLong(item -> item.text().length() + item.ref().length()).sum();
-        if (chars > limits.maxSourceChars()) throw ImportFailure.invalid("Источник слишком большой. Выберите нужные листы.");
-        return new Source(List.copyOf(items));
+        var source = new Source(List.copyOf(items));
+        if (limitChars) checkSize(source);
+        return source;
     }
 
     private void checkSize(List<SourceItem> items) {

@@ -92,6 +92,18 @@ Google-документ должен читаться без входа: «Вс�
 Повтор `requestId` с тем же содержимым возвращает ту же сессию без нового задания.
 Изменённое содержимое при том же ключе — 409. Для исправленного исходника создаётся новая сессия.
 
+### Выбор листов
+
+В одном файле тренера бывают программы разных людей, поэтому книга XLSX/XLS с несколькими непустыми листами
+не уходит в модель целиком. Сервер читает её сам и переводит сессию в `sheet_selection` (миграция 042): в View
+поле `sheets: [{index, name, cells, preview}]` — непустые листы по порядку, `preview` — первые четыре строки
+листа (значения через « · »). Интерфейс показывает листы с галочками и кнопкой «Выбрать все».
+
+`POST /api/v2/imports/{id}/sheets`, `{"version": 2, "sheets": [1, 3]}` → **202**, View. Только в `sheet_selection`
+с текущей версией (иначе 409); номера — из `sheets` (иначе 400). В сессии остаются только выбранные листы,
+остальные стираются; дальше — обычный разбор. Объём источника (`max-source-chars`) проверяется уже по выбранным
+листам. Книга с одним непустым листом, CSV, текст и ссылка Google Sheets (одна вкладка) выбора не требуют.
+
 ### Состояние
 
 `GET /api/v2/imports/{id}` → **200**:
@@ -104,7 +116,7 @@ Google-документ должен читаться без входа: «Вс�
 - `error:{code,message}` либо null;
 - `inputTokens`, `outputTokens`, `reservedCostMicros`, `receipt` после сохранения.
 
-Состояния: `queued → processing → clarification_required → queued → processing → review → committed`.
+Состояния: `queued → processing → [sheet_selection → queued → processing →] clarification_required → queued → processing → review → committed`.
 Также `failed`, `cancelled`, `expired`. `review` с `canCommit:false` требует выбора упражнения.
 Интерфейс опрашивает состояние каждые 1–2 секунды только пока открыт экран обработки.
 Не показывать фиктивный процент генерации — только `progress`.
@@ -344,7 +356,7 @@ Resolution: `key` (`e1`, `e2`, … в порядке списка), `originalNam
 | clarification-rounds | 3 |
 | attempts-per-round | 2, включая первоначальный вызов |
 | max-file-bytes / max-expanded-bytes | 5 / 50 МиБ |
-| max-sheets / max-cells | 10 / 20 000 |
+| max-sheets / max-cells | 50 / 20 000 на всю книгу |
 | max-source-chars | 200 000 |
 | max-output-tokens | 32 768 |
 | max-cost-micros | 1 000 000 микродолларов = $1 верхнего бюджета |

@@ -33,6 +33,10 @@ public final class ImportDtos {
     public record Decision(@NotBlank @Size(max = 100) String key, @NotBlank String kind, UUID exerciseId,
                            @Size(max = NAME_CHARS) String name, String resultType, LiftClass liftClass) { }
     public record Commit(@Min(1) long version) { }
+    /** Лист книги для выбора: index — номер листа в книге, cells — заполненные ячейки, preview — первые строки. */
+    public record Sheet(int index, String name, int cells, List<String> preview) { }
+    /** Выбранные листы книги; version — текущая версия сессии. */
+    public record SelectSheets(@Min(1) long version, @NotEmpty @Size(max = 100) List<@NotNull Integer> sheets) { }
     /** Повторный разбор недель, которые не удалось разобрать; version — текущая версия сессии. */
     public record RetryWeeks(@Min(1) long version) { }
     public record Created(UUID id, String status, long version) { }
@@ -49,5 +53,5 @@ public final class ImportDtos {
                        Map<String, Decision> decisions,
                        boolean canCommit, ProgramPayloadV1 program, List<String> warnings,
                        Failure error, long inputTokens, long outputTokens, long reservedCostMicros,
-                       Receipt receipt, Progress progress) { }
+                       Receipt receipt, Progress progress, List<Sheet> sheets) { }
 }

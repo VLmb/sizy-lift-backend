@@ -17,6 +17,7 @@ import com.sizylift.backend.web.dto.WebDtos.CatalogExercise;
  * repairHint — конкретные ошибки отклонённого ответа модели для следующей технической попытки этого раунда.
  * outline — план большой программы раунда; после перезапуска worker недели разбираются без повторного плана.
  * progress — прогресс текущего вызова модели, только пока сессия обрабатывается.
+ * sheetsSelected — пользователь выбрал листы книги: в normalized остались только они.
  */
 public record ImportSession(UUID id, UUID userId, UUID ownerId, UUID requestId, String requestHash,
         String status, long version, String sourceKind, String sourceText, byte[] sourceBytes, String sourceName,
@@ -24,7 +25,7 @@ public record ImportSession(UUID id, UUID userId, UUID ownerId, UUID requestId, 
         List<Clarification> history, String name, LocalDate startDate, UUID programId, Long programRevision,
         int round, int attempts, long reservedCostMicros, long inputTokens, long outputTokens, long cachedTokens,
         String errorCode, String errorMessage, UUID leaseToken, Instant expiresAt, String repairHint,
-        ImportPlan outline, Progress progress) {
+        ImportPlan outline, Progress progress, boolean sheetsSelected) {
     public record Source(List<SourceItem> items, String language) {
         public Source { language = ImportLanguage.of(language).code(); }
         public Source(List<SourceItem> items) { this(items, ImportLanguage.RUSSIAN.code()); }
@@ -36,6 +37,6 @@ public record ImportSession(UUID id, UUID userId, UUID ownerId, UUID requestId, 
         return new ImportSession(id, userId, ownerId, requestId, requestHash, status, version, sourceKind, sourceText,
                 sourceBytes, sourceName, normalized, catalog, draft, selected, history, name, startDate, programId,
                 programRevision, round, attempts, reservedCostMicros, inputTokens, outputTokens, cachedTokens,
-                errorCode, errorMessage, leaseToken, expiresAt, repairHint, outline, progress);
+                errorCode, errorMessage, leaseToken, expiresAt, repairHint, outline, progress, sheetsSelected);
     }
 }

@@ -22,6 +22,7 @@ import com.sizylift.backend.imports.model.ProgramParserModel;
 import com.sizylift.backend.imports.model.ProgramParserModel.Task;
 import com.sizylift.backend.imports.repository.ImportRepository;
 import com.sizylift.backend.imports.source.ImportSourceReader;
+import com.sizylift.backend.imports.source.SourceSheets;
 import com.sizylift.backend.imports.template.ExerciseResolver;
 import com.sizylift.backend.imports.template.ImportAssembly;
 import com.sizylift.backend.publication.service.AggregateType;
@@ -109,6 +110,13 @@ public class ImportWorker {
                 var parsed = sourceReader.read(session);
                 source = new Source(parsed.items(), sessions.language(session.id()));
             }
+            if (!session.sheetsSelected() && SourceSheets.needsSelection(source)) {
+                // Несколько листов: модель не вызывается, пока пользователь не выберет нужные.
+                if (sessions.awaitSheets(session, source, clock.instant()))
+                    metrics.outcome(session.sourceKind(), "sheet_selection", System.nanoTime() - started);
+                return;
+            }
+            sourceReader.checkSize(source);
             if (session.normalized() == null && !sessions.normalized(session, source, clock.instant())) return;
             var catalog = catalogs.of(session);
             var system = ImportPrompt.build(catalog.prompt());

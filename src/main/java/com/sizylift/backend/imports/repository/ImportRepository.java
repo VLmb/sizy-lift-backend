@@ -39,7 +39,7 @@ public class ImportRepository {
             """;
     private static final String ACTIVE = """
             SELECT count(*) FROM sizylift.import_session WHERE user_id = ? AND expires_at > ?
-              AND status IN ('queued','processing','clarification_required','review')
+              AND status IN ('queued','processing','sheet_selection','clarification_required','review')
             """;
     private static final String DAILY = "SELECT count(*) FROM sizylift.import_session WHERE user_id = ? AND created_at > ?";
     private static final String CLAIM_COUNT = """
@@ -84,6 +84,15 @@ public class ImportRepository {
     private static final String RETRY_WEEKS = """
             UPDATE sizylift.import_session SET status='queued',version=version+1,attempts=0,outline=?::jsonb,
                 error_code=NULL,error_message=NULL,repair_hint=NULL,progress=NULL,next_attempt_at=? WHERE id=?
+            """;
+    private static final String AWAIT_SHEETS = """
+            UPDATE sizylift.import_session SET status='sheet_selection',version=version+1,normalized=?::jsonb,
+                source_bytes=NULL,source_text=NULL,lease_token=NULL,lease_until=NULL,progress=NULL
+            WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
+            """;
+    private static final String SELECT_SHEETS = """
+            UPDATE sizylift.import_session SET status='queued',version=version+1,normalized=?::jsonb,sheets_selected=true,
+                next_attempt_at=? WHERE id=?
             """;
     private static final String PROGRESS = """
             UPDATE sizylift.import_session SET progress=?::jsonb
@@ -187,6 +196,14 @@ public class ImportRepository {
     public boolean progress(ImportSession session, Progress progress, Instant now) {
         return jdbc.update(PROGRESS, json.writeValueAsString(progress), session.id(), session.leaseToken(), stamp(now)) == 1;
     }
+    /** Книга с несколькими листами: модель не вызывается, пока пользователь не выберет листы. */
+    public boolean awaitSheets(ImportSession session, Source source, Instant now) {
+        return jdbc.update(AWAIT_SHEETS, json.writeValueAsString(source), session.id(), session.leaseToken(), stamp(now)) == 1;
+    }
+    /** Остаются только выбранные листы; остальные стираются и в модель не уходят. */
+    public void selectSheets(UUID id, Source source, Instant now) {
+        jdbc.update(SELECT_SHEETS, json.writeValueAsString(source), stamp(now), id);
+    }
     /** Частичный черновик и прогресс, пока модель пишет ответ. */
     public boolean partial(ImportSession session, ImportDraftV1 draft, Progress progress, Instant now) {
         return jdbc.update(PARTIAL, json.writeValueAsString(draft), json.writeValueAsString(progress), session.id(),
@@ -233,7 +250,7 @@ public class ImportRepository {
                 row.getLong("input_tokens"), row.getLong("output_tokens"), row.getLong("cached_tokens"),
                 row.getString("error_code"), row.getString("error_message"), row.getObject("lease_token", UUID.class),
                 row.getTimestamp("expires_at").toInstant(), row.getString("repair_hint"),
-                read(row, "outline", ImportPlan.class), read(row, "progress", Progress.class));
+                read(row, "outline", ImportPlan.class), read(row, "progress", Progress.class), row.getBoolean("sheets_selected"));
     }
     private <T> T read(ResultSet row, String field, Class<T> type) throws SQLException {
         var value = row.getString(field);

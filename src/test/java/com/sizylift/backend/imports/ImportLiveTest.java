@@ -120,6 +120,15 @@ class ImportLiveTest extends CoachWorkspaceApiSupport {
                 .andExpect(status().isAccepted()));
         var id = created.get("id").asString();
         assertThat(worker.processOne()).isTrue();
+        var waiting = body(call(owner, get("/api/v2/imports/" + id)).andExpect(status().isOk()));
+        if (waiting.get("status").asString().equals("sheet_selection")) {
+            // Корпус — программы целиком: выбираются все листы, как кнопкой «Выбрать все».
+            var sheets = new ArrayList<Integer>();
+            waiting.get("sheets").forEach(sheet -> sheets.add(sheet.get("index").asInt()));
+            postJson(owner, "/api/v2/imports/" + id + "/sheets", Map.of("version", waiting.get("version").asLong(), "sheets", sheets))
+                    .andExpect(status().isAccepted());
+            assertThat(worker.processOne()).isTrue();
+        }
         long total = (System.nanoTime() - started) / 1_000_000;
         var view = body(call(owner, get("/api/v2/imports/" + id)).andExpect(status().isOk()));
         var report = new LinkedHashMap<String, Object>();

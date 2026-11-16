@@ -695,6 +695,52 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void aWorkbookWithSeveralProgramsWaitsForSheetsAndSendsOnlyTheChosenOneToTheModel() throws Exception {
+        byte[] bytes;
+        try (var book = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            for (var client : List.of("Иванов", "Петров", "Пустой")) {
+                var sheet = book.createSheet(client);
+                if (client.equals("Пустой")) continue;
+                sheet.createRow(0).createCell(0).setCellValue("Программа: " + client);
+                sheet.createRow(2).createCell(0).setCellValue("Присед 3×5 100 кг");
+            }
+            var output = new java.io.ByteArrayOutputStream();
+            book.write(output); bytes = output.toByteArray();
+        }
+        var metadata = new java.util.HashMap<>(input(null, null, UUID.randomUUID()));
+        metadata.put("source", "file"); metadata.remove("text");
+        var created = body(mvc.perform(multipart(BASE)
+                .file(new MockMultipartFile("file", "clients.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes))
+                .file(new MockMultipartFile("metadata", "", "application/json", json.writeValueAsBytes(metadata)))
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt()
+                        .jwt(token -> token.issuer(ISSUER).subject(owner).claim("email", owner + "@example.com"))))
+                .andExpect(status().isAccepted()));
+        var id = UUID.fromString(created.get("id").asString());
+        assertThat(worker.processOne()).isTrue();
+        var waiting = view(owner, id);
+        assertThat(waiting.get("status").asString()).isEqualTo("sheet_selection");
+        assertThat(waiting.get("sheets").size()).as("пустой лист не предлагается").isEqualTo(2);
+        assertThat(waiting.at("/sheets/1/name").asString()).isEqualTo("Петров");
+        assertThat(waiting.at("/sheets/1/preview/0").asString()).isEqualTo("Программа: Петров");
+        verifyNoInteractions(parser);
+        assertThat(worker.processOne()).as("без выбора листов задание в очереди не появляется").isFalse();
+
+        postJson(owner, BASE + "/" + id + "/sheets", Map.of("version", waiting.get("version").asLong(), "sheets", List.of(7)))
+                .andExpect(status().isBadRequest());
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
+        postJson(owner, BASE + "/" + id + "/sheets", Map.of("version", waiting.get("version").asLong(), "sheets", List.of(1)))
+                .andExpect(status().isAccepted());
+        assertThat(worker.processOne()).isTrue();
+        assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
+        var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
+        verify(parser, times(1)).parse(captor.capture(), any());
+        var sent = captor.getValue();
+        assertThat(sent.user()).contains("Программа: Петров").doesNotContain("Иванов");
+        assertThat(jdbc.queryForObject("SELECT normalized::text FROM sizylift.import_session WHERE id=?", String.class, id))
+                .doesNotContain("Иванов");
+    }
+
+    @Test
     void xlsxTranscriptionReachesTheModelAndTheCommittedPayloadWithoutLosingValues() throws Exception {
         byte[] bytes;
         try (var book = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {

@@ -19,7 +19,7 @@ public record ImportProperties(@DefaultValue("false") boolean enabled, @DefaultV
         @DefaultValue("20") int dailyLimit, @DefaultValue("2") int activePerUser,
         @DefaultValue("4") int concurrentRequests, @DefaultValue("3") int clarificationRounds,
         @DefaultValue("2") int attemptsPerRound, @DefaultValue("5242880") int maxFileBytes,
-        @DefaultValue("52428800") long maxExpandedBytes, @DefaultValue("10") int maxSheets,
+        @DefaultValue("52428800") long maxExpandedBytes, @DefaultValue("50") int maxSheets,
         @DefaultValue("20000") int maxCells, @DefaultValue("200000") int maxSourceChars,
         @DefaultValue("1000000") long maxCostMicros, @DefaultValue("32768") int maxOutputTokens,
         @DefaultValue("300000") long inputMicrosPerMillion, @DefaultValue("1200000") long outputMicrosPerMillion,
