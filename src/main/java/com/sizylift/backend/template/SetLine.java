@@ -69,6 +69,12 @@ public final class SetLine {
      * @return значения или null, если в строке не названо ни одного значения
      */
     public static Values parse(String body, String resultType, Scope scope, String label, List<String> skipped, List<String> issues) {
+        return parse(body, resultType, scope, label, skipped, issues, new java.util.ArrayList<>());
+    }
+
+    /** То же; {@code rejected} получает отклонённые пары «ключ=значение» как есть — их можно сохранить заметкой. */
+    public static Values parse(String body, String resultType, Scope scope, String label, List<String> skipped, List<String> issues,
+                               List<String> rejected) {
         var allowed = TemplateVocabulary.keysFor(resultType, scope);
         var common = TemplateVocabulary.commonKeys().stream().map(TemplateVocabulary::key).collect(Collectors.toSet());
         var known = TemplateVocabulary.allKeys(scope);
@@ -95,7 +101,7 @@ public final class SetLine {
             }
             values.putIfAbsent(k, m.group(2).strip());
         }
-        var line = new Reader(label, skipped);
+        var line = new Reader(label, skipped, rejected);
         Integer count = line.count(values.get("кол"), scope.maxSets());
         Integer reps = null;
         Integer repsMax = null;
@@ -137,8 +143,11 @@ public final class SetLine {
     }
 
     /** Значения одной строки подходов: формат и пределы. Неверное — в {@code skipped}, без угадывания. */
-    private record Reader(String exercise, List<String> skipped) {
-        void reject(String key, String value) { skipped.add(exercise + ": " + key + "=" + value); }
+    private record Reader(String exercise, List<String> skipped, List<String> rejected) {
+        void reject(String key, String value) {
+            skipped.add(exercise + ": " + key + "=" + value);
+            rejected.add(key + " " + value);
+        }
 
         Integer count(String text, int max) {
             if (text == null) return null;

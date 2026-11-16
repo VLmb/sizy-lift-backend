@@ -30,10 +30,8 @@ dependencies {
     // Sends Logback events through the OpenTelemetry SDK; built against the same OTel version as the Boot BOM.
     implementation("io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0:2.28.1-alpha")
     implementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
-    implementation("org.springframework.ai:spring-ai-deepseek:2.0.2")
     implementation("org.apache.poi:poi-ooxml:6.0.0")
     implementation("org.apache.commons:commons-csv:1.14.1")
-    implementation("com.networknt:json-schema-validator:3.0.8")
     // Хранилище видео (ADR-0012): только S3 API, синхронный клиент без Netty и Apache HttpClient.
     implementation(platform("software.amazon.awssdk:bom:2.46.7"))
     implementation("software.amazon.awssdk:s3") {

@@ -362,12 +362,17 @@ public final class ImportAssembly {
             var label = exercise.resolved().resolution().originalName();
             var skipped = new ArrayList<String>();
             var issues = new ArrayList<String>();
-            var values = SetLine.parse(body, type == null || type.isEmpty() ? null : type, Scope.IMPORT, label, skipped, issues);
-            skipped.forEach(s -> warn(language.text("Значение пропущено: ", "Value skipped: ") + quote(s)));
+            var rejected = new ArrayList<String>();
+            var values = SetLine.parse(body, type == null || type.isEmpty() ? null : type, Scope.IMPORT, label, skipped, issues, rejected);
+            skipped.forEach(s -> warn(language.text("Значение не по формату сохранено в заметке: ", "Unformatted value kept in the note: ") + quote(s)));
             issues.forEach(s -> warn(label + ": " + s));
-            if (values == null) return;
+            if (values == null && rejected.isEmpty()) return;
+            if (values == null) values = new SetLine.Values(null, null, null, false, null, null, null, null, null, null, null, null, null);
+            // Значение не по формату и ключ не по типу упражнения не теряются: пользователь видит их в заметке подхода.
+            var extra = new ArrayList<String>(rejected);
+            issues.forEach(issue -> extra.add(issue.split(" — ")[0]));
             var note = values.note() == null ? "" : values.note();
-            if (!issues.isEmpty()) note = (note.isEmpty() ? "" : note + "\n") + String.join("\n", issues);
+            if (!extra.isEmpty()) note = (note.isEmpty() ? "" : note + "\n") + String.join("\n", extra);
             item.sets().add(prescription(values, limit(note, NOTE_CHARS)));
         }
 

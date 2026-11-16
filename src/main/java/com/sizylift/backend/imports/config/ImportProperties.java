@@ -25,7 +25,7 @@ public record ImportProperties(@DefaultValue("false") boolean enabled, @DefaultV
         @DefaultValue("300000") long inputMicrosPerMillion, @DefaultValue("1200000") long outputMicrosPerMillion,
         @DefaultValue("8") int singleCallWorkouts, @DefaultValue("12") int workoutsPerChunk,
         @DefaultValue("8") int maxChunks, @DefaultValue("8") int chunkParallelism,
-        @DefaultValue("128000") int contextTokens) {
+        @DefaultValue("1048576") int contextTokens) {
     public ImportProperties {
         if (retention.isNegative() || retention.isZero() || lease.compareTo(Duration.ofMinutes(1)) < 0
                 || dailyLimit < 1 || activePerUser < 1 || concurrentRequests < 1 || concurrentRequests > 16

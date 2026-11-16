@@ -49,7 +49,8 @@ public final class ExerciseResolver {
         var alternatives = new LinkedHashSet<String>();
         for (var alternative : line.alternatives()) find(alternative).ifPresent(a -> alternatives.add(a.id().toString()));
         alternatives.remove(exercise.id().toString());
-        if (alternatives.isEmpty() && exercise.exact()) {
+        // Модель назвала упражнение каталога, но пометила его новым: противоречие решает пользователь.
+        if (alternatives.isEmpty() && exercise.exact() && !line.marked()) {
             return new Resolved(new Resolution(key, line.source(), MATCHED, exercise.id().toString(), List.of(), "", "", refs),
                     exercise.resultType(), exercise.name());
         }

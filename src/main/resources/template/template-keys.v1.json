@@ -4,8 +4,8 @@
     {"resultType": "weight_reps", "word": "вес_повторы", "description": "вес и повторы", "keys": ["повт", "вес", "процент", "RPE"], "importKeys": ["RIR"]},
     {"resultType": "added_weight_reps", "word": "доп_вес_повторы", "description": "дополнительный вес к своему весу и повторы", "keys": ["повт", "доп_вес", "RPE"], "importKeys": ["RIR"]},
     {"resultType": "reps", "word": "повторы", "description": "только повторы", "keys": ["повт", "RPE"], "importKeys": ["RIR"]},
-    {"resultType": "duration", "word": "время", "description": "время", "keys": ["время"]},
-    {"resultType": "distance_time", "word": "дистанция_время", "description": "дистанция и время", "keys": ["дистанция", "время"]},
+    {"resultType": "duration", "word": "время", "description": "время", "keys": ["время"], "importKeys": ["RPE"]},
+    {"resultType": "distance_time", "word": "дистанция_время", "description": "дистанция и время", "keys": ["дистанция", "время"], "importKeys": ["RPE"]},
     {"resultType": "free", "word": "свободное", "description": "без чисел", "keys": []}
   ],
   "commonKeys": ["кол", "тип", "отдых", "заметка"],
