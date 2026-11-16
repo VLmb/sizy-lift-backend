@@ -13,6 +13,7 @@ import com.sizylift.backend.access.service.AccessPolicy;
 import com.sizylift.backend.imports.config.ImportProperties;
 import com.sizylift.backend.imports.dto.ImportDraftV1;
 import com.sizylift.backend.imports.dto.ImportDtos.Decision;
+import com.sizylift.backend.imports.dto.ImportLimits;
 import com.sizylift.backend.imports.entity.ImportLanguage;
 import com.sizylift.backend.imports.entity.ImportSession;
 import com.sizylift.backend.imports.entity.ImportSession.Source;
@@ -255,6 +256,9 @@ public class ImportWorker {
         if (!draft.needsClarification() && decisions.size() == draft.exerciseResolutions().size())
             compiler.compile(session.withResult(draft, decisions), clock.instant());
         var outcome = draft.needsClarification() ? "clarification_required" : "review";
+        var draftName = draft.programDraft().name();
+        if (!draft.needsClarification() && draftName != null && !draftName.isBlank() && draftName.length() <= ImportLimits.NAME_CHARS)
+            sessions.adoptName(session.id(), draftName.trim());
         sessions.finish(session, outcome, draft, decisions, null, null, 0, 0, 0, clock.instant());
         events.changed(session.id());
         metrics.outcome(session.sourceKind(), outcome, System.nanoTime() - started);

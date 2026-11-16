@@ -46,6 +46,12 @@ public class ImportController {
         return imports.create(accounts.resolve(jwt).id(), input, file.getBytes(), file.getOriginalFilename());
     }
 
+    /** Незавершённые импорты пользователя, новые сверху: карточки «вернуться к разбору». */
+    @GetMapping
+    public java.util.List<Summary> list(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) UUID ownerId) {
+        return imports.list(accounts.resolve(jwt).id(), ownerId);
+    }
+
     @GetMapping("/{id}")
     public View get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) { return imports.get(accounts.resolve(jwt).id(), id); }
 

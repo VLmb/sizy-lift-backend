@@ -472,6 +472,49 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void unfinishedImportsAreListedToReturnToThem() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(ambiguous())));
+        var reviewed = create(owner, TEXT, null, UUID.randomUUID());
+        worker.processOne();
+        var waiting = create(owner, TEXT, null, UUID.randomUUID());
+        create(newSubject(), TEXT, null, UUID.randomUUID());
+
+        var list = body(call(owner, get(BASE)).andExpect(status().isOk()));
+        assertThat(list.size()).isEqualTo(2);
+        assertThat(list.get(0).get("id").asString()).isEqualTo(waiting.toString());
+        assertThat(list.get(0).get("status").asString()).isEqualTo("queued");
+        var review = list.get(1);
+        assertThat(review.get("id").asString()).isEqualTo(reviewed.toString());
+        assertThat(review.get("status").asString()).isEqualTo("review");
+        assertThat(review.get("openChoices").asInt()).isEqualTo(1);
+        // Название по умолчанию заменено названием из разбора.
+        assertThat(review.get("name").asString()).isEqualTo("Программа");
+        assertThat(view(owner, reviewed).get("name").asString()).isEqualTo("Программа");
+
+        var key = view(owner, reviewed).at("/draft/exerciseResolutions/0/key").asString();
+        call(owner, patch(BASE + "/" + reviewed).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of(
+                "version", view(owner, reviewed).get("version").asLong(),
+                "decisions", List.of(Map.of("key", key, "kind", "existing", "exerciseId", SQUAT.toString()))))))
+                .andExpect(status().isOk());
+        call(owner, delete(BASE + "/" + waiting)).andExpect(status().isNoContent());
+        list = body(call(owner, get(BASE)).andExpect(status().isOk()));
+        assertThat(list.size()).isEqualTo(1);
+        assertThat(list.get(0).get("openChoices").asInt()).isZero();
+        assertThat(body(call(owner, get(BASE).param("ownerId", UUID.randomUUID().toString()))
+                .andExpect(status().isOk())).size()).isZero();
+    }
+
+    @Test
+    void aNameGivenByTheUserIsKeptAfterParsing() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
+        var request = new java.util.HashMap<>(input(TEXT, null, UUID.randomUUID()));
+        request.put("name", "Моя программа");
+        var id = UUID.fromString(body(postJson(owner, BASE, request).andExpect(status().isAccepted())).get("id").asString());
+        worker.processOne();
+        assertThat(view(owner, id).get("name").asString()).isEqualTo("Моя программа");
+    }
+
+    @Test
     void aWeekThatCouldNotBeParsedIsShownAsFailedAndCanBeParsedAgain() throws Exception {
         var fixed = new java.util.concurrent.atomic.AtomicBoolean();
         when(parser.parse(any(), any())).thenAnswer(call -> {
@@ -487,6 +530,8 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(partial.get("status").asString()).isEqualTo("review");
         assertThat(partial.get("canCommit").asBoolean()).isTrue();
         assertThat(partial.at("/draft/plan/3/status").asString()).isEqualTo("failed");
+        // Неделя видна в каркасе со статусом failed — отдельного предупреждения о ней нет.
+        assertThat(partial.at("/draft/warnings").toString()).doesNotContain("недели");
         assertThat(partial.at("/program/cycles/1/weeks").size()).isEqualTo(1);
         fixed.set(true);
         postJson(owner, BASE + "/" + id + "/weeks/retry", Map.of("version", partial.get("version").asLong()))

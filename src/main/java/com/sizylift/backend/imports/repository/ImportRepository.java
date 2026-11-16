@@ -12,6 +12,8 @@ import com.sizylift.backend.imports.config.ImportProperties;
 import com.sizylift.backend.imports.dto.ImportDraftV1;
 import com.sizylift.backend.imports.dto.ImportDtos.Create;
 import com.sizylift.backend.imports.dto.ImportDtos.Decision;
+import com.sizylift.backend.imports.dto.ImportDtos.Failure;
+import com.sizylift.backend.imports.dto.ImportDtos.Summary;
 import com.sizylift.backend.imports.dto.ImportDtos.Progress;
 import com.sizylift.backend.imports.dto.ImportPlan;
 import com.sizylift.backend.imports.entity.ImportSession;
@@ -41,6 +43,20 @@ public class ImportRepository {
             SELECT count(*) FROM sizylift.import_session WHERE user_id = ? AND expires_at > ?
               AND status IN ('queued','processing','sheet_selection','clarification_required','review')
             """;
+    /** Незавершённые сессии пользователя для списка «вернуться к разбору», новые сверху. */
+    private static final String SUMMARIES = """
+            SELECT id, owner_id, status, version, name, ui_language, start_date, expires_at, progress, error_code, error_message,
+                   model_output -> 'programDraft' ->> 'name' AS draft_name,
+                   CASE WHEN status = 'review' THEN (
+                       SELECT count(*) FROM jsonb_array_elements(coalesce(model_output -> 'exerciseResolutions', '[]'::jsonb)) r
+                       WHERE decisions -> (r ->> 'key') IS NULL) ELSE 0 END AS open_choices
+            FROM sizylift.import_session
+            WHERE user_id = ? AND expires_at > ?
+              AND status IN ('queued','processing','sheet_selection','clarification_required','review','failed')
+            ORDER BY created_at DESC, id LIMIT ?
+            """;
+    /** Название из разбора, если пользователь не задал своё: у сессии осталось название по умолчанию. */
+    private static final String ADOPT_NAME = "UPDATE sizylift.import_session SET name=? WHERE id=? AND name IN (?,?)";
     private static final String DAILY = "SELECT count(*) FROM sizylift.import_session WHERE user_id = ? AND created_at > ?";
     private static final String CLAIM_COUNT = """
             SELECT count(*) FROM sizylift.import_session WHERE status = 'processing' AND lease_until > ? AND expires_at > ?
@@ -156,6 +172,12 @@ public class ImportRepository {
         return jdbc.query(BY_REQUEST, this::row, user, request).stream().findFirst();
     }
     public int active(UUID user, Instant now) { return jdbc.queryForObject(ACTIVE, Integer.class, user, stamp(now)); }
+    public List<Summary> summaries(UUID user, Instant now, int limit) {
+        return jdbc.query(SUMMARIES, this::summary, user, stamp(now), limit);
+    }
+    public void adoptName(UUID id, String name) {
+        jdbc.update(ADOPT_NAME, name, id, ImportLanguage.RUSSIAN.defaultName(), ImportLanguage.ENGLISH.defaultName());
+    }
     public int createdSince(UUID user, Instant since) { return jdbc.queryForObject(DAILY, Integer.class, user, stamp(since)); }
 
     public ImportSession create(UUID user, UUID owner, Create input, byte[] bytes, String sourceName,
@@ -264,6 +286,19 @@ public class ImportRepository {
                 row.getString("error_code"), row.getString("error_message"), row.getObject("lease_token", UUID.class),
                 row.getTimestamp("expires_at").toInstant(), row.getString("repair_hint"),
                 read(row, "outline", ImportPlan.class), read(row, "progress", Progress.class), row.getBoolean("sheets_selected"));
+    }
+    private Summary summary(ResultSet row, int index) throws SQLException {
+        var name = row.getString("name");
+        var draftName = row.getString("draft_name");
+        var language = ImportLanguage.of(row.getString("ui_language"));
+        if (draftName != null && !draftName.isBlank() && name.equals(language.defaultName())) name = draftName;
+        var error = row.getString("error_code");
+        return new Summary(row.getObject("id", UUID.class), row.getObject("owner_id", UUID.class), row.getString("status"),
+                row.getLong("version"), name, row.getObject("start_date", java.time.LocalDate.class),
+                row.getTimestamp("expires_at").toInstant(),
+                row.getString("status").equals("processing") ? read(row, "progress", Progress.class) : null,
+                row.getInt("open_choices"),
+                error == null || row.getString("status").equals("queued") ? null : new Failure(error, row.getString("error_message")));
     }
     private <T> T read(ResultSet row, String field, Class<T> type) throws SQLException {
         var value = row.getString(field);

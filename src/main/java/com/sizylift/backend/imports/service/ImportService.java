@@ -33,6 +33,8 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class ImportService {
     private static final Set<String> SOURCES = Set.of("text", "sheet", "file");
+    /** Больше, чем сессий за сутки (daily-limit): список не обрезает реальные незавершённые импорты. */
+    private static final int LIST_LIMIT = 50;
     private final ImportRepository sessions;
     private final ImportProperties limits;
     private final AccessPolicy access;
@@ -74,6 +76,15 @@ public class ImportService {
         var session = sessions.create(user, owner, input, bytes, filename == null ? "" : safeFilename(filename), hash, catalog, now, limits);
         events.publishEvent(new ImportQueued(session.id()));
         return new Created(session.id(), session.status(), session.version());
+    }
+
+    /** Незавершённые импорты, к которым можно вернуться; ownerId — только для этого владельца программы. */
+    @Transactional(readOnly = true)
+    public List<Summary> list(UUID user, UUID ownerId) {
+        return sessions.summaries(user, clock.instant(), LIST_LIMIT).stream()
+                .filter(s -> ownerId == null || s.ownerId().equals(ownerId))
+                .filter(s -> access.canRead(user, s.ownerId(), AggregateType.PROGRAM))
+                .toList();
     }
 
     @Transactional(readOnly = true)
