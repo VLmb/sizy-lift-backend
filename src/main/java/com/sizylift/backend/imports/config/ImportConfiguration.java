@@ -53,7 +53,14 @@ public class ImportConfiguration {
         @Override public org.springframework.http.HttpStatusCode getStatusCode() throws java.io.IOException { return delegate.getStatusCode(); }
         @Override public String getStatusText() throws java.io.IOException { return delegate.getStatusText(); }
         @Override public org.springframework.http.HttpHeaders getHeaders() { return delegate.getHeaders(); }
-        @Override public void close() { delegate.close(); }
+        /**
+         * Без дочитывания: Spring закрывает ответ JDK-клиента, дочитав тело до конца, — для потока это ожидание
+         * всей генерации. Остановка ответа и сторож простоя должны обрывать соединение сразу.
+         */
+        @Override public void close() {
+            try { delegate.getBody().close(); }
+            catch (java.io.IOException ignored) { /* соединение уже закрыто */ }
+        }
         @Override public java.io.InputStream getBody() throws java.io.IOException {
             if (body == null) body = new java.io.FilterInputStream(delegate.getBody()) {
                 private long consumed;

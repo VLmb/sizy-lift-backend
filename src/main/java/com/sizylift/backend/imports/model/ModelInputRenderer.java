@@ -142,6 +142,10 @@ public final class ModelInputRenderer {
                     if (!week.days().isEmpty()) text.append(" | дни=").append(escape(String.join(",", week.days())));
                     text.append('\n');
                 }
+                if (!task.rules().isEmpty()) {
+                    text.append("Правила чтения этой программы — соблюдай их во всех неделях:\n");
+                    for (var rule : task.rules()) text.append("Правило: ").append(escape(rule)).append('\n');
+                }
                 text.append("Упражнения программы — в «Упражнение:» пиши название ровно как здесь:\n");
                 for (var name : task.exercises()) text.append("- ").append(escape(name)).append('\n');
                 text.append("Если в этих неделях есть упражнение, которого нет в списке, перед «Тренировки:» напиши ")

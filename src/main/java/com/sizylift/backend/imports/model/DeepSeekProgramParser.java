@@ -90,7 +90,13 @@ public class DeepSeekProgramParser implements ProgramParserModel {
                 if (!line.startsWith(DATA)) continue;
                 var data = line.substring(DATA.length()).trim();
                 if (data.equals(DONE)) break;
-                stream.accept(json.readTree(data));
+                try {
+                    stream.accept(json.readTree(data));
+                } catch (Stop e) {
+                    // Остановлено сервером: соединение закрывается, полученный текст — как обрезанный ответ.
+                    response.close();
+                    return stream.stopped();
+                }
             }
         } finally {
             finished.set(true);
@@ -140,6 +146,8 @@ public class DeepSeekProgramParser implements ProgramParserModel {
                 if (choice.hasNonNull("finish_reason")) finish = choice.get("finish_reason").asString();
             }
         }
+
+        Result stopped() { return new Result(text.toString(), 0, 0, 0, true); }
 
         Result result() {
             int input = usage == null ? 0 : usage.path("prompt_tokens").asInt();

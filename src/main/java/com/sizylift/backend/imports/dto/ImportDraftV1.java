@@ -6,11 +6,12 @@ import java.util.List;
  * Черновик импорта в API и хранении; сервер строит его из строк шаблона модели (docs/imports.md, «Шаблон»).
  * Пустая строка числового поля означает неизвестное значение, а не ноль.
  * {@code plan} — каркас программы: все недели с днями и состоянием разбора, пока недели заполняются и после;
- * {@code warnings} — что сервер пропустил или поправил при разборе ответа модели.
+ * {@code warnings} — что сервер пропустил или поправил при разборе ответа модели;
+ * {@code rules} — правила чтения источника из каркаса («Правило:»), которым следуют все части разбора.
  */
 public record ImportDraftV1(int schemaVersion, boolean needsClarification, String clarificationMessage,
                             Draft programDraft, List<Resolution> exerciseResolutions, List<PlannedWeek> plan,
-                            List<String> warnings) {
+                            List<String> warnings, List<String> rules) {
     public static final String PENDING = "pending";
     public static final String ACTIVE = "active";
     public static final String DONE = "done";
@@ -19,11 +20,12 @@ public record ImportDraftV1(int schemaVersion, boolean needsClarification, Strin
     public ImportDraftV1 {
         plan = plan == null ? List.of() : List.copyOf(plan);
         warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        rules = rules == null ? List.of() : List.copyOf(rules);
     }
 
     public ImportDraftV1(int schemaVersion, boolean needsClarification, String clarificationMessage,
                          Draft programDraft, List<Resolution> exerciseResolutions) {
-        this(schemaVersion, needsClarification, clarificationMessage, programDraft, exerciseResolutions, List.of(), List.of());
+        this(schemaVersion, needsClarification, clarificationMessage, programDraft, exerciseResolutions, List.of(), List.of(), List.of());
     }
 
     /**

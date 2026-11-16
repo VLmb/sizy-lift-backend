@@ -113,6 +113,9 @@ class ImportTranscriptionTest {
     @Test
     void googleSheetsCsvKeepsEmptyColumnsLineBreaksAndPercentText() {
         var url = "https://docs.google.com/spreadsheets/d/12345678901234567890/edit#gid=42";
+        // Книга целиком недоступна — одна вкладка CSV, как раньше.
+        when(sheets.fetchBook(org.mockito.ArgumentMatchers.eq(url), org.mockito.ArgumentMatchers.anyInt()))
+                .thenThrow(new com.sizylift.backend.web.service.SheetImportService.UnavailableSheet());
         when(sheets.fetch(url)).thenReturn("День,,Упражнение,Нагрузка\r\nПн,,\"Жим, узкий\",72.5%\r\n");
         var session = mock(ImportSession.class);
         when(session.sourceKind()).thenReturn("sheet");
@@ -125,6 +128,30 @@ class ImportTranscriptionTest {
                 new SourceItem("csv:2:3", "Жим, узкий"),
                 new SourceItem("csv:2:4", "72.5%"));
         verify(sheets).fetch(url);
+    }
+
+    @Test
+    void googleSheetsBookKeepsFullTabNamesThatXlsxTruncates() throws Exception {
+        var url = "https://docs.google.com/spreadsheets/d/12345678901234567890/edit";
+        byte[] bytes;
+        try (var book = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            for (var name : List.of("Трекер", "Программа тренировок Intermedia")) {
+                book.createSheet(name).createRow(0).createCell(0).setCellValue("Присед 3×5");
+            }
+            var output = new java.io.ByteArrayOutputStream();
+            book.write(output);
+            bytes = output.toByteArray();
+        }
+        when(sheets.fetchBook(org.mockito.ArgumentMatchers.eq(url), org.mockito.ArgumentMatchers.anyInt())).thenReturn(
+                new com.sizylift.backend.web.service.SheetImportService.Book(bytes, List.of("Трекер", "Программа тренировок Intermediate")));
+        var session = mock(ImportSession.class);
+        when(session.sourceKind()).thenReturn("sheet");
+        when(session.sourceText()).thenReturn(url);
+        var source = reader.read(session);
+        assertThat(source.items()).contains(new SourceItem("sheet:0", "Трекер"),
+                new SourceItem("sheet:1", "Программа тренировок Intermediate"));
+        assertThat(com.sizylift.backend.imports.source.SourceSheets.list(source)).extracting(sheet -> sheet.name())
+                .containsExactly("Трекер", "Программа тренировок Intermediate");
     }
 
     private void format(Workbook book, Cell cell, String pattern) {

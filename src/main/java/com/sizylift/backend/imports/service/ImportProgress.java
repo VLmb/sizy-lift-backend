@@ -37,7 +37,10 @@ public class ImportProgress {
         }
 
         /** Слушатель одного вызова: делит поток на строки и передаёт их курсору. */
-        public Lines lines(ImportAssembly.Cursor cursor) { return new Lines(cursor); }
+        public Lines lines(ImportAssembly.Cursor cursor) { return new Lines(cursor, () -> false); }
+
+        /** То же; {@code stop} проверяется после каждой строки — true заканчивает ответ модели досрочно. */
+        public Lines lines(ImportAssembly.Cursor cursor, java.util.function.BooleanSupplier stop) { return new Lines(cursor, stop); }
 
         public synchronized void publish(boolean force) {
             var changes = assembly.changes();
@@ -57,9 +60,13 @@ public class ImportProgress {
         public final class Lines implements ProgramParserModel.Listener {
             private final ImportAssembly.Cursor cursor;
             private final StringBuilder buffer = new StringBuilder();
+            private final java.util.function.BooleanSupplier stop;
             private boolean received;
 
-            private Lines(ImportAssembly.Cursor cursor) { this.cursor = cursor; }
+            private Lines(ImportAssembly.Cursor cursor, java.util.function.BooleanSupplier stop) {
+                this.cursor = cursor;
+                this.stop = stop;
+            }
 
             @Override
             public void onText(String delta) {
@@ -71,6 +78,7 @@ public class ImportProgress {
                         cursor.line(buffer.toString());
                         buffer.setLength(0);
                         complete = true;
+                        if (stop.getAsBoolean()) throw new ProgramParserModel.Stop();
                     } else if (c != '\r') {
                         buffer.append(c);
                     }

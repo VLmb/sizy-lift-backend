@@ -145,6 +145,46 @@ class ImportPromptTest {
     }
 
     @Test
+    void perSetRepsBecomeSeparateSets() {
+        var draft = parse("""
+                Программа: Тест
+                Упражнения:
+                - Присед → Присед со штангой | тип=вес_повторы
+                План:
+                Неделя: 1 | дни=Пн
+                Тренировки:
+                Неделя: 1
+                День: Пн
+                Упражнение: Присед
+                Подход: кол=3 | повт=10 / 10 / 9 | вес=40 кг | RPE=8
+                """).snapshot(true);
+        var sets = draft.programDraft().cycles().getFirst().weeks().getFirst().workouts().getFirst().blocks().getFirst()
+                .exercises().getFirst().sets();
+        assertThat(sets).extracting(ImportDraftV1.Prescription::repetitions).containsExactly("10", "10", "9");
+        assertThat(sets).extracting(ImportDraftV1.Prescription::count).containsOnly("1");
+        assertThat(sets).extracting(ImportDraftV1.Prescription::weightKg).containsOnly("40");
+        assertThat(draft.warnings()).isEmpty();
+    }
+
+    @Test
+    void rulesOfThePlanReachEveryPart() {
+        var assembly = parse("""
+                Программа: Тест
+                Упражнения:
+                - Присед → Присед со штангой | тип=вес_повторы
+                План:
+                Правило: вес из журнала — у первого упражнения дня
+                Неделя: 1 | дни=Пн
+                Неделя: 2 | дни=Пн
+                """);
+        assertThat(assembly.snapshot(false).rules()).containsExactly("вес из журнала — у первого упражнения дня");
+        var outline = assembly.outline();
+        var input = new ProgramParserModel.Input(new com.sizylift.backend.imports.entity.ImportSession.Source(List.of()), MONDAY,
+                List.of(), ProgramParserModel.Task.weeks(outline, List.of(2)), "");
+        assertThat(ModelInputRenderer.render(input)).contains("Правило: вес из журнала — у первого упражнения дня");
+    }
+
+    @Test
     void aQuestionStopsTheParse() {
         var draft = parse("Вопрос: Какой лист разбирать — новичок или опытный?").snapshot(true);
         assertThat(draft.needsClarification()).isTrue();

@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
  */
 public sealed interface ProgramLine {
     record Question(String text) implements ProgramLine { }
+    /** Правило чтения источника из каркаса: части программы разбираются отдельно и следуют одним правилам. */
+    record Rule(String text) implements ProgramLine { }
     record Program(String name, String description) implements ProgramLine { }
     record Section(Kind kind) implements ProgramLine {
         public enum Kind { EXERCISES, PLAN, WORKOUTS }
@@ -57,6 +59,7 @@ public sealed interface ProgramLine {
         var rest = labelled.group(2).strip();
         return switch (label) {
             case "вопрос" -> rest.isEmpty() ? new Unknown(text) : new Question(rest);
+            case "правило" -> rest.isEmpty() ? new Unknown(text) : new Rule(rest);
             case "программа" -> program(rest);
             case "упражнения" -> new Section(Section.Kind.EXERCISES);
             case "план" -> new Section(Section.Kind.PLAN);

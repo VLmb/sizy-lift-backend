@@ -119,4 +119,11 @@ class SheetImportServiceTest {
             public HttpClient.Version version() { return HttpClient.Version.HTTP_1_1; }
         };
     }
+
+    @Test
+    void fullTabNamesAreReadFromTheViewPage() {
+        var html = "var items = [];items.push({name: \"\\u0422\u0440\u0435\u043a\u0435\u0440\", gid: \"0\"});"
+                + "items.push({name: \"Программа тренировок Intermediate\", gid: \"4\"});items.push({name: \"A \\/ B\", gid: \"5\"});";
+        assertThat(SheetImportService.names(html)).containsExactly("Трекер", "Программа тренировок Intermediate", "A / B");
+    }
 }

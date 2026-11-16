@@ -155,7 +155,7 @@ public class ImportService {
         var weeks = draft.plan().stream().map(w -> new ImportPlan.Week(w.number(), w.cycle(), w.name(), w.days().size(),
                 w.days(), w.copyOf())).toList();
         var outline = new ImportPlan(draft.programDraft().name(), draft.programDraft().description(),
-                draft.exerciseResolutions(), weeks);
+                draft.exerciseResolutions(), weeks, draft.rules());
         sessions.retryWeeks(id, outline, clock.instant());
         events.publishEvent(new ImportQueued(id));
         return view(sessions.find(id).orElseThrow());

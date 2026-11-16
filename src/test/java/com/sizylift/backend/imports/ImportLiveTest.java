@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Настоящий DeepSeek на настоящих программах (платные вызовы): полный путь через API, worker и разбор.
  * Запускается только с DEEPSEEK_API_KEY и IMPORT_LIVE_DIR — папкой с файлами XLSX/XLS/CSV/TXT. В
- * IMPORT_LIVE_DIR/results для каждого файла — итоговое состояние сессии, вызовы модели с временем и токенами
+ * IMPORT_LIVE_DIR/results для каждого файла (или, с IMPORT_LIVE_URL, для каждой вкладки Google Таблицы отдельно) — итоговое состояние сессии, вызовы модели с временем и токенами
  * и сырые ответы модели: по ним правится промпт.
  */
 @EnabledIfEnvironmentVariable(named = "DEEPSEEK_API_KEY", matches = ".+")
@@ -47,6 +47,11 @@ class ImportLiveTest extends CoachWorkspaceApiSupport {
         var dir = Path.of(System.getenv("IMPORT_LIVE_DIR"));
         var results = Files.createDirectories(dir.resolve("results"));
         var only = System.getenv("IMPORT_LIVE_ONLY");
+        var url = System.getenv("IMPORT_LIVE_URL");
+        if (url != null && !url.isBlank()) {
+            linkSheetBySheet(url, results);
+            return;
+        }
         try (var files = Files.list(dir)) {
             for (var file : files.filter(Files::isRegularFile).sorted().toList()) {
                 var name = file.getFileName().toString();
@@ -104,6 +109,47 @@ class ImportLiveTest extends CoachWorkspaceApiSupport {
         }
     }
 
+    /** Ссылка Google Sheets: каждая вкладка — отдельный импорт, как если бы пользователь выбрал только её. */
+    private void linkSheetBySheet(String url, Path results) throws Exception {
+        var probe = newSubject();
+        var id = createLink(probe, url);
+        assertThat(worker.processOne()).isTrue();
+        var waiting = body(call(probe, get("/api/v2/imports/" + id)).andExpect(status().isOk()));
+        Files.writeString(results.resolve("sheets.json"), json.writerWithDefaultPrettyPrinter().writeValueAsString(waiting.get("sheets")));
+        System.out.printf("Листы: %s%n", waiting.get("sheets"));
+        for (var sheet : waiting.get("sheets")) {
+            synchronized (Recording.CALLS) { Recording.CALLS.clear(); }
+            long started = System.nanoTime();
+            Recording.started = started;
+            var owner = newSubject();
+            var session = createLink(owner, url);
+            assertThat(worker.processOne()).isTrue();
+            var current = body(call(owner, get("/api/v2/imports/" + session)).andExpect(status().isOk()));
+            postJson(owner, "/api/v2/imports/" + session + "/sheets", Map.of("version", current.get("version").asLong(),
+                    "sheets", List.of(sheet.get("index").asInt()))).andExpect(status().isAccepted());
+            assertThat(worker.processOne()).isTrue();
+            report(results, "sheet-" + sheet.get("index").asInt() + " " + sheet.get("name").asString(), owner, session, started);
+        }
+    }
+
+    private String createLink(String owner, String url) throws Exception {
+        var request = Map.of("requestId", UUID.randomUUID().toString(), "source", "sheet", "url", url, "startDate", "2026-11-16");
+        return body(postJson(owner, "/api/v2/imports", request).andExpect(status().isAccepted())).get("id").asString();
+    }
+
+    private void report(Path results, String name, String owner, String id, long started) throws Exception {
+        long total = (System.nanoTime() - started) / 1_000_000;
+        var view = body(call(owner, get("/api/v2/imports/" + id)).andExpect(status().isOk()));
+        var report = new LinkedHashMap<String, Object>();
+        report.put("file", name);
+        report.put("totalMs", total);
+        synchronized (Recording.CALLS) { report.put("calls", new ArrayList<>(Recording.CALLS)); }
+        report.put("view", view);
+        // Имя отчёта — ASCII: в окружениях без UTF-8 файловой системы кириллица в имени файла недопустима.
+        Files.writeString(results.resolve(name.replaceAll("[^A-Za-z0-9._-]", "_") + ".json"), json.writerWithDefaultPrettyPrinter().writeValueAsString(report));
+        System.out.printf("%s: %s за %d мс%n", name, view.get("status").asString(), total);
+    }
+
     private void run(Path file, Path results) throws Exception {
         var name = file.getFileName().toString();
         synchronized (Recording.CALLS) { Recording.CALLS.clear(); }
@@ -129,14 +175,6 @@ class ImportLiveTest extends CoachWorkspaceApiSupport {
                     .andExpect(status().isAccepted());
             assertThat(worker.processOne()).isTrue();
         }
-        long total = (System.nanoTime() - started) / 1_000_000;
-        var view = body(call(owner, get("/api/v2/imports/" + id)).andExpect(status().isOk()));
-        var report = new LinkedHashMap<String, Object>();
-        report.put("file", name);
-        report.put("totalMs", total);
-        synchronized (Recording.CALLS) { report.put("calls", new ArrayList<>(Recording.CALLS)); }
-        report.put("view", view);
-        Files.writeString(results.resolve(name + ".json"), json.writerWithDefaultPrettyPrinter().writeValueAsString(report));
-        System.out.printf("%s: %s за %d мс%n", name, view.get("status").asString(), total);
+        report(results, name, owner, id, started);
     }
 }

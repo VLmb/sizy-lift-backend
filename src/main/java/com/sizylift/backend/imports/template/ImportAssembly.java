@@ -43,6 +43,10 @@ public final class ImportAssembly {
     private static final int MAX_QUOTE = 80;
     private static final int MAX_COPY_DEPTH = 4;
     private static final String KEY_PREFIX = "e";
+    private static final java.util.regex.Pattern PER_SET_REPS = java.util.regex.Pattern.compile(
+            "\\|?\\s*повт\\s*=\\s*(\\d{1,4}(?:\\s*/\\s*\\d{1,4})+)\\s*", java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
+    private static final java.util.regex.Pattern COUNT_KEY = java.util.regex.Pattern.compile(
+            "\\|?\\s*кол\\s*=\\s*\\d+\\s*", java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
     private static final String STAGE_PLAN = "plan";
     private static final String STAGE_WEEKS = "weeks";
     private static final String SINGLE = "single";
@@ -59,6 +63,8 @@ public final class ImportAssembly {
     private final Map<String, String> names = new LinkedHashMap<>();
     private final TreeMap<Integer, WeekState> weeks = new TreeMap<>();
     private final LinkedHashSet<String> warnings = new LinkedHashSet<>();
+    private final List<String> rules = new ArrayList<>();
+    private static final int MAX_RULES = 10;
     private String name = "";
     private String description = "";
     private String question;
@@ -139,7 +145,8 @@ public final class ImportAssembly {
     /** Каркас для import_session.outline: после перезапуска и при повторном разборе недель план не запрашивается. */
     public synchronized ImportPlan outline() {
         var list = plan.values().stream().map(w -> new ImportPlan.Week(w.number, w.cycle, w.name, w.days.size(), w.days, w.copyOf)).toList();
-        return new ImportPlan(name, description, exercises.values().stream().map(e -> e.resolved().resolution()).toList(), list);
+        return new ImportPlan(name, description, exercises.values().stream().map(e -> e.resolved().resolution()).toList(), list,
+                List.copyOf(rules));
     }
 
     /**
@@ -149,6 +156,7 @@ public final class ImportAssembly {
     public synchronized void restore(ImportPlan outline, ImportDraftV1 draft) {
         name = outline.name();
         description = outline.description();
+        rules.addAll(outline.rules());
         for (var week : outline.weeks()) {
             var planned = new PlanWeek(week.week());
             planned.cycle = week.cycle();
@@ -247,6 +255,9 @@ public final class ImportAssembly {
                     }
                 }
                 case ProgramLine.Section s -> section(s.kind());
+                case ProgramLine.Rule r -> {
+                    if (allowed == null && rules.size() < MAX_RULES) rules.add(limit(r.text(), NOTE_CHARS));
+                }
                 case ProgramLine.ExerciseEntry e -> exercise(e);
                 case ProgramLine.Week w -> {
                     // Повтор уже объявленной недели без ключей — модель начала тренировки, забыв «Тренировки:».
@@ -355,8 +366,21 @@ public final class ImportAssembly {
             else day.blocks().add(new BlockState(SINGLE, "", "", "", new ArrayList<>(List.of(item))));
         }
 
+        /** «повт=10 / 10 / 9» — повторы каждого подхода: строка раскладывается на подходы по одному. */
         private void set(String body) {
             if (item == null) return;
+            var perSet = PER_SET_REPS.matcher(body);
+            if (perSet.find()) {
+                var rest = COUNT_KEY.matcher(perSet.replaceFirst("")).replaceAll("").replaceAll("^\\s*\\|\\s*|\\s*\\|\\s*$", "");
+                for (var reps : perSet.group(1).split("/")) {
+                    single("кол=1 | повт=" + reps.strip() + (rest.isBlank() ? "" : " | " + rest));
+                }
+                return;
+            }
+            single(body);
+        }
+
+        private void single(String body) {
             var exercise = exercises.get(item.key());
             var type = exercise.resolved().resultType();
             var label = exercise.resolved().resolution().originalName();
@@ -445,7 +469,7 @@ public final class ImportAssembly {
         var resolutions = exercises.values().stream().map(e -> e.resolved().resolution())
                 .filter(r -> !complete || used.contains(r.key())).toList();
         return new ImportDraftV1(1, false, "", new ImportDraftV1.Draft(name, description, cycles), resolutions,
-                planned(), List.copyOf(warnings));
+                planned(), List.copyOf(warnings), List.copyOf(rules));
     }
 
     private List<PlannedWeek> planned() {

@@ -172,7 +172,10 @@ public class ImportWorker {
      */
     private void plan(ImportSession session, String system, ProgramParserModel.Input input, ImportAssembly assembly,
                       ImportProgress.Publisher publisher) {
-        var lines = publisher.lines(assembly.cursor(null));
+        // Большую программу модель могла начать расписывать целиком: как только каркас показал размер, ответ
+        // останавливается, и недели дописываются параллельными частями — так быстрее одного длинного ответа.
+        var lines = publisher.lines(assembly.cursor(null),
+                () -> assembly.planComplete() && assembly.workouts() > limits.singleCallWorkouts());
         var result = call(session, request(system, input), lines, true);
         lines.finish(result);
         if (!result.truncated() || assembly.planComplete() || assembly.question() != null) return;
