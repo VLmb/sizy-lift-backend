@@ -127,17 +127,15 @@ public final class ImportAssembly {
         return plan.values().stream().filter(w -> w.copyOf == null).mapToInt(w -> Math.max(1, w.days.size())).sum();
     }
 
-    /** Недели, которые разобрать не удалось: их содержимое не попадает в программу. */
+    /**
+     * Недели, которые разобрать не удалось: их содержимое не попадает в программу. Предупреждения нет — неделя видна
+     * в каркасе со статусом failed.
+     */
     public synchronized void fail(Collection<Integer> numbers) {
         for (var number : numbers) {
             var state = new WeekState(number);
             state.status = FAILED;
             weeks.put(number, state);
-        }
-        if (!numbers.isEmpty()) {
-            warn(language.text("Не удалось разобрать недели: ", "Could not parse weeks: ")
-                    + String.join(", ", numbers.stream().map(String::valueOf).toList())
-                    + language.text(". Их можно разобрать заново.", ". You can parse them again."));
         }
         changes++;
     }

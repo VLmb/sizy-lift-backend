@@ -47,6 +47,12 @@ public final class ImportDtos {
      * упражнений; weeksDone из weeksTotal — готовые недели каркаса. weeksTotal неизвестен, пока нет каркаса.
      */
     public record Progress(String stage, int exercises, int weeksDone, Integer weeksTotal) { }
+    /**
+     * Незавершённый импорт в списке «вернуться к разбору»: name — название из разбора, если пользователь своё не задал;
+     * openChoices — сколько упражнений ждёт выбора на проверке.
+     */
+    public record Summary(UUID id, UUID ownerId, String status, long version, String name, LocalDate startDate,
+                          Instant expiresAt, Progress progress, int openChoices, Failure error) { }
     public record View(UUID id, UUID ownerId, String status, long version, int round, String name,
                        LocalDate startDate, Instant expiresAt, boolean needsClarification,
                        String clarificationMessage, ImportDraftV1 draft, com.sizylift.backend.imports.entity.ImportSession.Source source,
