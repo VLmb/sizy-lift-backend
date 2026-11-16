@@ -33,12 +33,14 @@ public final class ImportDtos {
     public record Decision(@NotBlank @Size(max = 100) String key, @NotBlank String kind, UUID exerciseId,
                            @Size(max = NAME_CHARS) String name, String resultType, LiftClass liftClass) { }
     public record Commit(@Min(1) long version) { }
+    /** Повторный разбор недель, которые не удалось разобрать; version — текущая версия сессии. */
+    public record RetryWeeks(@Min(1) long version) { }
     public record Created(UUID id, String status, long version) { }
     public record Receipt(UUID id, UUID ownerId, UUID programId, long programRevision) { }
     public record Failure(String code, String message) { }
     /**
-     * Прогресс текущего разбора: stage — plan или weeks; exercises — найдено упражнений;
-     * weeksDone из weeksTotal — недели, полностью выписанные моделью. weeksTotal неизвестен, пока нет плана.
+     * Прогресс текущего разбора: stage — plan (пишется каркас) или weeks (заполняются недели); exercises — найдено
+     * упражнений; weeksDone из weeksTotal — готовые недели каркаса. weeksTotal неизвестен, пока нет каркаса.
      */
     public record Progress(String stage, int exercises, int weeksDone, Integer weeksTotal) { }
     public record View(UUID id, UUID ownerId, String status, long version, int round, String name,

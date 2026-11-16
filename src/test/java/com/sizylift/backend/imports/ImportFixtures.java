@@ -1,100 +1,59 @@
 package com.sizylift.backend.imports;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
-/** Ответы модели в компактном формате (схемы program-import.plan.v1 и program-import.weeks.v1). */
+/** Ответы модели строками шаблона импорта (imports/template-prompt.v1.txt). */
 final class ImportFixtures {
     static final UUID SQUAT = UUID.fromString("14000000-0000-4000-8000-000000000001");
-    /** Заменяется alias приседа из каталога, переданного модели. */
-    static final String SQUAT_ALIAS = "@SQUAT";
     static final String TEXT = "Присед со штангой 3×5 100 кг @8";
-    static final String DEFAULT_SET = "n=3 r=5 kg=100 rpe=8 type=working";
+    static final String DEFAULT_SET = "Подход: кол=3 | повт=5 | вес=100 кг | RPE=8";
+    private static final String ARROW = " → ";
     private ImportFixtures() { }
 
-    static Map<String, Object> matched(String ref) {
-        return exercise("e1", "Присед", "matched", SQUAT_ALIAS, List.of(), "", "", List.of(ref));
+    /** Строка списка «Упражнения»: присед из каталога. */
+    static String matched() { return "- Присед" + ARROW + "Присед со штангой | тип=вес_повторы"; }
+    /** Источник сам предлагает выбор — пользователь выбирает упражнение. */
+    static String ambiguous() { return matched() + " | или=Румынская тяга со штангой"; }
+    static String custom(String name, String type) { return "- " + name + ARROW + name + " | тип=" + type + " | новое"; }
+    static String clarification(String question) { return "Вопрос: " + question + "\n"; }
+
+    /** Небольшая программа целиком в первом ответе: одна неделя, одна тренировка. */
+    static String draft(String... exercises) { return draftWithSet(DEFAULT_SET, exercises); }
+
+    static String draftWithSet(String set, String... exercises) {
+        var text = new StringBuilder(head(List.of(exercises))).append("План:\nНеделя: 1 | дни=1\nТренировки:\n");
+        week(text, 1, set, exercises);
+        return text.toString();
     }
-    static Map<String, Object> ambiguous(String ref) {
-        return exercise("e1", "Присед", "ambiguous", "", List.of(SQUAT_ALIAS), "", "", List.of(ref));
+
+    /** Каркас большой программы без тренировок: weeks недель по workouts тренировок, циклы по две недели. */
+    static String plan(List<String> exercises, int weeks, int workouts) {
+        var text = new StringBuilder(head(exercises)).append("План:\n");
+        var days = String.join(",", java.util.stream.IntStream.rangeClosed(1, workouts).mapToObj(String::valueOf).toList());
+        for (int week = 1; week <= weeks; week++)
+            text.append("Неделя: ").append(week).append(" | цикл=Цикл ").append((week + 1) / 2).append(" | дни=").append(days).append('\n');
+        return text.toString();
     }
-    static Map<String, Object> custom(String id, String name, String type) {
-        return exercise(id, name, "new", "", List.of(), name, type, List.of("text:1"));
+
+    /** Ответ части: недели numbers по тренировке с каждым упражнением; extras — новые упражнения части. */
+    static String weeks(List<Integer> numbers, List<String> extras, String... exercises) {
+        var text = new StringBuilder();
+        if (!extras.isEmpty()) text.append("Упражнения:\n").append(String.join("\n", extras)).append('\n');
+        text.append("Тренировки:\n");
+        for (var number : numbers) week(text, number, DEFAULT_SET, exercises);
+        return text.toString();
     }
-    static Map<String, Object> exercise(String id, String name, String status, String match, List<String> candidates,
-                                        String newName, String resultType, List<String> refs) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("id", id); result.put("name", name); result.put("status", status); result.put("match", match);
-        result.put("candidates", new ArrayList<>(candidates)); result.put("newName", newName);
-        result.put("resultType", resultType); result.put("refs", new ArrayList<>(refs));
-        return result;
+
+    private static String head(List<String> exercises) {
+        return "Программа: Программа\nУпражнения:\n" + String.join("\n", exercises) + "\n";
     }
-    static Map<String, Object> clarification(String question) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("question", question); result.put("name", ""); result.put("description", "");
-        result.put("exercises", new ArrayList<>()); result.put("plan", new ArrayList<>()); result.put("weeks", new ArrayList<>());
-        return result;
+
+    private static void week(StringBuilder text, int number, String set, String... exercises) {
+        text.append("Неделя: ").append(number).append("\nДень: 1 | название=Тренировка\n");
+        for (var exercise : exercises) text.append("Упражнение: ").append(source(exercise)).append('\n').append(set).append('\n');
     }
-    /** Небольшая программа целиком в ответе плана: одна неделя, одна тренировка. */
-    @SafeVarargs
-    static Map<String, Object> draft(Map<String, Object>... exercises) {
-        var result = plan(List.of(exercises), 1, 1);
-        result.put("weeks", new ArrayList<>(List.of(week(1, exercises))));
-        return result;
-    }
-    /** План большой программы без подробных недель: weeks недель по workouts тренировок, циклы по две недели. */
-    static Map<String, Object> plan(List<Map<String, Object>> exercises, int weeks, int workouts) {
-        var plan = new ArrayList<Object>();
-        for (int week = 1; week <= weeks; week++) {
-            var row = new LinkedHashMap<String, Object>();
-            row.put("week", week); row.put("cycle", "Цикл " + ((week + 1) / 2)); row.put("name", ""); row.put("workouts", workouts);
-            plan.add(row);
-        }
-        var result = new LinkedHashMap<String, Object>();
-        result.put("question", ""); result.put("name", "Программа"); result.put("description", "");
-        result.put("exercises", new ArrayList<>(exercises)); result.put("plan", plan); result.put("weeks", new ArrayList<>());
-        return result;
-    }
-    /** Ответ emit_program_weeks: по тренировке с каждым упражнением в каждой неделе. */
-    @SafeVarargs
-    static Map<String, Object> weeks(List<Integer> numbers, List<Map<String, Object>> extras, Map<String, Object>... exercises) {
-        var weeks = new ArrayList<Object>();
-        for (var number : numbers) weeks.add(week(number, exercises));
-        var result = new LinkedHashMap<String, Object>();
-        result.put("exercises", new ArrayList<>(extras)); result.put("weeks", weeks);
-        return result;
-    }
-    @SafeVarargs
-    static Map<String, Object> week(int number, Map<String, Object>... exercises) {
-        var blocks = new ArrayList<Object>();
-        for (var exercise : exercises) {
-            var item = new LinkedHashMap<String, Object>();
-            item.put("ex", exercise.get("id")); item.put("note", "");
-            item.put("refs", new ArrayList<>((List<?>) exercise.get("refs"))); item.put("sets", new ArrayList<>(List.of(DEFAULT_SET)));
-            var block = new LinkedHashMap<String, Object>();
-            block.put("type", "single"); block.put("label", ""); block.put("title", ""); block.put("note", "");
-            block.put("items", new ArrayList<>(List.of(item)));
-            blocks.add(block);
-        }
-        var day = new LinkedHashMap<String, Object>();
-        day.put("day", 0); day.put("title", "Тренировка"); day.put("blocks", blocks);
-        var week = new LinkedHashMap<String, Object>();
-        week.put("week", number); week.put("days", new ArrayList<>(List.of(day)));
-        return week;
-    }
-    /** Первое упражнение первой тренировки: refs, note, sets. */
-    @SuppressWarnings("unchecked")
-    static Map<String, Object> firstItem(Map<String, Object> draft) {
-        var week = (Map<String, Object>) ((List<?>) draft.get("weeks")).getFirst();
-        var day = (Map<String, Object>) ((List<?>) week.get("days")).getFirst();
-        var block = (Map<String, Object>) ((List<?>) day.get("blocks")).getFirst();
-        return (Map<String, Object>) ((List<?>) block.get("items")).getFirst();
-    }
-    @SuppressWarnings("unchecked")
-    static Map<String, Object> firstExercise(Map<String, Object> draft) {
-        return (Map<String, Object>) ((List<?>) draft.get("exercises")).getFirst();
-    }
+
+    /** Название как в источнике — левая часть строки списка. */
+    static String source(String entry) { return entry.substring(2, entry.indexOf(ARROW)); }
 }

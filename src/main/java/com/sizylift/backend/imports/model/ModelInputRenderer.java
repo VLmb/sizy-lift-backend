@@ -1,10 +1,8 @@
 package com.sizylift.backend.imports.model;
 
-import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -16,16 +14,14 @@ import com.sizylift.backend.imports.model.ProgramParserModel.Input;
 import com.sizylift.backend.imports.model.ProgramParserModel.Task;
 
 /**
- * Вход модели — текст, а не JSON: меньше токенов. Каталог идёт первым, раздел ЗАДАЧА — последним, поэтому
- * префикс запроса совпадает между импортами и между вызовами одной сессии и попадает в кэш провайдера.
- * Таблицы выводятся сеткой: модель видит расположение ячеек, а координата не повторяется в каждой ячейке.
- * Переносы и табуляции внутри значений экранируются: значение не может начать строку раздела или подделать ref.
+ * Сообщение пользователя для модели: язык интерфейса, источник, ответы на вопросы, задача. Источник и ответы
+ * одинаковы у всех вызовов сессии, задача — в конце, поэтому общий префикс запроса попадает в кэш провайдера.
+ * Таблицы выводятся сеткой: строка с буквами столбцов, затем строки с номером в начале — модель видит расположение
+ * ячеек, а координата не повторяется в каждой ячейке. Переносы и табуляции внутри значений экранируются:
+ * значение не может начать строку раздела.
  */
 public final class ModelInputRenderer {
-    public static final String PLAN_TOOL = "emit_program_plan";
-    public static final String WEEKS_TOOL = "emit_program_weeks";
-    private static final Locale RUSSIAN = Locale.forLanguageTag("ru-RU");
-    private static final Pattern SHEET_TITLE = Pattern.compile("(sheet:\\d+)");
+    private static final Pattern SHEET_TITLE = Pattern.compile("sheet:(\\d+)");
     private static final Pattern SHEET_CELL = Pattern.compile("(sheet:\\d+)!([A-Z]+)(\\d+)");
     private static final Pattern CSV_CELL = Pattern.compile("csv:(\\d+):(\\d+)");
     private static final String CSV = "csv";
@@ -35,19 +31,15 @@ public final class ModelInputRenderer {
     private ModelInputRenderer() { }
 
     public static String render(Input input) {
-        var text = new StringBuilder(INITIAL_CAPACITY).append("КАТАЛОГ\n");
-        for (var entry : input.catalog()) text.append(entry.alias()).append('\t').append(escape(entry.name())).append('\n');
+        var text = new StringBuilder(INITIAL_CAPACITY);
         text.append("ЯЗЫК ИНТЕРФЕЙСА\n").append(input.source().language()).append('\n');
-        text.append("ДАТА СТАРТА\n").append(input.startDate()).append(", ")
-                .append(input.startDate().getDayOfWeek().getDisplayName(TextStyle.FULL, RUSSIAN)).append('\n');
         text.append("ИСТОЧНИК\n");
         source(text, input.source().items());
         if (!input.history().isEmpty()) {
             text.append("ОТВЕТЫ ПОЛЬЗОВАТЕЛЯ\n");
-            for (int i = 0; i < input.history().size(); i++) {
-                var answer = input.history().get(i);
-                text.append("answer:").append(i + 1).append("\tВопрос: ").append(escape(answer.question()))
-                        .append("\tОтвет: ").append(escape(answer.answer())).append('\n');
+            for (var answer : input.history()) {
+                text.append("Вопрос: ").append(escape(answer.question())).append('\n')
+                        .append("Ответ: ").append(escape(answer.answer())).append('\n');
             }
         }
         task(text, input.task());
@@ -57,11 +49,7 @@ public final class ModelInputRenderer {
         return text.toString();
     }
 
-    /**
-     * Строки текста — {@code text:N<TAB>строка}. Лист или CSV — заголовок с правилом ref, строка столбцов и строки
-     * с номером в начале; выводятся только непустые строки и столбцы. Прочие ref, например объединения ячеек,
-     * идут списком после сетки своего листа.
-     */
+    /** Строки текста — как есть; лист или CSV — сеткой непустых строк и столбцов, объединения — после сетки. */
     private static void source(StringBuilder text, List<SourceItem> items) {
         var grids = new LinkedHashMap<String, Grid>();
         var loose = new ArrayList<SourceItem>();
@@ -79,7 +67,7 @@ public final class ModelInputRenderer {
                 grid(grids, sheet, "").extra.add(item);
             } else loose.add(item);
         }
-        for (var item : loose) text.append(item.ref()).append('\t').append(escape(item.text())).append('\n');
+        for (var item : loose) text.append(escape(item.text())).append('\n');
         grids.forEach((name, grid) -> grid.render(text, name));
     }
 
@@ -112,9 +100,12 @@ public final class ModelInputRenderer {
 
         void render(StringBuilder text, String name) {
             boolean csv = name.equals(CSV);
-            if (csv) text.append("CSV, ref ячейки: csv:строка:столбец, например csv:3:2\n");
-            else text.append("ЛИСТ ").append(name).append('\t').append(escape(title)).append(", ref ячейки: ")
-                    .append(name).append("!столбецстрока, например ").append(name).append("!B3\n");
+            if (csv) text.append("CSV\n");
+            else {
+                var number = SHEET_TITLE.matcher(name);
+                int index = number.matches() ? Integer.parseInt(number.group(1)) + 1 : 1;
+                text.append("ЛИСТ ").append(index).append(": ").append(escape(title)).append('\n');
+            }
             var columns = new TreeSet<Integer>();
             rows.values().forEach(row -> columns.addAll(row.keySet()));
             if (!columns.isEmpty()) {
@@ -126,25 +117,35 @@ public final class ModelInputRenderer {
                     text.append('\n');
                 });
             }
-            for (var item : extra) text.append(item.ref()).append('\t').append(escape(item.text())).append('\n');
+            for (var item : extra) text.append("объединение ").append(item.ref().substring(item.ref().indexOf('!') + 1))
+                    .append('\t').append(escape(item.text())).append('\n');
         }
     }
 
     private static void task(StringBuilder text, Task task) {
         text.append("ЗАДАЧА\n");
         switch (task.kind()) {
-            case PLAN -> text.append(PLAN_TOOL).append(". Если тренировок во всей программе не больше ")
-                    .append(task.singleCallWorkouts()).append(", заполни и weeks подробно; иначе weeks=[].\n");
-            case PLAN_ONLY -> text.append(PLAN_TOOL).append(". Только план: weeks=[].\n");
+            case PLAN -> text.append("Напиши строку «Программа», раздел «Упражнения» и раздел «План» со всеми неделями. ")
+                    .append("Если тренировок во всей программе не больше ").append(task.singleCallWorkouts())
+                    .append(", затем напиши «Тренировки:» и распиши все недели подробно. Иначе закончи ответ после плана — ")
+                    .append("недели распишут отдельно. Если без ответа пользователя не разобрать — только строку «Вопрос:».\n");
+            case PLAN_ONLY -> text.append("Напиши только строку «Программа», раздел «Упражнения» и раздел «План» со всеми неделями, ")
+                    .append("без «Тренировки». Если без ответа пользователя не разобрать — только строку «Вопрос:».\n");
             case WEEKS -> {
-                text.append(WEEKS_TOOL).append(". Разбери подробно недели: ")
+                text.append("Распиши подробно только недели ")
                         .append(task.weeks().stream().map(String::valueOf).collect(Collectors.joining(", ")))
-                        .append(".\nПлан этих недель (week<TAB>cycle<TAB>name<TAB>workouts):\n");
-                for (var week : task.plan()) text.append(week.week()).append('\t').append(escape(week.cycle())).append('\t')
-                        .append(escape(week.name())).append('\t').append(week.workouts()).append('\n');
-                text.append("Упражнения программы (id<TAB>name):\n");
-                for (var exercise : task.exercises())
-                    text.append(exercise.key()).append('\t').append(escape(exercise.originalName())).append('\n');
+                        .append(": начни со строки «Тренировки:». Не пиши «Программа» и «План», вопросов не задавай — ")
+                        .append("неясное сохрани в заметке или комментарии.\nПлан этих недель:\n");
+                for (var week : task.plan()) {
+                    text.append("Неделя: ").append(week.week());
+                    if (!week.cycle().isEmpty()) text.append(" | цикл=").append(escape(week.cycle()));
+                    if (!week.days().isEmpty()) text.append(" | дни=").append(escape(String.join(",", week.days())));
+                    text.append('\n');
+                }
+                text.append("Упражнения программы — в «Упражнение:» пиши название ровно как здесь:\n");
+                for (var name : task.exercises()) text.append("- ").append(escape(name)).append('\n');
+                text.append("Если в этих неделях есть упражнение, которого нет в списке, перед «Тренировки:» напиши ")
+                        .append("«Упражнения:» и строки только для новых упражнений.\n");
             }
         }
     }

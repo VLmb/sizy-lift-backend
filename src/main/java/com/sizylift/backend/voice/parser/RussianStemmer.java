@@ -8,7 +8,7 @@ import java.util.Comparator;
  * Нужен, чтобы «приседе», «приседа» и «присед» сравнивались как одна основа.
  * Ожидает нижний регистр и «е» вместо «ё».
  */
-final class RussianStemmer {
+public final class RussianStemmer {
     private static final String VOWELS = "аеиоуыэюя";
     private static final String A_OR_YA = "ая";
     private static final String[] PERFECTIVE_AFTER_A = sorted("в", "вши", "вшись");
@@ -30,7 +30,7 @@ final class RussianStemmer {
 
     private RussianStemmer() { }
 
-    static String stem(String word) {
+    public static String stem(String word) {
         int rv = regionAfterVowel(word, 0);
         if (rv >= word.length()) return word;
         int r1 = regionAfterConsonant(word, 0);

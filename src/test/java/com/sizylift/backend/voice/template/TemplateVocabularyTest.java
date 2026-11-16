@@ -4,6 +4,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import com.sizylift.backend.template.SetLine;
+import com.sizylift.backend.template.TemplateVocabulary;
+import com.sizylift.backend.template.TemplateVocabulary.Scope;
 import com.sizylift.backend.voice.service.VoiceTestCatalog;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +20,8 @@ class TemplateVocabularyTest {
 
     @Test
     void everyKeyHasFormatAndEveryFormatHasKey() {
-        assertThat(TemplateVocabulary.allKeys()).containsExactlyInAnyOrderElementsOf(TemplateParser.FORMATS.keySet());
+        assertThat(TemplateVocabulary.allKeys(Scope.IMPORT)).containsExactlyInAnyOrderElementsOf(SetLine.FORMATS.keySet());
+        assertThat(TemplateVocabulary.allKeys(Scope.IMPORT)).containsAll(TemplateVocabulary.allKeys());
     }
 
     @Test

@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -11,22 +12,23 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.ToIntFunction;
 
 import com.sizylift.backend.imports.config.ImportProperties;
-import com.sizylift.backend.imports.dto.ImportDraftV1;
-import com.sizylift.backend.imports.dto.ImportPlan;
 import com.sizylift.backend.imports.entity.ImportSession;
 import com.sizylift.backend.imports.model.ModelFailure;
 import com.sizylift.backend.imports.model.ProgramParserModel;
 import com.sizylift.backend.imports.model.ProgramParserModel.Task;
 import com.sizylift.backend.imports.repository.ImportRepository;
+import com.sizylift.backend.imports.template.ImportAssembly;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 
 /**
- * Второй этап разбора большой программы: недели плана делятся на части, части разбираются моделью
- * параллельно и сводятся в один черновик. Время ожидания — примерно время самой долгой части,
- * а объём программы не ограничен выводом одного ответа.
+ * Второй этап разбора большой программы: недели каркаса делятся на части, части разбираются моделью параллельно
+ * и потоком пишут свои недели в общую сборку — пользователь видит, как заполняются сразу несколько недель.
+ * Время ожидания — примерно время самой долгой части. Сбой части не отменяет остальные: её недели повторяются,
+ * а если не вышло — помечаются неразобранными, остальная программа сохраняется.
  */
 @Component
 public class ImportChunks {
@@ -36,38 +38,35 @@ public class ImportChunks {
     private static final long JITTER_MILLIS = 1500;
     private static final int HALVES = 2;
     private final ProgramParserModel model;
-    private final ImportDraftValidator validator;
     private final ImportRepository sessions;
     private final ImportProperties limits;
     private final ImportCost cost;
     private final ImportMetrics metrics;
-    private final ImportProgress progress;
     private final Clock clock;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-    public ImportChunks(ProgramParserModel model, ImportDraftValidator validator,
-                        ImportRepository sessions, ImportProperties limits,
-                        ImportCost cost, ImportMetrics metrics, ImportProgress progress, Clock clock) {
-        this.model = model; this.validator = validator; this.sessions = sessions; this.limits = limits;
-        this.cost = cost; this.metrics = metrics; this.progress = progress; this.clock = clock;
+    public ImportChunks(ProgramParserModel model, ImportRepository sessions, ImportProperties limits,
+                        ImportCost cost, ImportMetrics metrics, Clock clock) {
+        this.model = model; this.sessions = sessions; this.limits = limits;
+        this.cost = cost; this.metrics = metrics; this.clock = clock;
     }
 
     /** Части подряд идущих недель примерно по workoutsPerChunk тренировок; частей не больше maxChunks. */
-    public static List<List<Integer>> split(ImportPlan plan, int workoutsPerChunk, int maxChunks) {
-        int total = plan.weeks().stream().mapToInt(ImportChunks::weight).sum();
+    public static List<List<Integer>> split(List<Integer> weeks, ToIntFunction<Integer> weight, int workoutsPerChunk, int maxChunks) {
+        int total = weeks.stream().mapToInt(weight).sum();
         int target = Math.max(workoutsPerChunk, Math.ceilDiv(total, maxChunks));
         while (true) {
             var result = new ArrayList<List<Integer>>();
             var current = new ArrayList<Integer>();
             int size = 0;
-            for (var week : plan.weeks()) {
-                if (!current.isEmpty() && size + weight(week) > target) {
+            for (var week : weeks) {
+                if (!current.isEmpty() && size + weight.applyAsInt(week) > target) {
                     result.add(List.copyOf(current));
                     current.clear();
                     size = 0;
                 }
-                current.add(week.week());
-                size += weight(week);
+                current.add(week);
+                size += weight.applyAsInt(week);
             }
             if (!current.isEmpty()) result.add(List.copyOf(current));
             if (result.size() <= maxChunks) return result;
@@ -75,134 +74,128 @@ public class ImportChunks {
         }
     }
 
-    /** Неделя без тренировок всё равно разбирается: в ней могут быть заметки и отдых. */
-    private static int weight(ImportPlan.Week week) { return Math.max(1, week.workouts()); }
-
-    public ImportDraftV1 run(ImportSession session, ImportPlan plan, ProgramParserModel.Input base) {
-        var run = new Run(session, plan, base);
-        var futures = split(plan, limits.workoutsPerChunk(), limits.maxChunks()).stream()
-                .map(weeks -> executor.submit(() -> run.chunk(weeks))).toList();
-        return validator.assemble(plan, run.collect(futures));
+    /** Разбирает недели weeks; неразобранные помечаются в сборке. Бросает только {@link Lost}. */
+    public void run(ImportSession session, String system, ProgramParserModel.Input base, ImportAssembly assembly,
+                    ImportProgress.Publisher publisher, List<Integer> weeks) {
+        var run = new Run(session, system, base, assembly, publisher);
+        var futures = split(weeks, assembly::workouts, limits.workoutsPerChunk(), limits.maxChunks()).stream()
+                .map(part -> executor.submit(() -> run.chunk(part))).toList();
+        run.await(futures);
     }
 
     @PreDestroy
     public void close() { executor.shutdownNow(); }
 
-    /** Сбой разбора частей: code и message — для пользователя, cancelled — аренда потеряна, писать нечего. */
-    public static class ChunkFailure extends RuntimeException {
-        private final String code;
-        private final boolean cancelled;
-        ChunkFailure(String code, String message, boolean cancelled) {
-            super(message);
-            this.code = code;
-            this.cancelled = cancelled;
-        }
-        public String code() { return code; }
-        public boolean cancelled() { return cancelled; }
-        static ChunkFailure tooLarge() {
-            return new ChunkFailure("input_too_large", "Неделя программы слишком большая для разбора. Разделите источник на части.", false);
-        }
-        static ChunkFailure unavailable() {
-            return new ChunkFailure("model_unavailable", "Не удалось получить корректный разбор. Повторите импорт позже.", false);
-        }
-        static ChunkFailure budget() {
-            return new ChunkFailure("import_budget", "Достигнут лимит запросов или стоимости обработки.", false);
-        }
-        static ChunkFailure lost() { return new ChunkFailure("lease_lost", "Сессия отменена или передана другому worker.", true); }
+    /** Аренда потеряна: сессию отменили или забрали, писать нечего. */
+    public static class Lost extends RuntimeException {
+        Lost() { super("Сессия отменена или передана другому worker"); }
     }
 
     private final class Run {
         private final ImportSession session;
-        private final ImportPlan plan;
+        private final String system;
         private final ProgramParserModel.Input base;
-        private final ImportProgress.Tracker tracker;
+        private final ImportAssembly assembly;
+        private final ImportProgress.Publisher publisher;
         private final Semaphore permits = new Semaphore(limits.chunkParallelism());
-        /** Дробление обрезанных частей ограничено, чтобы сбой модели не превратился в лавину платных вызовов. */
+        /** Повторы и продолжения ограничены, чтобы сбой модели не превратился в лавину платных вызовов. */
         private final AtomicInteger calls = new AtomicInteger();
-        private final int maxCalls = limits.maxChunks() * limits.attemptsPerRound() * HALVES;
+        private final int maxCalls = limits.maxChunks() * limits.attemptsPerRound() * HALVES * HALVES;
 
-        Run(ImportSession session, ImportPlan plan, ProgramParserModel.Input base) {
-            this.session = session; this.plan = plan; this.base = base;
-            this.tracker = progress.weeks(session, plan);
+        Run(ImportSession session, String system, ProgramParserModel.Input base, ImportAssembly assembly,
+            ImportProgress.Publisher publisher) {
+            this.session = session; this.system = system; this.base = base; this.assembly = assembly; this.publisher = publisher;
         }
 
-        List<ImportDraftValidator.Chunk> chunk(List<Integer> weeks) {
+        /**
+         * Одна часть. Обрезанный ответ продолжается с первой неразобранной недели и попыткой не считается; если не
+         * готово ни одной недели, часть делится пополам. Ответ без части недель повторяется с подсказкой.
+         */
+        Void chunk(List<Integer> weeks) {
+            var remaining = new ArrayList<>(weeks);
             var hint = "";
-            for (int attempt = 0; attempt < limits.attemptsPerRound(); attempt++) {
-                var input = new ProgramParserModel.Input(base.source(), base.catalog(), base.startDate(), base.history(),
-                        Task.weeks(plan, weeks), hint);
-                var counter = tracker.call();
+            int attempts = 0;
+            while (!remaining.isEmpty() && attempts < limits.attemptsPerRound()) {
+                var input = new ProgramParserModel.Input(base.source(), base.startDate(), base.history(),
+                        Task.weeks(assembly.outline(), remaining), hint);
+                var cursor = assembly.cursor(Set.copyOf(remaining));
+                var lines = publisher.lines(cursor);
+                ProgramParserModel.Result result;
                 try {
-                    var chunk = validator.weeks(call(input, counter).json(), plan, weeks, base.source(), base.catalog(), base.history());
-                    tracker.completed(counter, chunk.weeks().size());
-                    return List.of(chunk);
-                } catch (ImportDraftValidator.InvalidDraft e) {
-                    tracker.abandoned(counter);
-                    hint = e.repairHint();
+                    result = call(new ProgramParserModel.Request(system, input), lines);
                 } catch (ModelFailure e) {
-                    tracker.abandoned(counter);
-                    if (e.truncated()) return halves(weeks);
-                    if (!e.retryable()) throw ChunkFailure.unavailable();
+                    lines.end(true);
+                    if (!e.retryable()) break;
+                    attempts++;
                     pause(e.retryAfter());
                     hint = "";
+                    continue;
+                } catch (Budget e) {
+                    lines.end(true);
+                    break;
                 } catch (RuntimeException e) {
-                    tracker.abandoned(counter);
+                    lines.end(true);
                     throw e;
                 }
+                var done = lines.finish(result);
+                remaining.removeAll(done);
+                if (remaining.isEmpty()) return null;
+                if (result.truncated()) {
+                    if (done.isEmpty()) return halves(remaining);
+                    continue;
+                }
+                attempts++;
+                hint = "В ответе нет недель " + String.join(", ", remaining.stream().map(String::valueOf).toList())
+                        + ". Распиши их подробно, начиная со строки «Тренировки:».";
             }
-            throw ChunkFailure.unavailable();
+            assembly.fail(remaining);
+            return null;
         }
 
-        /** Обрезанная часть делится пополам: тот же запрос снова упёрся бы в лимит вывода. */
-        private List<ImportDraftValidator.Chunk> halves(List<Integer> weeks) {
-            if (weeks.size() < HALVES) throw ChunkFailure.tooLarge();
+        /** Обрезанная часть без единой готовой недели делится пополам: тот же запрос снова упёрся бы в лимит вывода. */
+        private Void halves(List<Integer> weeks) {
+            if (weeks.size() < HALVES) {
+                assembly.fail(weeks);
+                return null;
+            }
             int middle = weeks.size() / HALVES;
-            var first = executor.submit(() -> chunk(weeks.subList(0, middle)));
-            var second = executor.submit(() -> chunk(weeks.subList(middle, weeks.size())));
-            return collect(List.of(first, second));
+            var first = List.copyOf(weeks.subList(0, middle));
+            var second = List.copyOf(weeks.subList(middle, weeks.size()));
+            await(List.of(executor.submit(() -> chunk(first)), executor.submit(() -> chunk(second))));
+            return null;
         }
 
-        private ProgramParserModel.Result call(ProgramParserModel.Input input, ProgramParserModel.Listener listener) {
-            if (calls.incrementAndGet() > maxCalls) throw ChunkFailure.unavailable();
-            if (cost.tooLarge(input)) throw ChunkFailure.tooLarge();
+        private ProgramParserModel.Result call(ProgramParserModel.Request request, ProgramParserModel.Listener listener) {
+            if (calls.incrementAndGet() > maxCalls || cost.tooLarge(request)) throw new Budget();
             permits.acquireUninterruptibly();
             ProgramParserModel.Result result;
             try {
                 // Аренда продлевается уже после ожидания слота: вызов всегда укладывается в одну аренду.
-                if (!sessions.extend(session, clock.instant(), limits)) throw ChunkFailure.lost();
-                if (!sessions.reserveChunk(session, cost.micros(input), clock.instant(), limits)) throw ChunkFailure.budget();
-                result = model.parse(input, listener);
-            } catch (ModelFailure e) {
-                if (e.truncated()) record(e.inputTokens(), e.outputTokens(), 0);
-                throw e;
+                if (!sessions.extend(session, clock.instant(), limits)) throw new Lost();
+                if (!sessions.reserveChunk(session, cost.micros(request), clock.instant(), limits)) throw new Budget();
+                result = model.parse(request, listener);
             } finally {
                 permits.release();
             }
             if (result.inputTokens() < 0 || result.outputTokens() < 0 || result.cachedTokens() < 0
                     || result.cachedTokens() > result.inputTokens()) throw new ModelFailure(true, Duration.ZERO);
-            record(result.inputTokens(), result.outputTokens(), result.cachedTokens());
+            sessions.usage(session, result.inputTokens(), result.outputTokens(), result.cachedTokens(), clock.instant());
+            metrics.usage(result.inputTokens(), result.outputTokens(), result.cachedTokens());
             return result;
         }
 
-        private void record(int input, int output, int cached) {
-            sessions.usage(session, input, output, cached, clock.instant());
-            metrics.usage(input, output, cached);
-        }
-
-        /** Первая ошибка отменяет остальные части: результат без них всё равно не собрать. */
-        List<ImportDraftValidator.Chunk> collect(List<Future<List<ImportDraftValidator.Chunk>>> futures) {
-            var result = new ArrayList<ImportDraftValidator.Chunk>();
+        /** Потеря аренды останавливает все части; прочие сбои части уже учтены в сборке. */
+        void await(List<Future<Void>> futures) {
             try {
-                for (var future : futures) result.addAll(future.get());
-                return result;
+                for (var future : futures) future.get();
             } catch (ExecutionException e) {
                 futures.forEach(future -> future.cancel(true));
                 if (e.getCause() instanceof RuntimeException failure) throw failure;
-                throw ChunkFailure.unavailable();
+                throw new Lost();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 futures.forEach(future -> future.cancel(true));
-                throw ChunkFailure.lost();
+                throw new Lost();
             }
         }
 
@@ -210,7 +203,12 @@ public class ImportChunks {
             long millis = Math.min(MAX_BACKOFF.toMillis(), Math.max(MIN_BACKOFF_MILLIS, requested.toMillis()))
                     + ThreadLocalRandom.current().nextLong(JITTER_MILLIS);
             try { Thread.sleep(millis); }
-            catch (InterruptedException e) { Thread.currentThread().interrupt(); throw ChunkFailure.lost(); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new Lost(); }
         }
+    }
+
+    /** Лимит вызовов или бюджета исчерпан: оставшиеся недели части не разбираются. */
+    private static class Budget extends RuntimeException {
+        Budget() { super("Достигнут лимит запросов или стоимости обработки"); }
     }
 }

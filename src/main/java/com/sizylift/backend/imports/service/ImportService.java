@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import com.sizylift.backend.access.service.AccessPolicy;
 import com.sizylift.backend.imports.config.ImportProperties;
 import com.sizylift.backend.imports.dto.ImportDtos.*;
+import com.sizylift.backend.imports.dto.ImportPlan;
 import com.sizylift.backend.imports.entity.ImportSession;
 import com.sizylift.backend.imports.entity.ImportSession.Clarification;
 import com.sizylift.backend.imports.repository.ImportRepository;
@@ -117,6 +118,23 @@ public class ImportService {
         var updated = sessions.find(id).orElseThrow();
         if (decisions.keySet().containsAll(keys)) compiler.compile(updated, clock.instant(), available);
         return view(updated);
+    }
+
+    /** Недели, которые не удалось разобрать, — снова в разбор; готовые недели и выбор упражнений сохраняются. */
+    @Transactional
+    public View retryWeeks(UUID user, UUID id, RetryWeeks input) {
+        enabled();
+        var session = owned(user, id, true);
+        var draft = session.output();
+        if (!session.status().equals("review") || session.version() != input.version() || draft == null
+                || !draft.hasFailedWeeks()) throw ImportFailure.conflict();
+        var weeks = draft.plan().stream().map(w -> new ImportPlan.Week(w.number(), w.cycle(), w.name(), w.days().size(),
+                w.days(), w.copyOf())).toList();
+        var outline = new ImportPlan(draft.programDraft().name(), draft.programDraft().description(),
+                draft.exerciseResolutions(), weeks);
+        sessions.retryWeeks(id, outline, clock.instant());
+        events.publishEvent(new ImportQueued(id));
+        return view(sessions.find(id).orElseThrow());
     }
 
     @Transactional

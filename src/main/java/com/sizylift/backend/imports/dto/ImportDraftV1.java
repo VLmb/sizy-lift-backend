@@ -3,11 +3,37 @@ package com.sizylift.backend.imports.dto;
 import java.util.List;
 
 /**
- * Черновик импорта в API и хранении; сервер строит его из компактного ответа модели ({@link ImportModelDraft}).
+ * Черновик импорта в API и хранении; сервер строит его из строк шаблона модели (docs/imports.md, «Шаблон»).
  * Пустая строка числового поля означает неизвестное значение, а не ноль.
+ * {@code plan} — каркас программы: все недели с днями и состоянием разбора, пока недели заполняются и после;
+ * {@code warnings} — что сервер пропустил или поправил при разборе ответа модели.
  */
 public record ImportDraftV1(int schemaVersion, boolean needsClarification, String clarificationMessage,
-                            Draft programDraft, List<Resolution> exerciseResolutions) {
+                            Draft programDraft, List<Resolution> exerciseResolutions, List<PlannedWeek> plan,
+                            List<String> warnings) {
+    public static final String PENDING = "pending";
+    public static final String ACTIVE = "active";
+    public static final String DONE = "done";
+    public static final String FAILED = "failed";
+
+    public ImportDraftV1 {
+        plan = plan == null ? List.of() : List.copyOf(plan);
+        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+    }
+
+    public ImportDraftV1(int schemaVersion, boolean needsClarification, String clarificationMessage,
+                         Draft programDraft, List<Resolution> exerciseResolutions) {
+        this(schemaVersion, needsClarification, clarificationMessage, programDraft, exerciseResolutions, List.of(), List.of());
+    }
+
+    /**
+     * Неделя каркаса. {@code status}: pending — ещё не разобрана, active — разбирается сейчас, done — готова,
+     * failed — разобрать не удалось (её можно разобрать заново). {@code copyOf} — номер недели, которую она повторяет.
+     */
+    public record PlannedWeek(int number, String cycle, String name, List<String> days, Integer copyOf, String status) { }
+
+    public boolean hasFailedWeeks() { return plan.stream().anyMatch(week -> FAILED.equals(week.status())); }
+
     public record Draft(String name, String description, List<Cycle> cycles) { }
     public record Cycle(String key, String name, List<Week> weeks) { }
     public record Week(String key, int number, String name, List<Day> workouts) { }

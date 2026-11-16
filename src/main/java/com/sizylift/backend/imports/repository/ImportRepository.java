@@ -77,6 +77,14 @@ public class ImportRepository {
             UPDATE sizylift.import_session SET outline=?::jsonb
             WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
             """;
+    private static final String PARTIAL = """
+            UPDATE sizylift.import_session SET model_output=?::jsonb,progress=?::jsonb
+            WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
+            """;
+    private static final String RETRY_WEEKS = """
+            UPDATE sizylift.import_session SET status='queued',version=version+1,attempts=0,outline=?::jsonb,
+                error_code=NULL,error_message=NULL,repair_hint=NULL,progress=NULL,next_attempt_at=? WHERE id=?
+            """;
     private static final String PROGRESS = """
             UPDATE sizylift.import_session SET progress=?::jsonb
             WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
@@ -178,6 +186,15 @@ public class ImportRepository {
     }
     public boolean progress(ImportSession session, Progress progress, Instant now) {
         return jdbc.update(PROGRESS, json.writeValueAsString(progress), session.id(), session.leaseToken(), stamp(now)) == 1;
+    }
+    /** Частичный черновик и прогресс, пока модель пишет ответ. */
+    public boolean partial(ImportSession session, ImportDraftV1 draft, Progress progress, Instant now) {
+        return jdbc.update(PARTIAL, json.writeValueAsString(draft), json.writeValueAsString(progress), session.id(),
+                session.leaseToken(), stamp(now)) == 1;
+    }
+    /** Неразобранные недели — снова в очередь; готовые недели и решения по упражнениям сохраняются. */
+    public void retryWeeks(UUID id, ImportPlan outline, Instant now) {
+        jdbc.update(RETRY_WEEKS, json.writeValueAsString(outline), stamp(now), id);
     }
     /** Продлевает аренду перед каждым вызовом модели по частям; false — сессию отменили или забрали. */
     public boolean extend(ImportSession session, Instant now, ImportProperties limits) {

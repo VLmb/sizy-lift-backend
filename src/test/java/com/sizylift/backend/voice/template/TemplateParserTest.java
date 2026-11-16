@@ -119,17 +119,17 @@ class TemplateParserTest {
     void catalogNameIsFoundExactlyThenByVariants() {
         var items = parse("Упражнение: присед СО штангой | тип=вес_повторы", "Подход: кол=3 | повт=5",
                 "Упражнение: Румынка | тип=вес_повторы", "Подход: кол=3 | повт=8").items();
-        assertThat(items).extracting(Item::exerciseName).containsExactly("Присед со штангой", "Румынская тяга");
+        assertThat(items).extracting(Item::exerciseName).containsExactly("Присед со штангой", "Румынская тяга со штангой");
         assertThat(items.getFirst().confidence()).isEqualTo("high");
     }
 
     @Test
     void unknownExerciseIsProposedWithModelType() {
-        var item = only("Упражнение: Рывок гири | тип=вес_повторы | новое", "Подход: кол=1 | повт=20 | вес=16 кг");
+        var item = only("Упражнение: Толчок бревна | тип=вес_повторы | новое", "Подход: кол=1 | повт=20 | вес=16 кг");
         assertThat(item.exerciseId()).isNull();
         assertThat(item.confidence()).isEqualTo("low");
         assertThat(item.proposal()).extracting(p -> p.name(), p -> p.resultType(), p -> p.source())
-                .containsExactly("Рывок гири", "weight_reps", "model");
+                .containsExactly("Толчок бревна", "weight_reps", "model");
         assertThat(item.lines().getFirst().weightKg()).isEqualTo(16.0);
     }
 

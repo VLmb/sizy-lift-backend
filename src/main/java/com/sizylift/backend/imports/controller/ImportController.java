@@ -51,6 +51,12 @@ public class ImportController {
         return imports.answer(accounts.resolve(jwt).id(), id, input);
     }
 
+    @PostMapping("/{id}/weeks/retry")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public View retryWeeks(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @Valid @RequestBody RetryWeeks input) {
+        return imports.retryWeeks(accounts.resolve(jwt).id(), id, input);
+    }
+
     @PatchMapping("/{id}")
     public View patch(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id, @Valid @RequestBody Patch input) {
         return imports.patch(accounts.resolve(jwt).id(), id, input);
