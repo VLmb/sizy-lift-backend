@@ -25,7 +25,8 @@ public class ImportConfiguration {
             @Value("${sizylift.imports.deepseek.api-key}") String key,
             @Value("${sizylift.imports.deepseek.url}") String url,
             @Value("${sizylift.imports.deepseek.model}") String model,
-            @Value("${sizylift.imports.deepseek.timeout}") Duration timeout) {
+            @Value("${sizylift.imports.deepseek.timeout}") Duration timeout,
+            @Value("${sizylift.imports.deepseek.plan-effort:}") String planEffort) {
         if (key.isBlank()) throw new IllegalArgumentException("Для AI-импорта нужен ключ DeepSeek");
         if (timeout.compareTo(properties.lease().minusSeconds(30)) >= 0)
             throw new IllegalArgumentException("Аренда задания должна быть длиннее таймаута модели");
@@ -35,7 +36,7 @@ public class ImportConfiguration {
         factory.setReadTimeout(timeout);
         return new DeepSeekProgramParser(RestClient.builder().requestFactory(factory).requestInterceptor((request, body, execution) ->
                 new BoundedResponse(execution.execute(request, body))), json,
-                key, url, model, properties.maxOutputTokens(), timeout);
+                key, url, model, properties.maxOutputTokens(), timeout, planEffort);
     }
 
     @Bean

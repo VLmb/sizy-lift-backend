@@ -27,6 +27,9 @@ sizylift:
       url: https://api.deepseek.com
       model: deepseek-flash
       timeout: 5m
+      # Рассуждения в первом вызове (каркас и правила чтения): low, high или max; пусто — выключены.
+      # Замер 17.11.2026: с правилами чтения в промпте рассуждения не улучшают разбор, но добавляют 15–40 с.
+      plan-effort: ""
   voice:
     # Голосовой ввод тренировки (docs/voice.md). Остальные значения по умолчанию — в VoiceProperties.
     enabled: false

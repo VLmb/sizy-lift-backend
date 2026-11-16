@@ -37,7 +37,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @EnabledIfEnvironmentVariable(named = "IMPORT_LIVE_DIR", matches = ".+")
 @SpringBootTest(properties = {"sizylift.imports.enabled=true", "sizylift.imports.worker-enabled=false",
         "sizylift.imports.daily-limit=1000", "sizylift.imports.active-per-user=1000",
-        "sizylift.imports.deepseek.api-key=${DEEPSEEK_API_KEY}", "sizylift.imports.deepseek.url=https://api.deepseek.com"})
+        "sizylift.imports.deepseek.api-key=${DEEPSEEK_API_KEY}", "sizylift.imports.deepseek.url=https://api.deepseek.com",
+        "sizylift.imports.deepseek.plan-effort=${IMPORT_LIVE_EFFORT:}"})
 @AutoConfigureMockMvc
 class ImportLiveTest extends CoachWorkspaceApiSupport {
     @Autowired ImportWorker worker;
@@ -98,6 +99,7 @@ class ImportLiveTest extends CoachWorkspaceApiSupport {
                 entry.put("outputTokens", result.outputTokens());
                 entry.put("truncated", result.truncated());
                 entry.put("text", result.text());
+                entry.put("reasoning", result.reasoning());
                 return result;
             } catch (RuntimeException e) {
                 entry.put("durationMs", (System.nanoTime() - begin) / 1_000_000);

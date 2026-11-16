@@ -57,6 +57,13 @@ public interface ProgramParserModel {
         }
     }
 
-    /** {@code truncated} — ответ обрезан по лимиту вывода: готовые строки можно использовать, остальное — нет. */
-    record Result(String text, int inputTokens, int outputTokens, int cachedTokens, boolean truncated) { }
+    /**
+     * {@code truncated} — ответ обрезан по лимиту вывода: готовые строки можно использовать, остальное — нет.
+     * {@code reasoning} — рассуждения модели, если они включены: только для отладки промпта, в разбор не идут.
+     */
+    record Result(String text, int inputTokens, int outputTokens, int cachedTokens, boolean truncated, String reasoning) {
+        public Result(String text, int inputTokens, int outputTokens, int cachedTokens, boolean truncated) {
+            this(text, inputTokens, outputTokens, cachedTokens, truncated, "");
+        }
+    }
 }

@@ -20,10 +20,13 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import com.sizylift.backend.imports.model.ProgramParserModel.Task;
+
 /**
  * Один потоковый вызов DeepSeek (OpenAI-совместимый chat completions) без скрытых повторов: ответ — текст строк
- * шаблона, фрагменты сразу передаются слушателю, и сервер разбирает строки по мере генерации. Рассуждения выключены,
- * {@code temperature 0}: на один и тот же источник — одинаковый разбор. Ответ ограничен общим таймаутом и простоем
+ * шаблона, фрагменты сразу передаются слушателю, и сервер разбирает строки по мере генерации. {@code temperature 0}:
+ * на один и тот же источник — одинаковый разбор. Рассуждения — только в первом вызове ({@code planEffort}); они
+ * приходят отдельным полем reasoning_content, держат поток живым и в ответ не попадают. Ответ ограничен общим таймаутом и простоем
  * потока: зависшее соединение закрывается.
  */
 public class DeepSeekProgramParser implements ProgramParserModel {
@@ -44,9 +47,17 @@ public class DeepSeekProgramParser implements ProgramParserModel {
     private final String model;
     private final int maxOutputTokens;
     private final Duration timeout;
+    /** Уровень рассуждений первого вызова (low, high, max); пусто — без рассуждений. */
+    private final String planEffort;
 
     public DeepSeekProgramParser(RestClient.Builder http, ObjectMapper json, String key, String url,
                                  String model, int maxOutputTokens, Duration timeout) {
+        this(http, json, key, url, model, maxOutputTokens, timeout, "");
+    }
+
+    public DeepSeekProgramParser(RestClient.Builder http, ObjectMapper json, String key, String url,
+                                 String model, int maxOutputTokens, Duration timeout, String planEffort) {
+        this.planEffort = planEffort == null ? "" : planEffort.strip();
         this.json = json;
         this.model = model;
         this.maxOutputTokens = maxOutputTokens;
@@ -56,10 +67,18 @@ public class DeepSeekProgramParser implements ProgramParserModel {
 
     @Override
     public Result parse(Request request, Listener listener) {
-        var body = Map.of("model", model, "stream", true, "stream_options", Map.of("include_usage", true),
-                "temperature", 0, "thinking", Map.of("type", "disabled"), "max_tokens", maxOutputTokens,
+        var body = new java.util.LinkedHashMap<String, Object>(Map.of("model", model, "stream", true,
+                "stream_options", Map.of("include_usage", true), "temperature", 0, "max_tokens", maxOutputTokens,
                 "messages", List.of(Map.of("role", "system", "content", request.system()),
-                        Map.of("role", "user", "content", request.user())));
+                        Map.of("role", "user", "content", request.user()))));
+        // Понимание таблицы — в первом вызове: каркас и правила чтения. Здесь модель рассуждает; части недель
+        // только исполняют правила и идут без рассуждений — быстрее и без разных толкований в разных частях.
+        if (request.input().task().kind() != Task.Kind.WEEKS && !planEffort.isEmpty()) {
+            body.put("thinking", Map.of("type", "enabled"));
+            body.put("reasoning_effort", planEffort);
+        } else {
+            body.put("thinking", Map.of("type", "disabled"));
+        }
         try {
             return http.post().uri(COMPLETIONS).contentType(MediaType.APPLICATION_JSON).accept(MediaType.TEXT_EVENT_STREAM)
                     .body(json.writeValueAsString(body))
@@ -125,6 +144,7 @@ public class DeepSeekProgramParser implements ProgramParserModel {
     private static final class Stream {
         private final Listener listener;
         private final StringBuilder text = new StringBuilder();
+        private final StringBuilder reasoning = new StringBuilder();
         private String finish;
         private JsonNode usage;
 
@@ -136,6 +156,8 @@ public class DeepSeekProgramParser implements ProgramParserModel {
             for (int i = 0; i < choices.size(); i++) {
                 var choice = choices.get(i);
                 if (choice.path("index").asInt() != 0) throw invalid();
+                var thought = choice.path("delta").path("reasoning_content");
+                if (thought.isString() && reasoning.length() < MAX_TEXT_CHARS) reasoning.append(thought.asString());
                 var content = choice.path("delta").path("content");
                 if (content.isString() && !content.asString().isEmpty()) {
                     var delta = content.asString();
@@ -147,7 +169,7 @@ public class DeepSeekProgramParser implements ProgramParserModel {
             }
         }
 
-        Result stopped() { return new Result(text.toString(), 0, 0, 0, true); }
+        Result stopped() { return new Result(text.toString(), 0, 0, 0, true, reasoning.toString()); }
 
         Result result() {
             int input = usage == null ? 0 : usage.path("prompt_tokens").asInt();
@@ -157,7 +179,7 @@ public class DeepSeekProgramParser implements ProgramParserModel {
                     : usage.path("prompt_tokens_details").path("cached_tokens").asInt();
             boolean truncated = LENGTH.equals(finish);
             if (!truncated && (finish == null || !COMPLETED.contains(finish) || text.isEmpty())) throw invalid();
-            return new Result(text.toString(), input, output, cached, truncated);
+            return new Result(text.toString(), input, output, cached, truncated, reasoning.toString());
         }
     }
 
