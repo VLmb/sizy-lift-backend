@@ -4,14 +4,18 @@ import java.net.URI;
 import java.time.Duration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * Видео (ADR-0012). Пределы — настройки, а не константы: {@code maxSizeBytes} и {@code maxPreviewSizeBytes} —
  * ролик и кадр-превью, {@code maxDuration} — длина ролика, {@code quota} — на пользователя по видам,
  * {@code bucketLimitBytes} — всё хранилище, {@code pendingTtl} — сколько живёт незавершённая загрузка.
+ * {@code enabled} — флаг функции: выключенные видео клиенты прячут ({@code videoAvailable} в {@code /api/v1/me}),
+ * а сервер не выдаёт и не принимает ролики; удаление работает.
  */
 @ConfigurationProperties("sizylift.video")
 public record VideoProperties(
+        @DefaultValue("true") boolean enabled,
         Storage storage,
         Duration uploadUrlTtl,
         Duration viewUrlTtl,

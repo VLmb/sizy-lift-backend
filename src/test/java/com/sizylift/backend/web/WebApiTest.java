@@ -454,6 +454,7 @@ class WebApiTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("не включено")));
         call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk());
         call(owner, get("/api/v1/me")).andExpect(jsonPath("$.accountDeletionAvailable").value(false));
+        call(owner, get("/api/v1/me")).andExpect(jsonPath("$.videoAvailable").value(true));
         org.mockito.Mockito.when(accountDeletion.configured()).thenReturn(true);
         call(owner, get("/api/v1/me")).andExpect(jsonPath("$.accountDeletionAvailable").value(true));
         org.mockito.Mockito.reset(accountDeletion);
