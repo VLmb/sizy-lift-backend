@@ -125,3 +125,6 @@ databaseChangeLog:
   - include:
       file: changes/043-import-sheet-selection.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/044-athlete-card-goals.sql
+      relativeToChangelogFile: true
