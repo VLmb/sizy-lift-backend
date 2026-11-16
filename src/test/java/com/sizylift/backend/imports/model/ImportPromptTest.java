@@ -11,6 +11,7 @@ import com.sizylift.backend.imports.entity.ImportLanguage;
 import com.sizylift.backend.imports.entity.ImportSession.SourceItem;
 import com.sizylift.backend.imports.template.ExerciseResolver;
 import com.sizylift.backend.imports.template.ImportAssembly;
+import com.sizylift.backend.imports.template.ProgramLine;
 import com.sizylift.backend.template.TemplateVocabulary;
 import com.sizylift.backend.template.TemplateVocabulary.Scope;
 import com.sizylift.backend.voice.service.VoiceTestCatalog;
@@ -26,28 +27,37 @@ class ImportPromptTest {
     private static final LocalDate MONDAY = LocalDate.of(2026, 11, 9);
 
     @Test
-    void promptMentionsAllSetKeysAndNothingUnknown() {
-        var rules = ImportPrompt.rules();
-        assertThat(rules).doesNotContain("{{").doesNotContain("}}");
-        var mentioned = new HashSet<String>();
-        var m = KEY_IN_TEXT.matcher(rules);
-        while (m.find()) mentioned.add(TemplateVocabulary.key(m.group(1)));
-        var known = new HashSet<>(TemplateVocabulary.allKeys(Scope.IMPORT));
-        known.addAll(STRUCTURE);
-        assertThat(known).containsAll(mentioned);
-        assertThat(mentioned).containsAll(TemplateVocabulary.allKeys(Scope.IMPORT));
+    void promptsMentionOnlyKnownKeysAndTheWeeksPromptAllSetKeys() {
+        for (var prompt : List.of(ImportPrompt.UNDERSTAND, ImportPrompt.MATCH, ImportPrompt.WEEKS)) {
+            assertThat(prompt).doesNotContain("{{").doesNotContain("}}");
+            var known = new HashSet<>(TemplateVocabulary.allKeys(Scope.IMPORT));
+            known.addAll(STRUCTURE);
+            assertThat(known).containsAll(mentioned(prompt));
+        }
+        assertThat(mentioned(ImportPrompt.WEEKS)).containsAll(TemplateVocabulary.allKeys(Scope.IMPORT));
     }
 
+    /** Примеры этапов 1–3 вместе: понимание даёт правила, упражнения и план, сопоставление и неделя 1 — по ним. */
     @Test
-    void exampleAnswerIsParsedWithoutWarnings() {
-        var draft = parse(example()).snapshot(true);
+    void exampleAnswersOfTheStagesAreParsedWithoutWarnings() {
+        var assembly = parse(example(ImportPrompt.UNDERSTAND));
+        assertThat(assembly.snapshot(false).rules()).hasSize(4);
+        assertThat(assembly.pendingWeeks()).containsExactly(1, 2);
+        assertThat(assembly.unresolved()).contains("Подтягивания / верхний блок | тип=вес_повторы");
+        for (var line : example(ImportPrompt.MATCH).split("\n")) {
+            if (ProgramLine.parse(line) instanceof ProgramLine.ExerciseEntry entry) assembly.remap(entry);
+        }
+        assembly.remap((ProgramLine.ExerciseEntry) ProgramLine.parse(
+                "- Подтягивания / верхний блок → Подтягивания | тип=вес_повторы | или=Тяга верхнего блока"));
+        var cursor = assembly.cursor(java.util.Set.of(1));
+        for (var line : example(ImportPrompt.WEEKS).split("\n")) cursor.line(line);
+        assertThat(cursor.end(false)).containsExactly(1);
+        var draft = assembly.snapshot(false);
         assertThat(draft.warnings()).isEmpty();
         assertThat(draft.programDraft().name()).isEqualTo("POWERBUILDING");
-        assertThat(draft.programDraft().cycles()).extracting(ImportDraftV1.Cycle::name).containsExactly("Объём", "Разгрузка");
-        assertThat(draft.plan()).extracting(ImportDraftV1.PlannedWeek::status).containsOnly(ImportDraftV1.DONE);
+        assertThat(draft.plan()).extracting(ImportDraftV1.PlannedWeek::status).containsExactly(ImportDraftV1.DONE, ImportDraftV1.PENDING);
 
         var resolutions = draft.exerciseResolutions();
-        assertThat(resolutions).hasSize(5);
         assertThat(resolutions.getFirst().status()).isEqualTo("matched");
         assertThat(resolutions.getFirst().originalName()).isEqualTo("Присед соревновательный");
         assertThat(resolutions.getLast().status()).isEqualTo("ambiguous");
@@ -61,10 +71,13 @@ class ImportPromptTest {
         var set = squat.sets().getFirst();
         assertThat(List.of(set.count(), set.repetitions(), set.percentOneRm(), set.weightKg(), set.rpe(), set.setType()))
                 .containsExactly("4", "6", "67", "105", "7", "working");
-        var curl = week1.workouts().getFirst().blocks().get(2).exercises().getFirst();
-        assertThat(curl.sets().getFirst().repetitions()).isEqualTo("10-12");
-        var week2 = draft.programDraft().cycles().get(1).weeks().getFirst();
-        assertThat(week2.workouts()).extracting(ImportDraftV1.Day::dayOffset).containsExactly(7, 8);
+    }
+
+    private static HashSet<String> mentioned(String prompt) {
+        var mentioned = new HashSet<String>();
+        var m = KEY_IN_TEXT.matcher(prompt);
+        while (m.find()) mentioned.add(TemplateVocabulary.key(m.group(1)));
+        return mentioned;
     }
 
     @Test
@@ -180,7 +193,7 @@ class ImportPromptTest {
         assertThat(assembly.snapshot(false).rules()).containsExactly("вес из журнала — у первого упражнения дня");
         var outline = assembly.outline();
         var input = new ProgramParserModel.Input(new com.sizylift.backend.imports.entity.ImportSession.Source(List.of()), MONDAY,
-                List.of(), ProgramParserModel.Task.weeks(outline, List.of(2)), "");
+                List.of(), ProgramParserModel.Task.weeks(outline, List.of(2), List.of("Присед | тип=вес_повторы")), "");
         assertThat(ModelInputRenderer.render(input)).contains("Правило: вес из журнала — у первого упражнения дня");
     }
 
@@ -191,9 +204,11 @@ class ImportPromptTest {
         assertThat(draft.clarificationMessage()).startsWith("Какой лист");
     }
 
-    private static String example() {
-        var rules = ImportPrompt.rules();
-        return rules.substring(rules.indexOf("Ответ:\n") + "Ответ:\n".length(), rules.indexOf("\n\nКАТАЛОГ"));
+    /** Ответ из примера промпта: строки после «Ответ:» до конца примера. */
+    private static String example(String prompt) {
+        var start = prompt.indexOf("Ответ:\n") + "Ответ:\n".length();
+        var end = prompt.indexOf("\n\n", start);
+        return end < 0 ? prompt.substring(start) : prompt.substring(start, end);
     }
 
     private static ImportAssembly assembly() {

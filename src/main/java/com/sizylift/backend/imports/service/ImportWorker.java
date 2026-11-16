@@ -25,6 +25,7 @@ import com.sizylift.backend.imports.source.ImportSourceReader;
 import com.sizylift.backend.imports.source.SourceSheets;
 import com.sizylift.backend.imports.template.ExerciseResolver;
 import com.sizylift.backend.imports.template.ImportAssembly;
+import com.sizylift.backend.imports.template.ProgramLine;
 import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.web.service.SheetImportService;
 import jakarta.annotation.PreDestroy;
@@ -41,7 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Component
 public class ImportWorker {
     private static final String NO_PLAN = """
-            Предыдущий ответ не по шаблону: нет раздела «Упражнения» или «План». Ответь строками шаблона: «Программа», \
+            Предыдущий ответ не по шаблону: нет раздела «Упражнения» или «План». Ответь строками: «Программа», «Правило», \
             «Упражнения», «План» со всеми неделями — или одной строкой «Вопрос:».""";
     private final ImportRepository sessions;
     private final ImportProperties limits;
@@ -119,11 +120,9 @@ public class ImportWorker {
             sourceReader.checkSize(source);
             if (session.normalized() == null && !sessions.normalized(session, source, clock.instant())) return;
             var catalog = catalogs.of(session);
-            var system = ImportPrompt.build(catalog.prompt());
-            var base = new ProgramParserModel.Input(source, session.startDate(), session.history(),
-                    Task.plan(limits.singleCallWorkouts()),
+            var base = new ProgramParserModel.Input(source, session.startDate(), session.history(), Task.understand(),
                     session.attempts() == 0 || session.repairHint() == null ? "" : session.repairHint());
-            if (cost.tooLarge(request(system, base))) {
+            if (cost.tooLarge(request(ImportPrompt.understand(), base))) {
                 fail(session, "input_too_large", "Источник слишком большой для разбора. Сократите его или выберите нужные листы.");
                 return;
             }
@@ -134,18 +133,19 @@ public class ImportWorker {
             if (session.outline() != null) assembly.restore(session.outline(), session.output());
             var publisher = progress.start(session, assembly);
             if (session.outline() == null) {
-                plan(session, system, base, assembly, publisher);
+                understand(session, base, assembly, publisher);
                 if (assembly.question() == null) {
                     if (!assembly.hasPlan()) {
                         retryOrFail(session, true, Duration.ZERO, NO_PLAN);
                         return;
                     }
+                    match(session, ImportPrompt.match(catalog.prompt()), base, assembly, publisher);
                     if (!sessions.outline(session, assembly.outline(), clock.instant())) return;
                 }
             }
             if (assembly.question() == null) {
                 var pending = assembly.pendingWeeks();
-                if (!pending.isEmpty()) chunks.run(session, system, base, assembly, publisher, pending);
+                if (!pending.isEmpty()) chunks.run(session, ImportPrompt.weeks(), base, assembly, publisher, pending);
             }
             finish(session, assembly.snapshot(true), started);
         } catch (Budget e) {
@@ -167,24 +167,38 @@ public class ImportWorker {
     }
 
     /**
-     * Первый вызов: вопрос, каркас и, для небольшой программы, тренировки. Если ответ обрезан раньше, чем закончен
-     * каркас, каркас запрашивается отдельно; готовые недели обрезанного ответа сохраняются.
+     * Этап 1 — понимание источника (с рассуждениями, если они включены): правила чтения, упражнения как в источнике
+     * и план недель — или вопрос. Тренировки на этом этапе не пишутся; если модель начала их писать, ответ
+     * останавливается — недели распишут части по правилам.
      */
-    private void plan(ImportSession session, String system, ProgramParserModel.Input input, ImportAssembly assembly,
-                      ImportProgress.Publisher publisher) {
-        // Большую программу модель могла начать расписывать целиком: как только каркас показал размер, ответ
-        // останавливается, и недели дописываются параллельными частями — так быстрее одного длинного ответа.
-        var lines = publisher.lines(assembly.cursor(null),
-                () -> assembly.planComplete() && assembly.workouts() > limits.singleCallWorkouts());
-        var result = call(session, request(system, input), lines, true);
+    private void understand(ImportSession session, ProgramParserModel.Input input, ImportAssembly assembly,
+                            ImportProgress.Publisher publisher) {
+        var lines = publisher.lines(assembly.cursor(null), assembly::planComplete);
+        var result = call(session, request(ImportPrompt.understand(), input), lines, true);
         lines.finish(result);
-        if (!result.truncated() || assembly.planComplete() || assembly.question() != null) return;
-        var planOnly = new ProgramParserModel.Input(input.source(), input.startDate(), input.history(), Task.planOnly(),
-                input.repairMessage());
-        var again = publisher.lines(assembly.cursor(null));
-        var plan = call(session, request(system, planOnly), again, false);
-        again.finish(plan);
-        if (plan.truncated() && !assembly.planComplete()) throw new TooLarge();
+        if (result.truncated() && !assembly.planComplete() && assembly.question() == null) throw new TooLarge();
+    }
+
+    /**
+     * Этап 2 — сопоставление с каталогом. Сначала словарь сервера (точные названия, варианты, личные синонимы); что
+     * не нашлось однозначно — одним коротким вызовом без источника и рассуждений. Сбой этого вызова не останавливает
+     * разбор: несопоставленное пользователь выберет сам.
+     */
+    private void match(ImportSession session, String system, ProgramParserModel.Input base, ImportAssembly assembly,
+                       ImportProgress.Publisher publisher) {
+        var unresolved = assembly.unresolved();
+        if (unresolved.isEmpty()) return;
+        var input = new ProgramParserModel.Input(base.source(), base.startDate(), base.history(), Task.match(unresolved), "");
+        ProgramParserModel.Result result;
+        try {
+            result = call(session, request(system, input), ProgramParserModel.Listener.NONE, false);
+        } catch (ModelFailure | Budget e) {
+            return;
+        }
+        for (var line : result.text().split("\\R")) {
+            if (ProgramLine.parse(line) instanceof ProgramLine.ExerciseEntry entry) assembly.remap(entry);
+        }
+        publisher.publish(true);
     }
 
     /** Даже каркас программы не поместился в лимит вывода: повтор с тем же входом обрежется снова. */
@@ -206,7 +220,13 @@ public class ImportWorker {
         var reserved = attempt ? sessions.reserve(session, cost.micros(request), clock.instant(), limits)
                 : sessions.reserveChunk(session, cost.micros(request), clock.instant(), limits);
         if (!reserved) throw new Budget();
-        var result = model.parse(request, listener);
+        ProgramParserModel.Result result;
+        try {
+            result = model.parse(request, listener);
+        } catch (ProgramParserModel.Stop e) {
+            // Слушатель остановил ответ, а модель не обработала остановку сама: строки уже прочитаны.
+            result = new ProgramParserModel.Result("", 0, 0, 0, true);
+        }
         if (result.inputTokens() < 0 || result.outputTokens() < 0 || result.cachedTokens() < 0
                 || result.cachedTokens() > result.inputTokens()) throw new ModelFailure(true, Duration.ZERO);
         sessions.usage(session, result.inputTokens(), result.outputTokens(), result.cachedTokens(), clock.instant());

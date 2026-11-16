@@ -3,7 +3,7 @@ package com.sizylift.backend.imports;
 import java.util.List;
 import java.util.UUID;
 
-/** Ответы модели строками шаблона импорта (imports/template-prompt.v1.txt). */
+/** Ответы модели строками шаблона импорта (imports/understand-, match-, weeks-prompt.v1.txt). */
 final class ImportFixtures {
     static final UUID SQUAT = UUID.fromString("14000000-0000-4000-8000-000000000001");
     static final String TEXT = "Присед со штангой 3×5 100 кг @8";

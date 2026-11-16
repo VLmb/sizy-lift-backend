@@ -64,7 +64,7 @@ public final class ImportAssembly {
     private final TreeMap<Integer, WeekState> weeks = new TreeMap<>();
     private final LinkedHashSet<String> warnings = new LinkedHashSet<>();
     private final List<String> rules = new ArrayList<>();
-    private static final int MAX_RULES = 10;
+    private static final int MAX_RULES = 20;
     private String name = "";
     private String description = "";
     private String question;
@@ -414,6 +414,37 @@ public final class ImportAssembly {
         exercises.put(key, new Exercise(resolved, ExerciseResolver.qualifier(line.source(), resolved.catalogName())));
         index(line.source(), key);
         index(line.name(), key);
+    }
+
+    /**
+     * Упражнения, которые сервер не сопоставил с каталогом однозначно: строки «название | тип=…» для этапа
+     * сопоставления. Точное совпадение со словарём каталога модели не отправляется.
+     */
+    public synchronized List<String> unresolved() {
+        return exercises.values().stream().filter(e -> !ExerciseResolver.MATCHED.equals(e.resolved().resolution().status()))
+                .map(ImportAssembly::line).toList();
+    }
+
+    /** Решение этапа сопоставления: строка «- источник → название | тип=…» заменяет решение по этому названию. */
+    public synchronized void remap(ProgramLine.ExerciseEntry entry) {
+        var key = names.get(key(entry.source()));
+        if (key == null) return;
+        var resolved = resolver.resolve(key, entry);
+        exercises.put(key, new Exercise(resolved, ExerciseResolver.qualifier(entry.source(), resolved.catalogName())));
+        index(entry.name(), key);
+        changes++;
+    }
+
+    /** Упражнения программы для частей: название как в источнике и тип, по которому разбираются подходы. */
+    public synchronized List<String> exerciseLines() {
+        return exercises.values().stream().map(ImportAssembly::line).toList();
+    }
+
+    private static String line(Exercise exercise) {
+        var name = exercise.resolved().resolution().originalName();
+        var type = exercise.resolved().resultType();
+        var word = type == null || type.isEmpty() ? "" : com.sizylift.backend.template.TemplateVocabulary.word(type).orElse("");
+        return word.isEmpty() ? name : name + " | тип=" + word;
     }
 
     /** Ключ упражнения строки «Упражнение:»: по названию из источника или каталога; иначе новое из этой строки. */

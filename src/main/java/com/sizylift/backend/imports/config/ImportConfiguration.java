@@ -26,7 +26,7 @@ public class ImportConfiguration {
             @Value("${sizylift.imports.deepseek.url}") String url,
             @Value("${sizylift.imports.deepseek.model}") String model,
             @Value("${sizylift.imports.deepseek.timeout}") Duration timeout,
-            @Value("${sizylift.imports.deepseek.plan-effort:}") String planEffort) {
+            @Value("${sizylift.imports.deepseek.plan-effort:low}") String planEffort) {
         if (key.isBlank()) throw new IllegalArgumentException("Для AI-импорта нужен ключ DeepSeek");
         if (timeout.compareTo(properties.lease().minusSeconds(30)) >= 0)
             throw new IllegalArgumentException("Аренда задания должна быть длиннее таймаута модели");

@@ -8,8 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 /**
  * contextTokens — контекстное окно модели: вход (инструкция, каталог, источник) вместе с maxOutputTokens должен
  * в него помещаться, иначе импорт отклоняется до платного вызова.
- * singleCallWorkouts — до скольких тренировок модель разбирает программу целиком одним вызовом.
- * Большую программу первый вызов описывает планом, а недели разбираются параллельно частями
+ * Недели программы разбираются параллельно частями
  * примерно по workoutsPerChunk тренировок, не больше maxChunks частей и chunkParallelism одновременных
  * запросов на сессию.
  */
@@ -23,7 +22,7 @@ public record ImportProperties(@DefaultValue("false") boolean enabled, @DefaultV
         @DefaultValue("20000") int maxCells, @DefaultValue("200000") int maxSourceChars,
         @DefaultValue("1000000") long maxCostMicros, @DefaultValue("32768") int maxOutputTokens,
         @DefaultValue("300000") long inputMicrosPerMillion, @DefaultValue("1200000") long outputMicrosPerMillion,
-        @DefaultValue("8") int singleCallWorkouts, @DefaultValue("12") int workoutsPerChunk,
+        @DefaultValue("12") int workoutsPerChunk,
         @DefaultValue("8") int maxChunks, @DefaultValue("8") int chunkParallelism,
         @DefaultValue("1048576") int contextTokens) {
     public ImportProperties {
@@ -33,7 +32,7 @@ public record ImportProperties(@DefaultValue("false") boolean enabled, @DefaultV
                 || maxExpandedBytes < maxFileBytes || maxSheets < 1 || maxCells < 1
                 || maxSourceChars < 1 || maxCostMicros < 1 || maxOutputTokens < 1
                 || inputMicrosPerMillion < 1 || outputMicrosPerMillion < 1
-                || singleCallWorkouts < 0 || workoutsPerChunk < 1 || maxChunks < 1 || maxChunks > 32
+                || workoutsPerChunk < 1 || maxChunks < 1 || maxChunks > 32
                 || chunkParallelism < 1 || chunkParallelism > 32 || contextTokens <= maxOutputTokens) {
             throw new IllegalArgumentException("Некорректные ограничения импорта");
         }

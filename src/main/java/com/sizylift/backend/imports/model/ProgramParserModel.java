@@ -38,22 +38,22 @@ public interface ProgramParserModel {
     record Input(Source source, LocalDate startDate, List<Clarification> history, Task task, String repairMessage) { }
 
     /**
-     * Что сделать этим вызовом. Всё, кроме задачи и ошибок повтора, одинаково для всех вызовов сессии,
-     * поэтому общий префикс запроса попадает в кэш провайдера.
+     * Что сделать этим вызовом (docs/imports.md, «Три этапа»). UNDERSTAND — понять источник: правила чтения,
+     * упражнения как в источнике и план недель; MATCH — сопоставить названия с каталогом; WEEKS — расписать недели
+     * по правилам. Источник и ответы одинаковы у вызовов сессии, задача — в конце: общий префикс попадает в кэш.
      */
-    record Task(Kind kind, int singleCallWorkouts, List<Integer> weeks, List<ImportPlan.Week> plan, List<String> exercises,
-                List<String> rules) {
-        public enum Kind { PLAN, PLAN_ONLY, WEEKS }
+    record Task(Kind kind, List<Integer> weeks, List<ImportPlan.Week> plan, List<String> exercises, List<String> rules) {
+        public enum Kind { UNDERSTAND, MATCH, WEEKS }
 
-        /** Каркас; программу до singleCallWorkouts тренировок модель расписывает целиком в том же вызове. */
-        public static Task plan(int singleCallWorkouts) { return new Task(Kind.PLAN, singleCallWorkouts, List.of(), List.of(), List.of(), List.of()); }
-        /** Только каркас: ответ с тренировками не поместился в лимит вывода. */
-        public static Task planOnly() { return new Task(Kind.PLAN_ONLY, 0, List.of(), List.of(), List.of(), List.of()); }
-        /** Подробный разбор недель weeks по каркасу; exercises — названия упражнений программы как в источнике. */
-        public static Task weeks(ImportPlan plan, List<Integer> weeks) {
+        public static Task understand() { return new Task(Kind.UNDERSTAND, List.of(), List.of(), List.of(), List.of()); }
+        /** {@code exercises} — строки «название | тип=…», которые сервер не сопоставил с каталогом сам. */
+        public static Task match(List<String> exercises) {
+            return new Task(Kind.MATCH, List.of(), List.of(), List.copyOf(exercises), List.of());
+        }
+        /** Подробный разбор недель weeks по каркасу; exercises — строки «название | тип=…» как в источнике. */
+        public static Task weeks(ImportPlan plan, List<Integer> weeks, List<String> exercises) {
             var selected = plan.weeks().stream().filter(week -> weeks.contains(week.week())).toList();
-            return new Task(Kind.WEEKS, 0, List.copyOf(weeks), selected,
-                    plan.exercises().stream().map(e -> e.originalName()).toList(), plan.rules());
+            return new Task(Kind.WEEKS, List.copyOf(weeks), selected, List.copyOf(exercises), plan.rules());
         }
     }
 

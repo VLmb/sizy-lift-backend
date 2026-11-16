@@ -10,21 +10,27 @@ import com.sizylift.backend.voice.service.VoiceCatalog;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * Инструкция модели импорта (docs/imports.md, «Шаблон»): текст — {@code imports/template-prompt.v1.txt}, списки
- * типов, ключей и видов подходов — из общего с голосом словаря {@link TemplateVocabulary}, в конце — каталог.
- * Правила и системный каталог одинаковы у всех импортов и идут первыми — их DeepSeek берёт из кэша; свои упражнения
- * и синонимы пользователя — в конце. Источник и задача идут отдельным сообщением.
+ * Инструкции модели импорта по этапам (docs/imports.md, «Три этапа»): у каждого этапа свой короткий промпт только про
+ * его работу. Понимание источника — {@code imports/understand-prompt}, сопоставление с каталогом —
+ * {@code imports/match-prompt} (в конце — каталог), недели — {@code imports/weeks-prompt}. Списки типов, ключей и
+ * видов подходов — из общего с голосом словаря {@link TemplateVocabulary}. Каждый промпт одинаков у всех импортов
+ * (каталог — кроме своих упражнений пользователя в конце) и попадает в кэш DeepSeek.
  */
 public final class ImportPrompt {
-    /** Версия промпта — в логах и метриках, чтобы понимать, каким текстом разобран импорт. */
+    /** Версия промптов — в логах и метриках, чтобы понимать, какими текстами разобран импорт. */
     public static final String VERSION = "v1";
-    static final String RESOURCE = "imports/template-prompt." + VERSION + ".txt";
-    static final String RULES = rules();
+    static final String UNDERSTAND = fill(read("imports/understand-prompt." + VERSION + ".txt"));
+    static final String MATCH = fill(read("imports/match-prompt." + VERSION + ".txt"));
+    static final String WEEKS = fill(read("imports/weeks-prompt." + VERSION + ".txt"));
 
     private ImportPrompt() { }
 
-    public static String build(VoiceCatalog.Prompt catalog) {
-        var out = new StringBuilder(RULES);
+    public static String understand() { return UNDERSTAND; }
+
+    public static String weeks() { return WEEKS; }
+
+    public static String match(VoiceCatalog.Prompt catalog) {
+        var out = new StringBuilder(MATCH);
         for (var e : catalog.system()) out.append(line(e)).append('\n');
         if (!catalog.own().isEmpty()) {
             out.append("\nСВОИ УПРАЖНЕНИЯ ПОЛЬЗОВАТЕЛЯ (тоже каталог)\n");
@@ -37,14 +43,16 @@ public final class ImportPrompt {
         return out.toString();
     }
 
-    /** Текст промпта со списками из словаря, без каталога. */
-    static String rules() {
-        String text;
-        try (var in = new ClassPathResource(RESOURCE).getInputStream()) {
-            text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    private static String read(String resource) {
+        try (var in = new ClassPathResource(resource).getInputStream()) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new IllegalStateException("Нет промпта " + RESOURCE, e);
+            throw new IllegalStateException("Нет промпта " + resource, e);
         }
+    }
+
+    /** Подставляет списки из словаря: типы упражнений, ключи по типам, общие ключи, виды подходов. */
+    static String fill(String text) {
         var types = TemplateVocabulary.exerciseTypes().stream()
                 .map(t -> "  " + t.word() + " — " + t.description()).collect(Collectors.joining("\n"));
         var keys = TemplateVocabulary.exerciseTypes().stream()

@@ -71,9 +71,9 @@ public class DeepSeekProgramParser implements ProgramParserModel {
                 "stream_options", Map.of("include_usage", true), "temperature", 0, "max_tokens", maxOutputTokens,
                 "messages", List.of(Map.of("role", "system", "content", request.system()),
                         Map.of("role", "user", "content", request.user()))));
-        // Понимание таблицы — в первом вызове: каркас и правила чтения. Здесь модель рассуждает; части недель
-        // только исполняют правила и идут без рассуждений — быстрее и без разных толкований в разных частях.
-        if (request.input().task().kind() != Task.Kind.WEEKS && !planEffort.isEmpty()) {
+        // Рассуждения — только на этапе понимания источника. Сопоставление с каталогом и недели исполняют
+        // готовые правила и идут без рассуждений — быстрее и без разных толкований в разных частях.
+        if (request.input().task().kind() == Task.Kind.UNDERSTAND && !planEffort.isEmpty()) {
             body.put("thinking", Map.of("type", "enabled"));
             body.put("reasoning_effort", planEffort);
         } else {

@@ -27,19 +27,15 @@ public final class ModelInputRenderer {
     private static final String CSV = "csv";
     private static final int ALPHABET = 26;
     private static final int INITIAL_CAPACITY = 4096;
-    /**
-     * О чём рассуждать в первом вызове: структура источника решает качество всех частей, а сопоставление с каталогом
-     * сервер проверяет сам. Без этой подсказки модель тратит рассуждения на каталог и пропускает правила.
-     */
-    static final String THINK = "Если рассуждаешь — коротко, не больше 15 строк, и только о структуре источника: где программа, где шаблон дней и где "
-            + "недели, как связаны таблицы, что меняется от недели к неделе, какие указания относятся ко всем тренировкам. "
-            + "Итог рассуждений запиши строками «Правило:». Не обдумывай упражнения и не составляй ответ в рассуждениях — "
-            + "сразу пиши его: упражнения с каталогом сопоставляй без перебора, сомнительное сервер покажет пользователю.\n";
-
     private ModelInputRenderer() { }
 
     public static String render(Input input) {
         var text = new StringBuilder(INITIAL_CAPACITY);
+        if (input.task().kind() == Task.Kind.MATCH) {
+            // Сопоставлению с каталогом источник не нужен: только названия.
+            task(text, input.task());
+            return text.toString();
+        }
         text.append("ЯЗЫК ИНТЕРФЕЙСА\n").append(input.source().language()).append('\n');
         text.append("ИСТОЧНИК\n");
         source(text, input.source().items());
@@ -133,31 +129,29 @@ public final class ModelInputRenderer {
     private static void task(StringBuilder text, Task task) {
         text.append("ЗАДАЧА\n");
         switch (task.kind()) {
-            case PLAN -> text.append(THINK).append("Напиши строку «Программа», раздел «Упражнения» и раздел «План» с правилами и всеми неделями. ")
-                    .append("Если тренировок во всей программе не больше ").append(task.singleCallWorkouts())
-                    .append(", затем напиши «Тренировки:» и распиши все недели подробно. Иначе закончи ответ после плана — ")
-                    .append("недели распишут отдельно. Если без ответа пользователя не разобрать — только строку «Вопрос:».\n");
-            case PLAN_ONLY -> text.append(THINK).append("Напиши только строку «Программа», раздел «Упражнения» и раздел «План» с правилами и всеми неделями, ")
-                    .append("без «Тренировки». Если без ответа пользователя не разобрать — только строку «Вопрос:».\n");
+            case UNDERSTAND -> text.append("Пойми, как устроен источник, и ответь строками «Программа», «Правило», «Упражнения» ")
+                    .append("и «План» — или одной строкой «Вопрос:». Подходы не расписывай.\n");
+            case MATCH -> {
+                text.append("Сопоставь с каталогом каждое название из списка:\n");
+                for (var exercise : task.exercises()) text.append("- ").append(escape(exercise)).append('\n');
+            }
             case WEEKS -> {
                 text.append("Распиши подробно только недели ")
                         .append(task.weeks().stream().map(String::valueOf).collect(Collectors.joining(", ")))
-                        .append(": начни со строки «Тренировки:». Не пиши «Программа» и «План», вопросов не задавай — ")
-                        .append("неясное сохрани в заметке или комментарии.\nПлан этих недель:\n");
+                        .append(" — по правилам ниже, начиная со строки «Тренировки:».\n");
+                if (!task.rules().isEmpty()) {
+                    text.append("Правила чтения источника — следуй им буквально:\n");
+                    for (var rule : task.rules()) text.append("Правило: ").append(escape(rule)).append('\n');
+                }
+                text.append("План этих недель:\n");
                 for (var week : task.plan()) {
                     text.append("Неделя: ").append(week.week());
                     if (!week.cycle().isEmpty()) text.append(" | цикл=").append(escape(week.cycle()));
                     if (!week.days().isEmpty()) text.append(" | дни=").append(escape(String.join(",", week.days())));
                     text.append('\n');
                 }
-                if (!task.rules().isEmpty()) {
-                    text.append("Правила чтения этой программы — соблюдай их во всех неделях:\n");
-                    for (var rule : task.rules()) text.append("Правило: ").append(escape(rule)).append('\n');
-                }
                 text.append("Упражнения программы — в «Упражнение:» пиши название ровно как здесь:\n");
-                for (var name : task.exercises()) text.append("- ").append(escape(name)).append('\n');
-                text.append("Если в этих неделях есть упражнение, которого нет в списке, перед «Тренировки:» напиши ")
-                        .append("«Упражнения:» и строки только для новых упражнений.\n");
+                for (var exercise : task.exercises()) text.append("- ").append(escape(exercise)).append('\n');
             }
         }
     }

@@ -117,12 +117,14 @@ public class ImportChunks {
             int attempts = 0;
             while (!remaining.isEmpty() && attempts < limits.attemptsPerRound()) {
                 var input = new ProgramParserModel.Input(base.source(), base.startDate(), base.history(),
-                        Task.weeks(assembly.outline(), remaining), hint);
+                        Task.weeks(assembly.outline(), remaining, assembly.exerciseLines()), hint);
                 var cursor = assembly.cursor(Set.copyOf(remaining));
                 var lines = publisher.lines(cursor);
                 ProgramParserModel.Result result;
                 try {
                     result = call(new ProgramParserModel.Request(system, input), lines);
+                } catch (ProgramParserModel.Stop e) {
+                    result = new ProgramParserModel.Result("", 0, 0, 0, true);
                 } catch (ModelFailure e) {
                     lines.end(true);
                     if (!e.retryable()) break;

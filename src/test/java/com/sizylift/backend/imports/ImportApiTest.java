@@ -196,7 +196,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.program WHERE user_id=?", Integer.class, user)).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT normalized IS NULL AND source_text IS NULL AND history='[]'::jsonb FROM sizylift.import_session WHERE id=?",
                 Boolean.class, id)).isTrue();
-        verify(parser, times(1)).parse(any(), any());
+        verify(parser, times(2)).parse(any(), any());
     }
 
     @Test
@@ -213,7 +213,8 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         worker.processOne();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
         var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
-        verify(parser, times(2)).parse(captor.capture(), any());
+        // Вопрос, понимание после ответа и недели.
+        verify(parser, times(3)).parse(captor.capture(), any());
         var requests = captor.getAllValues();
         assertThat(requests.get(1).input().source()).isEqualTo(requests.get(0).input().source());
         assertThat(requests.get(1).system()).isEqualTo(requests.get(0).system());
@@ -253,7 +254,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
                 .content(json.writeValueAsString(Map.of("version", view.get("version").asLong(), "decisions",
                         List.of(Map.of("key", "e1", "kind", "existing", "exerciseId", SQUAT)))))).andExpect(status().isOk()));
         assertThat(chosen.get("canCommit").asBoolean()).isTrue();
-        verify(parser, times(1)).parse(any(), any());
+        verify(parser, times(3)).parse(any(), any());
     }
 
     @Test
@@ -384,12 +385,11 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var view = view(owner, id);
         assertThat(view.get("status").asString()).isEqualTo("failed");
         assertThat(view.at("/error/code").asString()).isEqualTo("input_too_large");
-        assertThat(view.get("outputTokens").asLong()).isEqualTo(2 * 32768);
+        assertThat(view.get("outputTokens").asLong()).isEqualTo(32768);
         assertThat(worker.processOne()).isFalse();
         var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
-        verify(parser, times(2)).parse(captor.capture(), any());
-        assertThat(captor.getAllValues()).extracting(request -> request.input().task().kind())
-                .containsExactly(ProgramParserModel.Task.Kind.PLAN, ProgramParserModel.Task.Kind.PLAN_ONLY);
+        verify(parser, times(1)).parse(captor.capture(), any());
+        assertThat(captor.getValue().input().task().kind()).isEqualTo(ProgramParserModel.Task.Kind.UNDERSTAND);
     }
 
     @Test
@@ -401,7 +401,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(view.get("status").asString()).isEqualTo("review");
         assertThat(view.at("/draft/warnings").size()).isEqualTo(1);
         assertThat(view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets").size()).isEqualTo(3);
-        verify(parser, times(1)).parse(any(), any());
+        verify(parser, times(2)).parse(any(), any());
     }
 
     @Test
@@ -500,25 +500,45 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(captor.getAllValues().getLast().input().task().weeks()).containsExactly(4);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    void aProgramThatDidNotFitIntoOneAnswerIsReplannedWithoutWeeks() throws Exception {
+    void theCatalogStageMatchesOnlyWhatTheDictionaryCouldNotAndThePartsFollowTheRules() throws Exception {
         when(parser.parse(any(), any())).thenAnswer(call -> {
-            var input = call.getArgument(0, ProgramParserModel.Request.class).input();
+            var request = call.getArgument(0, ProgramParserModel.Request.class);
+            var input = request.input();
             return switch (input.task().kind()) {
-                case PLAN -> new ProgramParserModel.Result("Программа: Большая\nУпражнения:\n" + matched() + "\nПлан:\nНеделя: 1",
-                        1000, 32768, 0, true);
-                case PLAN_ONLY -> result(plan(List.of(matched()), 1, 1));
-                case WEEKS -> result(weeks(input.task().weeks(), List.of(), matched()));
+                case UNDERSTAND -> result("""
+                        Программа: Сила
+                        Правило: вес — у первого упражнения дня
+                        Упражнения:
+                        - Присед со штангой | тип=вес_повторы
+                        - Жим лёжа (объём) | тип=вес_повторы
+                        План:
+                        Неделя: 1 | дни=1
+                        """);
+                case MATCH -> {
+                    assertThat(input.task().exercises()).containsExactly("Жим лёжа (объём) | тип=вес_повторы");
+                    assertThat(request.user()).doesNotContain(TEXT);
+                    yield result("- Жим лёжа (объём) → Жим штанги лёжа | тип=вес_повторы\n");
+                }
+                case WEEKS -> {
+                    assertThat(request.user()).contains("Правило: вес — у первого упражнения дня",
+                            "- Жим лёжа (объём) | тип=вес_повторы");
+                    yield result("Тренировки:\nНеделя: 1\nДень: 1\nУпражнение: Присед со штангой\n" + DEFAULT_SET
+                            + "\nУпражнение: Жим лёжа (объём)\n" + DEFAULT_SET + "\n");
+                }
             };
         });
         var id = create(owner, TEXT, null, UUID.randomUUID());
         worker.processOne();
-        assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
+        var view = view(owner, id);
+        assertThat(view.get("status").asString()).isEqualTo("review");
+        assertThat(view.at("/draft/exerciseResolutions/0/exerciseId").asString()).isEqualTo(SQUAT.toString());
+        assertThat(view.at("/draft/exerciseResolutions/1/status").asString()).isEqualTo("matched");
+        assertThat(view.at("/draft/rules/0").asString()).isEqualTo("вес — у первого упражнения дня");
         var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
         verify(parser, times(3)).parse(captor.capture(), any());
         assertThat(captor.getAllValues()).extracting(request -> request.input().task().kind()).containsExactly(
-                ProgramParserModel.Task.Kind.PLAN, ProgramParserModel.Task.Kind.PLAN_ONLY, ProgramParserModel.Task.Kind.WEEKS);
+                ProgramParserModel.Task.Kind.UNDERSTAND, ProgramParserModel.Task.Kind.MATCH, ProgramParserModel.Task.Kind.WEEKS);
     }
 
     @Test
@@ -580,7 +600,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(chosen.at("/decisions/e1/exerciseId").asString()).isEqualTo(ProgramDraftCompiler.id(id, "exercise:e1").toString());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE user_id=?", Integer.class, userId(owner))).isZero();
         postJson(owner, BASE + "/" + id + "/commit", Map.of("version", chosen.get("version").asLong())).andExpect(status().isOk());
-        verify(parser, times(1)).parse(any(), any());
+        verify(parser, times(3)).parse(any(), any());
     }
 
     @Test
@@ -733,8 +753,8 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(worker.processOne()).isTrue();
         assertThat(view(owner, id).get("status").asString()).isEqualTo("review");
         var captor = org.mockito.ArgumentCaptor.forClass(ProgramParserModel.Request.class);
-        verify(parser, times(1)).parse(captor.capture(), any());
-        var sent = captor.getValue();
+        verify(parser, times(2)).parse(captor.capture(), any());
+        var sent = captor.getAllValues().getFirst();
         assertThat(sent.user()).contains("Программа: Петров").doesNotContain("Иванов");
         assertThat(jdbc.queryForObject("SELECT normalized::text FROM sizylift.import_session WHERE id=?", String.class, id))
                 .doesNotContain("Иванов");

@@ -88,7 +88,13 @@ public class ImportProgress {
 
             /** Конец вызова; если ответ пришёл не потоком, а целиком, его строки читаются здесь. */
             public java.util.List<Integer> finish(ProgramParserModel.Result result) {
-                if (!received && result.text() != null) onText(result.text());
+                if (!received && result.text() != null) {
+                    try {
+                        onText(result.text());
+                    } catch (ProgramParserModel.Stop e) {
+                        // Остановка при чтении целого ответа: дальше строки просто не читаются.
+                    }
+                }
                 return end(result.truncated());
             }
 
