@@ -1,58 +1,24 @@
-:root {
-  color-scheme: dark;
-  font:
-    16px/1.65 system-ui,
-    sans-serif;
-  background: #181817;
-  color: #ece9e3;
-}
-* {
-  box-sizing: border-box;
-}
-body {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 24px 24px 80px;
-}
-a {
-  color: #f3b456;
-  text-underline-offset: 3px;
-}
-a:focus-visible {
-  outline: 2px solid #f3b456;
-  outline-offset: 4px;
-}
-nav,
-footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  border-bottom: 1px solid #4c4943;
-  padding: 12px 0 18px;
-}
-footer {
-  border-top: 1px solid #4c4943;
-  border-bottom: 0;
-  margin-top: 48px;
-}
-h1 {
-  font-size: clamp(2rem, 6vw, 2.8rem);
-  line-height: 1.2;
-  margin: 48px 0 20px;
-}
-h2 {
-  font-size: 1.4rem;
-  margin-top: 42px;
-}
-p,
-li {
-  max-width: 75ch;
-}
-li {
-  margin: 10px 0;
-}
-@media (max-width: 480px) {
-  body {
-    padding: 16px 18px 60px;
-  }
+:root { color-scheme: light; background: #f8f6f2; color: #28231c; font: 16px/1.7 system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { max-width: 860px; margin: 0 auto; padding: 0 42px 90px; }
+nav { display: flex; align-items: center; flex-wrap: wrap; gap: 25px; min-height: 76px; border-bottom: 1px solid #ded7cb; }
+nav a:first-child { margin-right: auto; color: #242019; font-size: 24px; font-weight: 750; letter-spacing: -.04em; text-decoration: none; }
+nav a:not(:first-child) { color: #65594a; font-size: 14px; font-weight: 600; text-decoration: none; }
+nav a:hover { color: #9a631d; }
+main { padding: 55px 0 0; }
+h1 { max-width: 18ch; margin: 0 0 28px; color: #211e1a; font-size: clamp(34px, 6vw, 48px); line-height: 1.1; letter-spacing: -.04em; }
+h2 { margin: 48px 0 17px; padding-top: 26px; border-top: 1px solid #e1d9ce; color: #30291e; font-size: 22px; line-height: 1.35; letter-spacing: -.02em; }
+p, li { max-width: 74ch; color: #484139; }
+p { margin: 0 0 18px; }
+li { margin: 8px 0; }
+a { color: #89520c; text-underline-offset: 3px; }
+a:hover { color: #613604; }
+a:focus-visible { outline: 2px solid #b77818; outline-offset: 3px; }
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; margin-top: 60px; padding-top: 24px; border-top: 1px solid #e1d9ce; color: #786d60; font-size: 14px; }
+@media (max-width: 600px) {
+  body { padding: 0 24px 70px; font-size: 15px; }
+  nav { gap: 12px 20px; padding: 15px 0; }
+  nav a:first-child { width: 100%; }
+  main { padding-top: 35px; }
+  h2 { margin-top: 38px; font-size: 19px; }
 }
