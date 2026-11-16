@@ -281,6 +281,25 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void skippedExerciseIsLeftOutOfTheProgram() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(custom("Альфа", "вес_повторы"), custom("Омега", "вес_повторы"))));
+        var id = create(owner, "Альфа и Омега: 3×5 100 кг @8", null, UUID.randomUUID());
+        worker.processOne();
+        var view = view(owner, id);
+        var skipped = body(call(owner, patch(BASE + "/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("version", view.get("version").asLong(), "decisions",
+                        List.of(Map.of("key", "e1", "kind", "skip")))))).andExpect(status().isOk()));
+        assertThat(skipped.get("canCommit").asBoolean()).isTrue();
+        var receipt = body(postJson(owner, BASE + "/" + id + "/commit", Map.of("version", skipped.get("version").asLong()))
+                .andExpect(status().isOk()));
+        var user = userId(owner);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE user_id=? AND name='Альфа'", Integer.class, user)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE user_id=? AND name='Омега'", Integer.class, user)).isEqualTo(1);
+        var program = body(call(owner, get("/api/v2/web/programs/" + receipt.get("programId").asString())).andExpect(status().isOk()));
+        assertThat(program.toString()).doesNotContain("Альфа").contains("Омега");
+    }
+
+    @Test
     void genuineIdCollisionRollsBackEarlierExercisesAndAllFeedEntries() throws Exception {
         when(parser.parse(any(), any())).thenAnswer(reply(draft(custom("Альфа", "вес_повторы"), custom("Омега", "вес_повторы"))));
         var id = create(owner, "Альфа и Омега: 3×5 100 кг @8", null, UUID.randomUUID());

@@ -31,6 +31,8 @@ public class ProgramDraftCompiler {
     private static final int GRAMS_PER_KG = 1000;
     private static final int MILLIS_PER_SECOND = 1000;
     private static final int TENTHS = 10;
+    /** Решение «не добавлять»: упражнение и его подходы не попадают в программу. */
+    public static final String SKIP = "skip";
     private final Validator validator;
 
     public ProgramDraftCompiler(Validator validator) { this.validator = validator; }
@@ -62,9 +64,11 @@ public class ProgramDraftCompiler {
         for (var r : session.output().exerciseResolutions()) {
             var decision = session.decisions().get(r.key());
             if (decision == null) throw ImportFailure.invalid("Выберите упражнение: " + r.originalName());
-            exercises.put(r.key(), resolve(session.id(), decision, catalog, created, at));
+            if (!decision.kind().equals(SKIP)) exercises.put(r.key(), resolve(session.id(), decision, catalog, created, at));
         }
-        var context = new Compilation(session.id(), session.startDate(), exercises, warnings,
+        var skipped = session.decisions().values().stream().filter(d -> d.kind().equals(SKIP)).map(Decision::key)
+                .collect(Collectors.toSet());
+        var context = new Compilation(session.id(), session.startDate(), exercises, skipped, warnings,
                 ImportLanguage.of(session.normalized() == null ? null : session.normalized().language()));
         var cycles = new ArrayList<ProgramPayloadV1.Cycle>();
         for (var cycle : session.output().programDraft().cycles()) cycles.add(cycle(context, cycle, cycles.size()));
@@ -90,14 +94,21 @@ public class ProgramDraftCompiler {
 
     private ProgramPayloadV1.PlannedWorkout day(Compilation context, ImportDraftV1.Day source, int position) {
         var blocks = new ArrayList<ProgramPayloadV1.Block>();
-        for (var block : source.blocks()) blocks.add(block(context, block, blocks.size()));
+        for (var block : source.blocks()) {
+            var compiled = block(context, block, blocks.size());
+            if (!compiled.exercises().isEmpty()) blocks.add(compiled);
+        }
         return new ProgramPayloadV1.PlannedWorkout(id(context.id(), source.key()), nullable(source.title()),
                 context.startDate().plusDays(source.dayOffset()), position, blocks);
     }
 
     private ProgramPayloadV1.Block block(Compilation context, ImportDraftV1.Block source, int position) {
         var entries = new ArrayList<ProgramPayloadV1.Exercise>();
-        for (var ex : source.exercises()) entries.add(exercise(context, ex, entries.size()));
+        for (var ex : source.exercises()) {
+            // Упражнение, которое пользователь решил не добавлять, выпадает из программы вместе с подходами.
+            if (context.skipped().contains(ex.resolutionKey())) continue;
+            entries.add(exercise(context, ex, entries.size()));
+        }
         return new ProgramPayloadV1.Block(id(context.id(), source.key()), position, source.blockType(),
                 nullable(source.groupLabel()), null, nullable(source.title()), nullable(source.description()), entries);
     }
@@ -124,6 +135,7 @@ public class ProgramDraftCompiler {
     }
 
     public void validateDecision(UUID session, Decision decision, List<CatalogExercise> catalog) {
+        if (decision.kind().equals(SKIP)) return;
         resolve(session, decision, catalog.stream().collect(Collectors.toMap(CatalogExercise::id, Function.identity())),
                 new LinkedHashMap<>(), Instant.EPOCH);
     }
@@ -243,5 +255,5 @@ public class ProgramDraftCompiler {
         return UUID.nameUUIDFromBytes(("sizylift:import:" + session + ":" + key).getBytes(StandardCharsets.UTF_8));
     }
     private record Resolved(UUID id, String name, String resultType, LiftClass liftClass) { }
-    private record Compilation(UUID id, java.time.LocalDate startDate, Map<String, Resolved> exercises, List<String> warnings, ImportLanguage language) { }
+    private record Compilation(UUID id, java.time.LocalDate startDate, Map<String, Resolved> exercises, java.util.Set<String> skipped, List<String> warnings, ImportLanguage language) { }
 }
