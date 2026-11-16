@@ -475,3 +475,24 @@ select:focus-visible {
     margin-top: 32px;
   }
 }
+.sizy-legal-modal {
+  width: min(900px, calc(100vw - 32px));
+  height: min(820px, calc(100dvh - 32px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid #b99d7a;
+  border-radius: 18px;
+  background: #f7f2eb;
+  box-shadow: 0 24px 80px rgb(24 17 11 / 35%);
+  overflow: hidden;
+}
+.sizy-legal-modal::backdrop { background: rgb(18 14 11 / 68%); backdrop-filter: blur(4px); }
+.sizy-legal-modal-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 70px; padding: 14px 24px; background: #252017; color: #faf5ed; }
+.sizy-legal-modal-bar strong { font-size: 20px; }
+.sizy-legal-modal-bar button { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #76664f; border-radius: 50%; background: transparent; color: inherit; font-size: 27px; cursor: pointer; }
+.sizy-legal-modal iframe { display: block; width: 100%; height: calc(100% - 70px); border: 0; background: #f7f2eb; }
+@media (max-width: 600px) {
+  .sizy-legal-modal { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
+  .sizy-legal-modal-bar { padding: 12px 16px; }
+}
