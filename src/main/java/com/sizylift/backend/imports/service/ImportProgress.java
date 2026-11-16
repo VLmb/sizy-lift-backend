@@ -19,8 +19,13 @@ public class ImportProgress {
     private static final Duration INTERVAL = Duration.ofSeconds(1);
     private final ImportRepository sessions;
     private final Clock clock;
+    private final ImportEvents events;
 
-    public ImportProgress(ImportRepository sessions, Clock clock) { this.sessions = sessions; this.clock = clock; }
+    public ImportProgress(ImportRepository sessions, Clock clock, ImportEvents events) {
+        this.sessions = sessions;
+        this.clock = clock;
+        this.events = events;
+    }
 
     public Publisher start(ImportSession session, ImportAssembly assembly) { return new Publisher(session, assembly); }
 
@@ -50,6 +55,7 @@ public class ImportProgress {
             if (sessions.partial(session, assembly.snapshot(false), assembly.progress(), now)) {
                 published = changes;
                 written = now;
+                events.changed(session.id());
             }
         }
 

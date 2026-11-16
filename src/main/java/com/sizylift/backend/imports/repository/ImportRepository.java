@@ -94,6 +94,11 @@ public class ImportRepository {
             UPDATE sizylift.import_session SET status='queued',version=version+1,normalized=?::jsonb,sheets_selected=true,
                 next_attempt_at=? WHERE id=?
             """;
+    /** Отпечаток видимого состояния: меняется при любой записи статуса, версии, прогресса или черновика. */
+    private static final String STAMPS = """
+            SELECT id, status || ':' || version || ':' || md5(coalesce(progress::text, '') || coalesce(model_output::text, ''))
+                AS stamp FROM sizylift.import_session WHERE id = ANY(?)
+            """;
     private static final String PROGRESS = """
             UPDATE sizylift.import_session SET progress=?::jsonb
             WHERE id=? AND lease_token=? AND status='processing' AND expires_at > ?
@@ -203,6 +208,14 @@ public class ImportRepository {
     /** Остаются только выбранные листы; остальные стираются и в модель не уходят. */
     public void selectSheets(UUID id, Source source, Instant now) {
         jdbc.update(SELECT_SHEETS, json.writeValueAsString(source), stamp(now), id);
+    }
+    /** Отпечатки состояния сессий для потока событий; удалённых сессий в ответе нет. */
+    public Map<UUID, String> stamps(java.util.Collection<UUID> ids) {
+        var result = new java.util.HashMap<UUID, String>();
+        if (ids.isEmpty()) return result;
+        jdbc.query(STAMPS, row -> { result.put(row.getObject("id", UUID.class), row.getString("stamp")); },
+                (Object) ids.toArray(UUID[]::new));
+        return result;
     }
     /** Частичный черновик и прогресс, пока модель пишет ответ. */
     public boolean partial(ImportSession session, ImportDraftV1 draft, Progress progress, Instant now) {

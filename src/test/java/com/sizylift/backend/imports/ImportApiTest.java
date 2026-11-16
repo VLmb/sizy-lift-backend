@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {"sizylift.imports.enabled=true", "sizylift.imports.worker-enabled=false",
@@ -712,6 +713,32 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(worker.processOne()).isFalse();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.import_session WHERE status='review'", Integer.class))
                 .isEqualTo(limits.concurrentRequests() + 1);
+    }
+
+    @Test
+    void theEventStreamSendsTheStateAtOnceAndOnEveryChangeAndClosesWhenTheParseIsDone() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        var stream = call(owner, get(BASE + "/" + id + "/events").accept(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(request().asyncStarted()).andReturn();
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(5))
+                .until(() -> stream.getResponse().getContentAsString().contains("\"status\":\"queued\""));
+        assertThat(stream.getResponse().getContentType()).startsWith(MediaType.TEXT_EVENT_STREAM_VALUE);
+        assertThat(stream.getResponse().getHeader("X-Accel-Buffering")).isEqualTo("no");
+        assertThat(stream.getResponse().getContentAsString()).startsWith("event:state\nid:queued:");
+        worker.processOne();
+        // Разбор закончен: последнее событие — review, после него сервер сам закрывает поток.
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(5))
+                .until(() -> stream.getResponse().getContentAsString().contains("\"status\":\"review\""));
+        mvc.perform(asyncDispatch(stream)).andExpect(status().isOk());
+        var events = stream.getResponse().getContentAsString().split("\n\n");
+        assertThat(events.length).isGreaterThanOrEqualTo(2);
+        assertThat(events[events.length - 1]).contains("\"status\":\"review\"", "\"canCommit\":true");
+
+        // Готовая сессия — одно событие и сразу конец потока; чужая — 404 до начала потока.
+        var settled = call(owner, get(BASE + "/" + id + "/events").accept(MediaType.TEXT_EVENT_STREAM)).andReturn();
+        assertThat(settled.getResponse().getContentAsString()).containsOnlyOnce("event:state").contains("\"status\":\"review\"");
+        call(newSubject(), get(BASE + "/" + id + "/events").accept(MediaType.TEXT_EVENT_STREAM)).andExpect(status().isNotFound());
     }
 
     @Test

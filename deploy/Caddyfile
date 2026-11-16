@@ -4,7 +4,9 @@
 }
 
 {$API_DOMAIN} {
-	encode zstd gzip
+	# Поток событий импорта (SSE) не сжимается: сжатие копит события в буфере, и они приходят пачками.
+	@compressible not path /api/v2/imports/*/events
+	encode @compressible zstd gzip
 	reverse_proxy backend:8080
 }
 

@@ -12,7 +12,8 @@ backend ──▶ exp.host (Expo Push, HTTPS)
 keycloak ──▶ keycloak-postgres (данные Keycloak), SMTP
 ```
 
-- **Caddy** сам получает и продлевает сертификаты Let's Encrypt, перенаправляет HTTP на HTTPS.
+- **Caddy** сам получает и продлевает сертификаты Let's Encrypt, перенаправляет HTTP на HTTPS. Ответы API
+  сжимаются, кроме потока событий импорта (`/api/v2/imports/*/events`, SSE): сжатие копит события в буфере.
 - **Веб**: образ собирается из клона `sizy-lift-frontend` (путь — `WEB_SOURCE`), адреса API и
   Keycloak зашиваются при сборке. `www.<домен>` перенаправляется на `<домен>`. Бэкенд разрешает CORS
   с `https://<домен>`, клиент Keycloak `sizylift-web` принимает возврат на него.

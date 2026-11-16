@@ -6,6 +6,8 @@ import java.util.UUID;
 import com.sizylift.backend.identity.controller.AuthenticatedAccount;
 import com.sizylift.backend.imports.dto.ImportDtos.*;
 import com.sizylift.backend.imports.service.ImportCommitService;
+import com.sizylift.backend.imports.service.ImportEvents;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.sizylift.backend.imports.service.ImportFailure;
 import com.sizylift.backend.imports.service.ImportService;
 import jakarta.validation.Valid;
@@ -23,9 +25,11 @@ public class ImportController {
     private final AuthenticatedAccount accounts;
     private final ImportService imports;
     private final ImportCommitService commits;
+    private final ImportEvents events;
 
-    public ImportController(AuthenticatedAccount accounts, ImportService imports, ImportCommitService commits) {
-        this.accounts = accounts; this.imports = imports; this.commits = commits;
+    public ImportController(AuthenticatedAccount accounts, ImportService imports, ImportCommitService commits,
+                            ImportEvents events) {
+        this.accounts = accounts; this.imports = imports; this.commits = commits; this.events = events;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -44,6 +48,17 @@ public class ImportController {
 
     @GetMapping("/{id}")
     public View get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) { return imports.get(accounts.resolve(jwt).id(), id); }
+
+    /**
+     * Поток состояния сессии (Server-Sent Events): событие {@code state} с View — сразу и при каждом изменении.
+     * Закрывается, когда разбор закончен; опрос GET остаётся запасным путём.
+     */
+    @GetMapping(value = "/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> events(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        var emitter = events.subscribe(accounts.resolve(jwt).id(), id);
+        // Прокси не должны буферизовать поток (nginx — X-Accel-Buffering), кэш ответа не нужен.
+        return ResponseEntity.ok().header("X-Accel-Buffering", "no").header("Cache-Control", "no-cache").body(emitter);
+    }
 
     @PostMapping("/{id}/clarifications")
     @ResponseStatus(HttpStatus.ACCEPTED)
@@ -79,6 +94,8 @@ public class ImportController {
 
     @ExceptionHandler(ImportFailure.class)
     ResponseEntity<Failure> failure(ImportFailure failure) {
-        return ResponseEntity.status(failure.status()).body(new Failure(failure.code(), failure.getMessage()));
+        // Тип задан явно: запрос потока событий ждёт text/event-stream, а ошибка до начала потока — обычный JSON.
+        return ResponseEntity.status(failure.status()).contentType(MediaType.APPLICATION_JSON)
+                .body(new Failure(failure.code(), failure.getMessage()));
     }
 }

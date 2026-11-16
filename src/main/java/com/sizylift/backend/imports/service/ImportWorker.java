@@ -57,16 +57,18 @@ public class ImportWorker {
     private final ImportChunks chunks;
     private final ImportProgress progress;
     private final ImportCatalogs catalogs;
+    private final ImportEvents events;
     private final Semaphore capacity;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public ImportWorker(ImportRepository sessions, ImportProperties limits, ImportSourceReader sourceReader,
             ProgramParserModel model, ProgramDraftCompiler compiler, AccessPolicy access, TransactionTemplate transactions,
             Clock clock, ImportMetrics metrics, ImportCost cost, ImportChunks chunks, ImportProgress progress,
-            ImportCatalogs catalogs) {
+            ImportCatalogs catalogs, ImportEvents events) {
         this.sessions = sessions; this.limits = limits; this.sourceReader = sourceReader; this.model = model;
         this.compiler = compiler; this.access = access; this.transactions = transactions; this.clock = clock;
         this.metrics = metrics; this.cost = cost; this.chunks = chunks; this.progress = progress; this.catalogs = catalogs;
+        this.events = events;
         this.capacity = new Semaphore(limits.concurrentRequests());
     }
 
@@ -113,8 +115,10 @@ public class ImportWorker {
             }
             if (!session.sheetsSelected() && SourceSheets.needsSelection(source)) {
                 // Несколько листов: модель не вызывается, пока пользователь не выберет нужные.
-                if (sessions.awaitSheets(session, source, clock.instant()))
+                if (sessions.awaitSheets(session, source, clock.instant())) {
+                    events.changed(session.id());
                     metrics.outcome(session.sourceKind(), "sheet_selection", System.nanoTime() - started);
+                }
                 return;
             }
             sourceReader.checkSize(source);
@@ -252,6 +256,7 @@ public class ImportWorker {
             compiler.compile(session.withResult(draft, decisions), clock.instant());
         var outcome = draft.needsClarification() ? "clarification_required" : "review";
         sessions.finish(session, outcome, draft, decisions, null, null, 0, 0, 0, clock.instant());
+        events.changed(session.id());
         metrics.outcome(session.sourceKind(), outcome, System.nanoTime() - started);
     }
 
@@ -279,6 +284,7 @@ public class ImportWorker {
 
     private void fail(ImportSession session, String code, String message) {
         sessions.finish(session, "failed", session.output(), session.decisions(), code, message, 0, 0, 0, clock.instant());
+        events.changed(session.id());
         metrics.outcome(session.sourceKind(), code, 0);
     }
 
