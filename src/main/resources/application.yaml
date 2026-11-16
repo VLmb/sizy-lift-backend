@@ -54,6 +54,8 @@ sizylift:
     daily-cron: "0 17 4 * * *"
   video:
     # Видео подходов и техники (ADR-0012). Адрес и ключи хранилища — по профилям.
+    # Флаг функции: VIDEO_ENABLED=false прячет видео в приложении и на сайте, сервер их не выдаёт и не принимает.
+    enabled: ${VIDEO_ENABLED:true}
     upload-url-ttl: 15m
     view-url-ttl: 10m
     max-size-bytes: 26214400
