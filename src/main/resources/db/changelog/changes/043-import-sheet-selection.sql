@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset sizylift:042-import-sheet-selection
+--changeset sizylift:043-import-sheet-selection
 -- Книга с несколькими листами ждёт выбора листов до вызова модели: в модель уходят только выбранные.
 ALTER TABLE sizylift.import_session DROP CONSTRAINT import_session_status_check;
 ALTER TABLE sizylift.import_session ADD CONSTRAINT import_session_status_check CHECK (status IN

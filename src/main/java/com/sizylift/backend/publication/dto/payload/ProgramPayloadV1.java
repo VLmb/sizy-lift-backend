@@ -106,6 +106,14 @@ public record ProgramPayloadV1(
             boolean targetRpeAuto,
             @Min(PERCENT_ONE_RM_TENTHS_MIN) @Max(PERCENT_ONE_RM_TENTHS_MAX) Integer targetPercentOneRmTenths,
             @Min(0) Integer restMs,
-            @Size(max = LONG_TEXT) String note) {
+            @Size(max = LONG_TEXT) String note,
+            @Pattern(regexp = "(weight|percent|rpe):(weight|percent|rpe)?(,(weight|percent|rpe))*")
+            @Size(max = 64) String targetCalculation) {
+        public Set(UUID id, int position, String setType, Integer targetWeightGrams, Integer repetitions,
+                   Integer durationMs, Integer targetDistanceM, Integer targetRpeTenths, boolean targetRpeAuto,
+                   Integer targetPercentOneRmTenths, Integer restMs, String note) {
+            this(id, position, setType, targetWeightGrams, repetitions, durationMs, targetDistanceM,
+                    targetRpeTenths, targetRpeAuto, targetPercentOneRmTenths, restMs, note, null);
+        }
     }
 }

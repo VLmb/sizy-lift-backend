@@ -69,9 +69,17 @@ public class VideoService {
         this.clock = clock;
     }
 
+    /** Флаг функции: выключенные видео не выдаются и не принимаются. */
+    private void requireEnabled() {
+        if (!properties.enabled()) {
+            throw new VideoFailure(Reason.DISABLED);
+        }
+    }
+
     /** Выдаёт место под ролик. Повтор с тем же id до завершения загрузки возвращает новые ссылки. */
     @Transactional
     public UploadResponse create(UUID callerId, CreateVideoRequest request) {
+        requireEnabled();
         var draft = draft(callerId, request);
         videos.lockOwner(callerId);
         var existing = videos.find(draft.id());
@@ -86,6 +94,7 @@ public class VideoService {
     /** Подтверждает загрузку: оба объекта на месте и их размер совпадает с заявленным. */
     @Transactional
     public VideoResponse complete(UUID callerId, UUID id) {
+        requireEnabled();
         var video = videos.lock(id).filter(found -> found.ownerId().equals(callerId))
                 .orElseThrow(() -> new VideoFailure(Reason.NOT_FOUND));
         if (!video.ready()) {
@@ -100,6 +109,7 @@ public class VideoService {
 
     @Transactional(readOnly = true)
     public VideoResponse get(UUID callerId, UUID id) {
+        requireEnabled();
         var video = videos.find(id).filter(found -> canView(callerId, found))
                 .orElseThrow(() -> new VideoFailure(Reason.NOT_FOUND));
         return view(callerId, video);
@@ -108,6 +118,7 @@ public class VideoService {
     /** Свои ролики одного вида, новые сначала, со ссылками на превью и сведениями об использовании. */
     @Transactional(readOnly = true)
     public VideoListResponse list(UUID callerId, String kindCode, String cursor, Integer limit) {
+        requireEnabled();
         var kind = VideoKind.parse(kindCode).orElseThrow(() -> new VideoFailure(Reason.INVALID_VIDEO));
         var size = limit == null ? DEFAULT_PAGE_SIZE : limit;
         if (size < 1 || size > MAX_PAGE_SIZE) {

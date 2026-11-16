@@ -17,6 +17,7 @@ public class VideoFailure extends RuntimeException {
     }
 
     public enum Reason {
+        DISABLED("video_disabled", HttpStatus.NOT_FOUND, "Видео отключены"),
         INVALID_VIDEO("invalid_video", HttpStatus.BAD_REQUEST, "Некорректные сведения о видео"),
         NOT_FOUND("not_found", HttpStatus.NOT_FOUND, "Видео не найдено"),
         COACH_REQUIRED("coach_required", HttpStatus.FORBIDDEN, "Видео техники загружает тренер"),

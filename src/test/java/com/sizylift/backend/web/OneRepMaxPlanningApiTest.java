@@ -81,7 +81,7 @@ class OneRepMaxPlanningApiTest extends PostgresIntegrationTest {
     void plannedSetPercentRoundTripsThroughTheProgram() throws Exception {
         var programId = UUID.randomUUID();
         var program = fixture("program");
-        firstPlannedSet(program).put(PERCENT, 725);
+        firstPlannedSet(program).put(PERCENT, 725).put("targetCalculation", "rpe:weight");
 
         assertThat(push(owner, item("program", programId, null, 0, program)).get("status").asString())
                 .isEqualTo("accepted");
@@ -89,6 +89,7 @@ class OneRepMaxPlanningApiTest extends PostgresIntegrationTest {
         var read = body(call(owner, get("/api/v2/web/programs/" + programId)).andExpect(status().isOk()));
         var set = firstPlannedSet((ObjectNode) read.get("program"));
         assertThat(set.get(PERCENT).asInt()).isEqualTo(725);
+        assertThat(set.get("targetCalculation").asString()).isEqualTo("rpe:weight");
         assertThat(set.get("targetWeightGrams").asInt()).as("вес по проценту сервер не пересчитывает")
                 .isEqualTo(120000);
 
