@@ -271,6 +271,19 @@ select:focus-visible {
   gap: 12px;
   font-size: 15px;
 }
+.sizy-consent-group {
+  margin: 22px 0;
+  padding: 17px 18px 15px;
+  border: 1px solid rgba(224, 154, 45, .32);
+  border-radius: 10px;
+  background: rgba(224, 154, 45, .06);
+}
+.sizy-consent-group .sizy-data-notice {
+  margin: 12px 0 0 32px;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
 .sizy-consent-check input {
   appearance: auto;
   width: 20px;

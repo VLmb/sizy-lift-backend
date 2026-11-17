@@ -1,0 +1,46 @@
+.sizy-legal-modal {
+  width: min(920px, calc(100vw - 40px));
+  height: min(830px, calc(100dvh - 40px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid #cbbfae;
+  border-radius: 20px;
+  color: #26211b;
+  background: #f8f6f2;
+  box-shadow: 0 30px 100px rgb(11 9 7 / 40%);
+  overflow: hidden;
+}
+.sizy-legal-modal::backdrop { background: rgb(13 11 9 / 68%); backdrop-filter: blur(6px); }
+.sizy-legal-modal-top { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px; background: #211e1a; color: #f8f6f2; }
+.sizy-legal-modal-brand { display: flex; align-items: center; gap: 11px; font-size: 23px; font-weight: 700; letter-spacing: -.03em; }
+.sizy-legal-modal-brand img { object-fit: contain; }
+.sizy-legal-modal-divider { width: 1px; height: 22px; margin: 0 7px; background: #62574a; }
+.sizy-legal-modal-section { color: #d8c9b5; font-size: 14px; font-weight: 500; letter-spacing: 0; }
+.sizy-legal-modal-close { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid #6b6053; border-radius: 50%; background: transparent; color: #f8f6f2; font: inherit; font-size: 25px; line-height: 1; cursor: pointer; }
+.sizy-legal-modal-close:hover { background: #41382d; }
+.sizy-legal-modal-close:focus-visible, .sizy-legal-modal-tabs button:focus-visible { outline: 2px solid #d69734; outline-offset: 3px; }
+.sizy-legal-modal-tabs { height: 56px; display: flex; gap: 28px; align-items: stretch; padding: 0 42px; border-bottom: 1px solid #e2dcd3; background: #f8f6f2; }
+.sizy-legal-modal-tabs button { position: relative; border: 0; background: transparent; color: #74695c; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.sizy-legal-modal-tabs button.active { color: #2a241c; }
+.sizy-legal-modal-tabs button.active::after { content: ''; position: absolute; height: 3px; left: 0; right: 0; bottom: -1px; background: #bd7c1e; border-radius: 3px 3px 0 0; }
+.sizy-legal-modal-scroll { height: calc(100% - 128px); overflow-y: auto; overscroll-behavior: contain; }
+.sizy-legal-modal-article { max-width: 760px; margin: 0 auto; padding: 43px 48px 80px; font: 16px/1.7 system-ui, sans-serif; }
+.sizy-legal-modal-article h1 { max-width: 18ch; margin: 0 0 22px; color: #211e1a; font-size: clamp(30px, 4vw, 42px); font-weight: 700; line-height: 1.13; letter-spacing: -.035em; }
+.sizy-legal-modal-article h2 { margin: 43px 0 16px; padding-top: 23px; border-top: 1px solid #e4ddd2; color: #30291e; font-size: 21px; font-weight: 700; line-height: 1.35; letter-spacing: -.02em; }
+.sizy-legal-modal-article p { margin: 0 0 17px; color: #4a433a; }
+.sizy-legal-modal-article a, .sizy-legal-modal-status a { color: #8b540b; text-underline-offset: 3px; }
+.sizy-legal-modal-article a:hover, .sizy-legal-modal-status a:hover { color: #603805; }
+.sizy-legal-modal-article ul, .sizy-legal-modal-article ol { padding-left: 25px; color: #4a433a; }
+.sizy-legal-modal-article li { margin: 8px 0; }
+.sizy-legal-modal-status { margin: 60px 48px; color: #65594b; }
+@media (max-width: 600px) {
+  .sizy-legal-modal { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
+  .sizy-legal-modal-top { height: 64px; padding: 0 20px; }
+  .sizy-legal-modal-brand { font-size: 20px; }
+  .sizy-legal-modal-tabs { height: 53px; gap: 24px; padding: 0 22px; }
+  .sizy-legal-modal-scroll { height: calc(100% - 117px); }
+  .sizy-legal-modal-article { padding: 32px 24px 64px; font-size: 15px; }
+  .sizy-legal-modal-article h2 { margin-top: 35px; font-size: 19px; }
+  .sizy-legal-modal-status { margin: 40px 24px; }
+}

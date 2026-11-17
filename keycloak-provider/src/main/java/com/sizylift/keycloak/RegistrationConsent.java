@@ -19,6 +19,7 @@ public final class RegistrationConsent extends RegistrationTermsAndConditions {
 
     @Override
     public void buildPage(FormContext context, LoginFormsProvider form) {
+        TermsAgreement.show(context.getAuthenticationSession(), form);
         var settings = AccountConsent.settings(context.getRealm());
         if (settings.enabled()) AccountConsent.show(settings, context.getAuthenticationSession(), form);
     }
@@ -26,19 +27,25 @@ public final class RegistrationConsent extends RegistrationTermsAndConditions {
     @Override
     public void validate(ValidationContext context) {
         var settings = AccountConsent.settings(context.getRealm());
-        if (!settings.enabled()) { context.success(); return; }
         var data = context.getHttpRequest().getDecodedFormParameters();
         String error = null;
-        if (!settings.ready()) error = "sizyLegalUnavailable";
-        else if (!AccountConsent.wasDisplayed(settings, context.getAuthenticationSession())) error = "sizyConsentChanged";
-        else if (!AccountConsent.checked(data.getFirst(AccountConsent.FIELD))) error = "sizyConsentRequired";
+        String field = TermsAgreement.FIELD;
+        if (!TermsAgreement.displayed(context.getAuthenticationSession())) error = "sizyTermsChanged";
+        else if (!AccountConsent.checked(data.getFirst(TermsAgreement.FIELD))) error = "sizyTermsRequired";
+        else if (settings.enabled()) {
+            field = AccountConsent.FIELD;
+            if (!settings.ready()) error = "sizyLegalUnavailable";
+            else if (!AccountConsent.wasDisplayed(settings, context.getAuthenticationSession())) error = "sizyConsentChanged";
+            else if (!AccountConsent.checked(data.getFirst(AccountConsent.FIELD))) error = "sizyConsentRequired";
+        }
         if (error == null) { context.success(); return; }
         context.error(Errors.INVALID_REGISTRATION);
-        context.validationError(data, List.of(new FormMessage(AccountConsent.FIELD, error)));
+        context.validationError(data, List.of(new FormMessage(field, error)));
     }
 
     @Override
     public void success(FormContext context) {
+        TermsAgreement.record(context.getAuthenticationSession(), context.getUser());
         var settings = AccountConsent.settings(context.getRealm());
         if (settings.enabled()) AccountConsent.record(settings, context.getAuthenticationSession(), context.getUser());
     }
