@@ -145,9 +145,29 @@ class CoachReworkStage2ApiTest extends CoachWorkspaceApiSupport {
         assertThat(saved.get("startDate").asString()).isEqualTo("2027-01-16");
         assertThat(saved.get("targetExerciseIds")).hasSize(1);
 
+        assertThat(saved.get("goals")).as("целей ещё нет").isEmpty();
+
+        var withGoals = body(call(coach, put(path).contentType(MediaType.APPLICATION_JSON).content(
+                json.writeValueAsString(Map.of("targetExerciseIds", List.of(squat),
+                        "goals", List.of("  Приседать без боли  "),
+                        "exerciseGoals", List.of(Map.of("exerciseId", squat, "weightGrams", 190_000))))))
+                .andExpect(status().isOk()));
+        assertThat(withGoals.get("goals").get(0).asString()).isEqualTo("Приседать без боли");
+        assertThat(withGoals.get("exerciseGoals").get(0).get("weightGrams").asInt()).isEqualTo(190_000);
+
         call(coach, put(path).contentType(MediaType.APPLICATION_JSON).content("{\"targetExerciseIds\":[]}"))
                 .andExpect(status().isOk());
-        assertThat(body(call(coach, get(path))).get("targetExerciseIds")).as("пустой список допустим").isEmpty();
+        var kept = body(call(coach, get(path)));
+        assertThat(kept.get("targetExerciseIds")).as("пустой список допустим").isEmpty();
+        assertThat(kept.get("goals")).as("старый клиент без целей их не стирает").hasSize(1);
+        assertThat(kept.get("exerciseGoals")).hasSize(1);
+
+        call(coach, put(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(
+                Map.of("exerciseGoals", List.of(Map.of("exerciseId", squat, "weightGrams", 0))))))
+                .andExpect(status().isBadRequest());
+        call(coach, put(path).contentType(MediaType.APPLICATION_JSON).content("{\"goals\":[],\"exerciseGoals\":[]}"))
+                .andExpect(status().isOk());
+        assertThat(body(call(coach, get(path))).get("goals")).as("пустой список убирает цели").isEmpty();
 
         call(athlete, get(path)).andExpect(status().isNotFound());
         call(coach, org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(

@@ -7,7 +7,10 @@ import java.util.UUID;
 import java.time.LocalDate;
 
 import com.sizylift.backend.coaching.service.CoachProgramCopies;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 /** Контракт /api/v2/coaching (docs/coaching.md). */
@@ -55,17 +58,27 @@ public final class CoachingDtos {
     public static final int NOTES_MAX = 4000;
     public static final int START_NAME_MAX = 200;
     public static final int TARGETS_MAX = 20;
+    public static final int GOALS_MAX = 10;
+    public static final int GOAL_TEXT_MAX = 200;
 
     /**
      * Карточка подопечного у тренера (CR-18): заметки, старт и целевые упражнения. {@code targetExerciseIds}
      * {@code null} — тренер не выбирал (клиент берёт присед, жим лёжа и становую); пустой список — выбрал «ничего».
+     * Цели (веб, minimal-2026-11): {@code goals} — своими словами, {@code exerciseGoals} — целевой вес упражнения;
+     * {@code null} — не менять (старые клиенты их не присылают), пустой список — убрать все.
      */
     public record CardRequest(@Size(max = NOTES_MAX) String notes, LocalDate startDate,
                               @Size(max = START_NAME_MAX) String startName,
-                              @Size(max = TARGETS_MAX) List<@NotNull UUID> targetExerciseIds) {
+                              @Size(max = TARGETS_MAX) List<@NotNull UUID> targetExerciseIds,
+                              @Size(max = GOALS_MAX) List<@NotBlank @Size(max = GOAL_TEXT_MAX) String> goals,
+                              @Size(max = TARGETS_MAX) List<@NotNull @Valid ExerciseGoal> exerciseGoals) {
+    }
+
+    /** Целевой вес упражнения в граммах. */
+    public record ExerciseGoal(@NotNull UUID exerciseId, @NotNull @Positive Integer weightGrams) {
     }
 
     public record CardResponse(String notes, LocalDate startDate, String startName, List<UUID> targetExerciseIds,
-                               Instant updatedAt) {
+                               List<String> goals, List<ExerciseGoal> exerciseGoals, Instant updatedAt) {
     }
 }

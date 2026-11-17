@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Boot's console output (plain locally, ECS JSON in prod) plus export of every log record over OTLP. -->
+<!-- Human-readable console output in every profile plus export of every log record over OTLP. -->
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <springProfile name="prod">
-        <include resource="org/springframework/boot/logging/logback/structured-console-appender.xml"/>
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
     </springProfile>
     <springProfile name="!prod">
         <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>

@@ -254,10 +254,13 @@ public class CoachingService {
         return coaching.card(coachLink(coachId, linkId).id());
     }
 
+    /** Цели {@code null} — клиент их не прислал: остаются прежними. */
     public CoachingRepository.Card saveCard(UUID coachId, UUID linkId, CoachingRepository.Card card) {
         var link = coachLink(coachId, linkId);
+        var saved = coaching.card(link.id());
         coaching.updateCard(link.id(), new CoachingRepository.Card(card.notes(), card.startDate(),
-                card.startName(), card.targetExerciseIds(), clock.instant()));
+                card.startName(), card.targetExerciseIds(), card.goals() == null ? saved.goals() : card.goals(),
+                card.exerciseGoals() == null ? saved.exerciseGoals() : card.exerciseGoals(), clock.instant()));
         return coaching.card(link.id());
     }
 
