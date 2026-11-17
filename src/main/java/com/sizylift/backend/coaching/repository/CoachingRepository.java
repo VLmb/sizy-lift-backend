@@ -9,6 +9,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import com.sizylift.backend.coaching.entity.CoachingInvite;
 import com.sizylift.backend.coaching.entity.CoachingLink;
@@ -54,12 +55,15 @@ public class CoachingRepository {
             "SELECT display_name FROM sizylift.athlete_profile WHERE user_id = ? AND display_name IS NOT NULL";
 
     private static final String SELECT_CARD = """
-            SELECT coach_notes, start_date, start_name, target_exercise_ids, card_updated_at
+            SELECT coach_notes, start_date, start_name, target_exercise_ids, goal_texts, goal_exercise_ids,
+                   goal_weight_grams, card_updated_at
             FROM sizylift.coaching_link WHERE id = ?
             """;
     private static final String UPDATE_CARD = """
             UPDATE sizylift.coaching_link
-            SET coach_notes = ?, start_date = ?, start_name = ?, target_exercise_ids = ?::uuid[], card_updated_at = ?
+            SET coach_notes = ?, start_date = ?, start_name = ?, target_exercise_ids = ?::uuid[],
+                goal_texts = ?::text[], goal_exercise_ids = ?::uuid[], goal_weight_grams = ?::integer[],
+                card_updated_at = ?
             WHERE id = ?
             """;
 
@@ -114,26 +118,55 @@ public class CoachingRepository {
 
     /**
      * Карточка подопечного у тренера (CR-18). {@code targetExerciseIds} — {@code null}, пока тренер не выбирал.
+     * {@code goals} и {@code exerciseGoals} — цели своими словами и целевой вес упражнений; не было — пусто.
      */
     public record Card(String notes, LocalDate startDate, String startName, List<UUID> targetExerciseIds,
-                       Instant updatedAt) {
+                       List<String> goals, List<ExerciseGoal> exerciseGoals, Instant updatedAt) {
+    }
+
+    /** Целевой вес упражнения в граммах. */
+    public record ExerciseGoal(UUID exerciseId, int weightGrams) {
     }
 
     public Card card(UUID linkId) {
-        return jdbc.queryForObject(SELECT_CARD, (row, n) -> new Card(row.getString("coach_notes"),
-                row.getObject("start_date", LocalDate.class), row.getString("start_name"), uuids(row),
-                instant(row, "card_updated_at")), linkId);
+        return jdbc.queryForObject(SELECT_CARD, CoachingRepository::card, linkId);
     }
 
     public void updateCard(UUID linkId, Card card) {
         var targets = card.targetExerciseIds() == null ? null : card.targetExerciseIds().toArray(UUID[]::new);
+        var goals = card.exerciseGoals();
         jdbc.update(UPDATE_CARD, card.notes(), card.startDate(), card.startName(), targets,
+                card.goals().toArray(String[]::new),
+                goals.stream().map(ExerciseGoal::exerciseId).toArray(UUID[]::new),
+                goals.stream().map(ExerciseGoal::weightGrams).toArray(Integer[]::new),
                 card.updatedAt().atOffset(ZoneOffset.UTC), linkId);
     }
 
-    private static List<UUID> uuids(ResultSet row) throws SQLException {
-        var array = row.getArray("target_exercise_ids");
+    private static Card card(ResultSet row, int n) throws SQLException {
+        return new Card(row.getString("coach_notes"), row.getObject("start_date", LocalDate.class),
+                row.getString("start_name"), uuids(row, "target_exercise_ids"), texts(row), exerciseGoals(row),
+                instant(row, "card_updated_at"));
+    }
+
+    private static List<UUID> uuids(ResultSet row, String column) throws SQLException {
+        var array = row.getArray(column);
         return array == null ? null : List.of((UUID[]) array.getArray());
+    }
+
+    private static List<String> texts(ResultSet row) throws SQLException {
+        var array = row.getArray("goal_texts");
+        return array == null ? List.of() : List.of((String[]) array.getArray());
+    }
+
+    private static List<ExerciseGoal> exerciseGoals(ResultSet row) throws SQLException {
+        var ids = uuids(row, "goal_exercise_ids");
+        var grams = row.getArray("goal_weight_grams");
+        if (ids == null || grams == null) {
+            return List.of();
+        }
+        var weights = (Integer[]) grams.getArray();
+        return IntStream.range(0, Math.min(ids.size(), weights.length))
+                .mapToObj(i -> new ExerciseGoal(ids.get(i), weights[i])).toList();
     }
 
     public Optional<CoachingInvite> findInvite(byte[] tokenHash) {

@@ -9,6 +9,7 @@ import com.sizylift.backend.coaching.dto.CoachingDtos.CardRequest;
 import com.sizylift.backend.coaching.dto.CoachingDtos.CardResponse;
 import com.sizylift.backend.coaching.dto.CoachingDtos.CreateInviteRequest;
 import com.sizylift.backend.coaching.dto.CoachingDtos.EnabledRequest;
+import com.sizylift.backend.coaching.dto.CoachingDtos.ExerciseGoal;
 import com.sizylift.backend.coaching.dto.CoachingDtos.PublicInviteResponse;
 import com.sizylift.backend.coaching.repository.CoachingRepository;
 import com.sizylift.backend.coaching.dto.CoachingDtos.InvitePreviewResponse;
@@ -88,12 +89,17 @@ public class CoachingController {
                                  @Valid @RequestBody CardRequest request) {
         var targets = request.targetExerciseIds() == null ? null
                 : request.targetExerciseIds().stream().distinct().toList();
+        var goals = request.goals() == null ? null : request.goals().stream().map(String::strip).toList();
+        var exerciseGoals = request.exerciseGoals() == null ? null : request.exerciseGoals().stream()
+                .map(goal -> new CoachingRepository.ExerciseGoal(goal.exerciseId(), goal.weightGrams())).toList();
         return card(coaching.saveCard(userId(jwt), linkId, new CoachingRepository.Card(blank(request.notes()),
-                request.startDate(), blank(request.startName()), targets, null)));
+                request.startDate(), blank(request.startName()), targets, goals, exerciseGoals, null)));
     }
 
     private static CardResponse card(CoachingRepository.Card card) {
         return new CardResponse(card.notes(), card.startDate(), card.startName(), card.targetExerciseIds(),
+                card.goals(), card.exerciseGoals().stream()
+                        .map(goal -> new ExerciseGoal(goal.exerciseId(), goal.weightGrams())).toList(),
                 card.updatedAt());
     }
 
