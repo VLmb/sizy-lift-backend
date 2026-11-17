@@ -31,8 +31,12 @@ public class ProgramDraftCompiler {
     private static final int GRAMS_PER_KG = 1000;
     private static final int MILLIS_PER_SECOND = 1000;
     private static final int TENTHS = 10;
+    /** Длина названия блока в программе (ProgramPayloadV1.Block.title). */
+    private static final int SHORT_TEXT_CHARS = 200;
     /** Решение «не добавлять»: упражнение и его подходы не попадают в программу. */
     public static final String SKIP = "skip";
+    /** Решение «сделать блоком»: строка источника («Разминка») — не упражнение, а текстовый блок тренировки. */
+    public static final String BLOCK = "block";
     private final Validator validator;
 
     public ProgramDraftCompiler(Validator validator) { this.validator = validator; }
@@ -61,14 +65,17 @@ public class ProgramDraftCompiler {
         var exercises = new LinkedHashMap<String, Resolved>();
         var created = new LinkedHashMap<UUID, ExercisePayloadV1>();
         var warnings = new ArrayList<String>();
+        var headers = new LinkedHashMap<String, String>();
         for (var r : session.output().exerciseResolutions()) {
             var decision = session.decisions().get(r.key());
             if (decision == null) throw ImportFailure.invalid("Выберите упражнение: " + r.originalName());
-            if (!decision.kind().equals(SKIP)) exercises.put(r.key(), resolve(session.id(), decision, catalog, created, at));
+            if (decision.kind().equals(BLOCK))
+                headers.put(r.key(), decision.name() == null || decision.name().isBlank() ? r.originalName() : decision.name().trim());
+            else if (!decision.kind().equals(SKIP)) exercises.put(r.key(), resolve(session.id(), decision, catalog, created, at));
         }
         var skipped = session.decisions().values().stream().filter(d -> d.kind().equals(SKIP)).map(Decision::key)
                 .collect(Collectors.toSet());
-        var context = new Compilation(session.id(), session.startDate(), exercises, skipped, warnings,
+        var context = new Compilation(session.id(), session.startDate(), exercises, skipped, headers, warnings,
                 ImportLanguage.of(session.normalized() == null ? null : session.normalized().language()));
         var cycles = new ArrayList<ProgramPayloadV1.Cycle>();
         for (var cycle : session.output().programDraft().cycles()) cycles.add(cycle(context, cycle, cycles.size()));
@@ -94,23 +101,75 @@ public class ProgramDraftCompiler {
 
     private ProgramPayloadV1.PlannedWorkout day(Compilation context, ImportDraftV1.Day source, int position) {
         var blocks = new ArrayList<ProgramPayloadV1.Block>();
-        for (var block : source.blocks()) {
-            var compiled = block(context, block, blocks.size());
-            if (!compiled.exercises().isEmpty()) blocks.add(compiled);
-        }
+        for (var block : source.blocks()) blocks(context, block, blocks);
         return new ProgramPayloadV1.PlannedWorkout(id(context.id(), source.key()), nullable(source.title()),
                 context.startDate().plusDays(source.dayOffset()), position, blocks);
     }
 
-    private ProgramPayloadV1.Block block(Compilation context, ImportDraftV1.Block source, int position) {
+    /**
+     * Блок источника. Упражнение, которое решили не добавлять, выпадает вместе с подходами; строка «сделать блоком»
+     * становится свободным блоком на своём месте (название, а комментарий и подходы — его описанием) и делит блок
+     * источника на части до и после неё. Пустые части не попадают в программу.
+     */
+    private void blocks(Compilation context, ImportDraftV1.Block source, List<ProgramPayloadV1.Block> out) {
         var entries = new ArrayList<ProgramPayloadV1.Exercise>();
+        int part = 0;
         for (var ex : source.exercises()) {
-            // Упражнение, которое пользователь решил не добавлять, выпадает из программы вместе с подходами.
             if (context.skipped().contains(ex.resolutionKey())) continue;
-            entries.add(exercise(context, ex, entries.size()));
+            var header = context.headers().get(ex.resolutionKey());
+            if (header == null) {
+                entries.add(exercise(context, ex, entries.size()));
+                continue;
+            }
+            if (!entries.isEmpty()) {
+                out.add(part(context, source, part++, out.size(), entries));
+                entries = new ArrayList<>();
+            }
+            out.add(new ProgramPayloadV1.Block(id(context.id(), ex.key() + ":block"), out.size(), "free", null, null,
+                    shortText(header), nullable(headerText(ex, context.language())), List.of()));
         }
-        return new ProgramPayloadV1.Block(id(context.id(), source.key()), position, source.blockType(),
-                nullable(source.groupLabel()), null, nullable(source.title()), nullable(source.description()), entries);
+        if (!entries.isEmpty()) out.add(part(context, source, part, out.size(), entries));
+    }
+
+    private ProgramPayloadV1.Block part(Compilation context, ImportDraftV1.Block source, int part, int position,
+                                        List<ProgramPayloadV1.Exercise> entries) {
+        var key = part == 0 ? source.key() : source.key() + ":" + part;
+        return new ProgramPayloadV1.Block(id(context.id(), key), position, source.blockType(),
+                nullable(source.groupLabel()), null, part == 0 ? nullable(source.title()) : null,
+                part == 0 ? nullable(source.description()) : null, entries);
+    }
+
+    /** Описание блока из строки-заголовка: комментарий и подходы коротко («10 мин», «2 × 10»). */
+    private String headerText(ImportDraftV1.Exercise ex, ImportLanguage language) {
+        var parts = new ArrayList<String>();
+        parts.add(ex.comment());
+        for (var set : ex.sets()) parts.add(brief(set, language));
+        return join(parts.stream().filter(p -> p != null && !p.isBlank()).distinct().toList());
+    }
+
+    private String brief(ImportDraftV1.Prescription set, ImportLanguage language) {
+        var parts = new ArrayList<String>();
+        if (!set.durationSeconds().isBlank()) {
+            try {
+                var seconds = new BigDecimal(set.durationSeconds().replace(',', '.'));
+                parts.add(seconds.remainder(BigDecimal.valueOf(60)).signum() == 0 && seconds.intValue() >= 60
+                        ? seconds.intValue() / 60 + language.text(" мин", " min")
+                        : seconds.stripTrailingZeros().toPlainString() + language.text(" с", " s"));
+            } catch (NumberFormatException e) {
+                parts.add(set.durationSeconds() + language.text(" с", " s"));
+            }
+        }
+        if (!set.distanceMeters().isBlank()) parts.add(set.distanceMeters() + language.text(" м", " m"));
+        if (!set.weightKg().isBlank()) parts.add(set.weightKg() + language.text(" кг", " kg"));
+        if (!set.repetitions().isBlank()) parts.add(set.repetitions());
+        var text = String.join(" × ", parts);
+        if (!set.count().isBlank() && !set.count().equals("1")) text = set.count() + " × " + (text.isEmpty() ? "" : text);
+        if (!set.note().isBlank()) text = text.isBlank() ? set.note() : text + ", " + set.note();
+        return text.strip();
+    }
+
+    private static String shortText(String text) {
+        return text.length() <= SHORT_TEXT_CHARS ? text : text.substring(0, SHORT_TEXT_CHARS);
     }
 
     private ProgramPayloadV1.Exercise exercise(Compilation context, ImportDraftV1.Exercise source, int position) {
@@ -128,14 +187,14 @@ public class ProgramDraftCompiler {
             }
             int count = positiveInt(prescription.count(), SETS_PER_EXERCISE);
             if (sets.size() + count > SETS_PER_EXERCISE) throw ImportFailure.invalid("Больше 200 подходов у упражнения.");
-            for (int i = 0; i < count; i++) sets.add(set(context.id(), prescription, resolved, i, sets.size(), context.warnings(), context.language()));
+            for (int i = 0; i < count; i++) sets.add(set(context.id(), prescription, resolved, i, sets.size(), context.warnings(), context.language(), comments));
         }
         return new ProgramPayloadV1.Exercise(id(context.id(), source.key()), position, resolved.id(), resolved.name(),
                 resolved.resultType(), join(comments), sets);
     }
 
     public void validateDecision(UUID session, Decision decision, List<CatalogExercise> catalog) {
-        if (decision.kind().equals(SKIP)) return;
+        if (decision.kind().equals(SKIP) || decision.kind().equals(BLOCK)) return;
         resolve(session, decision, catalog.stream().collect(Collectors.toMap(CatalogExercise::id, Function.identity())),
                 new LinkedHashMap<>(), Instant.EPOCH);
     }
@@ -159,8 +218,10 @@ public class ProgramDraftCompiler {
         return new Resolved(id, payload.name(), payload.resultType(), liftClass);
     }
 
+    /** Подход плана. Комментариев к подходу нет: пометки подхода уходят в комментарий упражнения ({@code comments}). */
     private ProgramPayloadV1.Set set(UUID session, ImportDraftV1.Prescription source, Resolved exercise,
-                                     int index, int position, List<String> warnings, ImportLanguage language) {
+                                     int index, int position, List<String> warnings, ImportLanguage language,
+                                     List<String> comments) {
         var notes = new ArrayList<String>();
         notes.add(source.note());
         Integer reps = null;
@@ -200,10 +261,9 @@ public class ProgramDraftCompiler {
                 || type.equals("reps") && (weight != null || duration != null || distance != null)
                 || type.equals("distance_time") && (reps != null || weight != null))
             throw ImportFailure.invalid("Тип выбранного упражнения несовместим с подходами. Выберите другое или создайте своё.");
-        if (source.setType().isBlank()) notes.add(language.text("Тип подхода в источнике не указан.", "Set type not specified in the source."));
         return new ProgramPayloadV1.Set(id(session, source.key() + ":" + index), position,
                 source.setType().isBlank() ? "working" : source.setType(), weight, reps, duration, distance,
-                rpe, false, percent, scaled(source.restSeconds(), MILLIS_PER_SECOND), join(notes));
+                rpe, false, percent, scaled(source.restSeconds(), MILLIS_PER_SECOND), withNotes(comments, notes));
     }
 
     private String describe(ImportDraftV1.Prescription value, ImportLanguage language) {
@@ -245,6 +305,10 @@ public class ProgramDraftCompiler {
     private void valid(Object value) {
         if (!validator.validate(value).isEmpty()) throw ImportFailure.invalid("Программа не проходит проверку ограничений.");
     }
+    private static String withNotes(List<String> comments, List<String> notes) {
+        for (var note : notes) if (note != null && !note.isBlank() && !comments.contains(note)) comments.add(note);
+        return null;
+    }
     private static String nullable(String value) { return value == null || value.isBlank() ? null : value; }
     private String join(List<String> parts) {
         var text = parts.stream().filter(value -> value != null && !value.isBlank()).collect(Collectors.joining("\n"));
@@ -255,5 +319,5 @@ public class ProgramDraftCompiler {
         return UUID.nameUUIDFromBytes(("sizylift:import:" + session + ":" + key).getBytes(StandardCharsets.UTF_8));
     }
     private record Resolved(UUID id, String name, String resultType, LiftClass liftClass) { }
-    private record Compilation(UUID id, java.time.LocalDate startDate, Map<String, Resolved> exercises, java.util.Set<String> skipped, List<String> warnings, ImportLanguage language) { }
+    private record Compilation(UUID id, java.time.LocalDate startDate, Map<String, Resolved> exercises, java.util.Set<String> skipped, Map<String, String> headers, List<String> warnings, ImportLanguage language) { }
 }
