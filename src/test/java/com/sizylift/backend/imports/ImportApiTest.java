@@ -78,7 +78,9 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(worker.processOne()).isTrue();
         assertThat(sessions.find(id).orElseThrow().normalized().language()).isEqualTo("en");
         var preview = view(owner, id);
-        assertThat(preview.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0/note").asString())
+        // Комментариев к подходу нет: пометки подхода — в комментарии упражнения.
+        assertThat(preview.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0/note").isNull()).isTrue();
+        assertThat(preview.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/planComment").asString())
                 .contains("Reps: 8-12", "Личная заметка").doesNotContain("Set type not specified");
         // Повтор после смены языка не создаёт новую сессию и не меняет первый выбор.
         body.remove("language");
@@ -297,6 +299,28 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE user_id=? AND name='Омега'", Integer.class, user)).isEqualTo(1);
         var program = body(call(owner, get("/api/v2/web/programs/" + receipt.get("programId").asString())).andExpect(status().isOk()));
         assertThat(program.toString()).doesNotContain("Альфа").contains("Омега");
+    }
+
+    @Test
+    void rowMadeIntoBlockBecomesFreeBlockOfTheWorkout() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(custom("Разминка", "вес_повторы"), custom("Омега", "вес_повторы"))));
+        var id = create(owner, "Разминка; Омега: 3×5 100 кг @8", null, UUID.randomUUID());
+        worker.processOne();
+        var view = view(owner, id);
+        var decided = body(call(owner, patch(BASE + "/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("version", view.get("version").asLong(), "decisions",
+                        List.of(Map.of("key", "e1", "kind", "block", "name", "Разминка")))))).andExpect(status().isOk()));
+        assertThat(decided.get("canCommit").asBoolean()).isTrue();
+        var receipt = body(postJson(owner, BASE + "/" + id + "/commit", Map.of("version", decided.get("version").asLong()))
+                .andExpect(status().isOk()));
+        var user = userId(owner);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise WHERE user_id=? AND name='Разминка'", Integer.class, user)).isZero();
+        var program = body(call(owner, get("/api/v2/web/programs/" + receipt.get("programId").asString())).andExpect(status().isOk()));
+        var blocks = program.at("/program/cycles/0/weeks/0/workouts/0/blocks");
+        assertThat(blocks.get(0).get("blockType").asString()).isEqualTo("free");
+        assertThat(blocks.get(0).get("title").asString()).isEqualTo("Разминка");
+        assertThat(blocks.get(0).get("exercises").size()).isZero();
+        assertThat(program.toString()).contains("Омега");
     }
 
     @Test
@@ -639,7 +663,7 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
-    void missingValuesAndRangesRemainUnknownAndRirIsPreservedAsANote() throws Exception {
+    void missingValuesAndRangesRemainUnknownAndRirIsPreservedInTheExerciseComment() throws Exception {
         when(parser.parse(any(), any())).thenAnswer(reply(draftWithSet("Подход: кол=3 | повт=8-12 | RIR=2", matched())));
         var id = create(owner, "Присед 3×8-12 RIR 2", null, UUID.randomUUID());
         worker.processOne();
@@ -648,7 +672,9 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var actual = view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0");
         for (var field : List.of("repetitions", "targetWeightGrams", "targetRpeTenths", "restMs"))
             assertThat(actual.get(field).isNull()).as(field).isTrue();
-        assertThat(actual.get("note").asString()).contains("8-12", "RIR: 2");
+        assertThat(actual.get("note").isNull()).isTrue();
+        assertThat(view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/planComment").asString())
+                .contains("8-12", "RIR: 2");
     }
 
     @Test
