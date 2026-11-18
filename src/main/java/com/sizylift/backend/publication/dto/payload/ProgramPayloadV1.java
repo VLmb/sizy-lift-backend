@@ -8,6 +8,9 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.AssertTrue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -108,7 +111,21 @@ public record ProgramPayloadV1(
             @Min(0) Integer restMs,
             @Size(max = LONG_TEXT) String note,
             @Pattern(regexp = "(weight|percent|rpe):(weight|percent|rpe)?(,(weight|percent|rpe))*")
-            @Size(max = 64) String targetCalculation) {
+            @Size(max = 64) String targetCalculation,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Min(1) @Max(1000) Integer repetitionsMax) {
+        public Set(UUID id, int position, String setType, Integer targetWeightGrams, Integer repetitions,
+                   Integer durationMs, Integer targetDistanceM, Integer targetRpeTenths, boolean targetRpeAuto,
+                   Integer targetPercentOneRmTenths, Integer restMs, String note, String targetCalculation) {
+            this(id, position, setType, targetWeightGrams, repetitions, durationMs, targetDistanceM,
+                    targetRpeTenths, targetRpeAuto, targetPercentOneRmTenths, restMs, note, targetCalculation, null);
+        }
+
+        @JsonIgnore
+        @AssertTrue(message = "The upper repetition bound must exceed the positive lower bound.")
+        public boolean isRepetitionRangeValid() {
+            return repetitionsMax == null || repetitions != null && repetitions > 0 && repetitions < repetitionsMax;
+        }
+
         public Set(UUID id, int position, String setType, Integer targetWeightGrams, Integer repetitions,
                    Integer durationMs, Integer targetDistanceM, Integer targetRpeTenths, boolean targetRpeAuto,
                    Integer targetPercentOneRmTenths, Integer restMs, String note) {

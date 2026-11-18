@@ -67,8 +67,8 @@ public class ProgramDataRepository {
     private static final String INSERT_SET = """
             INSERT INTO sizylift.planned_set (user_id, id, program_id, planned_exercise_id, position, result_type,
                 set_type, target_weight_grams, repetitions, duration_ms, target_distance_m, target_rpe_tenths,
-                target_rpe_auto, target_percent_one_rm_tenths, rest_ms, note, target_calculation)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                target_rpe_auto, target_percent_one_rm_tenths, rest_ms, note, target_calculation, repetitions_max)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String SELECT_PROGRAM = """
@@ -98,7 +98,7 @@ public class ProgramDataRepository {
             """;
     private static final String SELECT_SETS = """
             SELECT id, planned_exercise_id, position, set_type, target_weight_grams, repetitions, duration_ms,
-                target_distance_m, target_rpe_tenths, target_rpe_auto, target_percent_one_rm_tenths, rest_ms, note, target_calculation
+                target_distance_m, target_rpe_tenths, target_rpe_auto, target_percent_one_rm_tenths, rest_ms, note, target_calculation, repetitions_max
             FROM sizylift.planned_set WHERE user_id = ? AND program_id = ? ORDER BY position, id
             """;
 
@@ -187,7 +187,7 @@ public class ProgramDataRepository {
                         exercise.id(), set.position(), exercise.resultType(), set.setType(),
                         set.targetWeightGrams(), set.repetitions(), set.durationMs(), set.targetDistanceM(),
                         set.targetRpeTenths(), set.targetRpeAuto(), set.targetPercentOneRmTenths(), set.restMs(),
-                        set.note(), set.targetCalculation()}))
+                        set.note(), set.targetCalculation(), set.repetitionsMax()}))
                 .toList();
     }
 
@@ -244,6 +244,7 @@ public class ProgramDataRepository {
         return new Child<>(uuid(row, "planned_exercise_id"), new Set(uuid(row, "id"), row.getInt("position"),
                 row.getString("set_type"), integer(row, "target_weight_grams"), integer(row, "repetitions"),
                 integer(row, "duration_ms"), integer(row, "target_distance_m"), integer(row, "target_rpe_tenths"),
-                row.getBoolean("target_rpe_auto"), integer(row, "target_percent_one_rm_tenths"), integer(row, "rest_ms"), row.getString("note"), row.getString("target_calculation")));
+                row.getBoolean("target_rpe_auto"), integer(row, "target_percent_one_rm_tenths"), integer(row, "rest_ms"), row.getString("note"), row.getString("target_calculation"),
+                integer(row, "repetitions_max")));
     }
 }

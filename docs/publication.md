@@ -13,6 +13,11 @@
 Статус: реализовано (сервер — feature `publication`, приложение — `src/application/publication.ts`,
 `src/data/sqlite/publication-*.ts`, `src/features/publication/`).
 
+
+Плановые подходы программы (`cycles[].weeks[].workouts[].blocks[].exercises[].sets[]`) и их снимки
+в выполненной тренировке (`planSetSnapshots[]`) поддерживают необязательное поле `repetitionsMax`.
+Если оно задано, `repetitions` — нижняя граница, `repetitionsMax` — верхняя (строго больше нижней, до 1000).
+Фактический подход хранит одно число повторений.
 ## Принципы
 
 - Публикуются **агрегаты целиком**: тренировка или программа со всеми вложенными

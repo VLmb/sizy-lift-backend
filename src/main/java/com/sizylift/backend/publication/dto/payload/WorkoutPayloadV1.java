@@ -8,6 +8,9 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.AssertTrue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -109,7 +112,21 @@ public record WorkoutPayloadV1(
             @Min(0) Integer targetDistanceM,
             @Min(RPE_TENTHS_MIN) @Max(RPE_TENTHS_MAX) Integer targetRpeTenths,
             @Min(0) Integer restMs,
-            @Size(max = LONG_TEXT) String note) {
+            @Size(max = LONG_TEXT) String note,
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Min(1) @Max(1000) Integer repetitionsMax) {
+        @JsonIgnore
+        @AssertTrue(message = "The upper repetition bound must exceed the positive lower bound.")
+        public boolean isRepetitionRangeValid() {
+            return repetitionsMax == null || repetitions != null && repetitions > 0 && repetitions < repetitionsMax;
+        }
+
+        public PlanSetSnapshot(UUID id, UUID actualSetId, UUID sourcePlannedExerciseId, UUID sourcePlannedSetId,
+                               int position, String resultType, String setType, Integer targetWeightGrams,
+                               Integer repetitions, Integer durationMs, Integer targetDistanceM,
+                               Integer targetRpeTenths, Integer restMs, String note) {
+            this(id, actualSetId, sourcePlannedExerciseId, sourcePlannedSetId, position, resultType, setType,
+                    targetWeightGrams, repetitions, durationMs, targetDistanceM, targetRpeTenths, restMs, note, null);
+        }
     }
 
     public record RecordEvent(
