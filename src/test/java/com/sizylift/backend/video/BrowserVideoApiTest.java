@@ -105,6 +105,25 @@ class BrowserVideoApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void techniqueFromTheBrowserMayLastTwoMinutes() throws Exception {
+        var coach = newSubject();
+        link(coach, athlete);
+        var source = movie("technique.mp4", "160x120", 95);
+        var id = UUID.randomUUID();
+        var place = request(id, "technique", Files.size(source), "video/mp4", 95_000);
+        place.put("title", "Присед: разбор");
+        var upload = body(postJson(coach, "/api/v2/videos", place).andExpect(status().isOk())).get("upload");
+        assertThat(put(upload.get("videoUrl").asString(), "video/mp4", Files.readAllBytes(source))).isEqualTo(200);
+        call(coach, post("/api/v2/videos/" + id + "/complete")).andExpect(status().isOk());
+
+        processing.processWaiting();
+
+        var ready = body(call(coach, get("/api/v2/videos/" + id)).andExpect(status().isOk()));
+        assertThat(ready.get("status").asString()).isEqualTo("ready");
+        assertThat(ready.get("durationMs").asInt()).isBetween(94_000, 96_000);
+    }
+
+    @Test
     void webmWithoutLengthInTheHeaderIsAccepted() throws Exception {
         var source = movie("recorded.webm", "640x480", 2);
         var id = uploadedSource(source, "video/webm", null);

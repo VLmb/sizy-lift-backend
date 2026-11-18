@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import com.sizylift.backend.video.config.VideoProperties;
+import com.sizylift.backend.video.config.VideoProperties.Limits;
 import com.sizylift.backend.video.service.VideoFailure.Reason;
 
 /**
@@ -43,14 +44,14 @@ public class FfmpegTranscoder implements VideoTranscoder {
     }
 
     @Override
-    public Transcoded transcode(Path source, Path video, Path preview) throws IOException {
-        var limit = properties.maxDuration().plus(properties.durationTolerance());
+    public Transcoded transcode(Path source, Path video, Path preview, Limits limits) throws IOException {
+        var limit = limits.maxDuration().plus(properties.durationTolerance());
         // Длины в заголовке может не быть (WebM из браузера): тогда её покажет готовый ролик.
         var sourceDuration = probe(source).orElseThrow(() -> new Rejected(Reason.UNSUPPORTED));
         if (sourceDuration.isPresent() && sourceDuration.get() > limit.toMillis()) {
             throw new Rejected(Reason.TOO_LONG);
         }
-        encode(source, video, limit.plusSeconds(1));
+        encode(source, video, limit.plusSeconds(1), limits.maxSizeBytes());
         var duration = probe(video).flatMap(found -> found)
                 .orElseThrow(() -> new Rejected(Reason.UNSUPPORTED));
         if (duration > limit.toMillis()) {
@@ -76,7 +77,7 @@ public class FfmpegTranscoder implements VideoTranscoder {
                 .map(seconds -> Math.round(seconds * MILLIS_PER_SECOND)).findFirst());
     }
 
-    private void encode(Path source, Path video, Duration limit) throws IOException {
+    private void encode(Path source, Path video, Duration limit, long maxSizeBytes) throws IOException {
         for (long bitrate : VIDEO_BITRATES) {
             var result = run(ffmpeg("-i", source.toString(), "-map", "0:v:0", "-map", "0:a:0?",
                     "-t", seconds(limit.toMillis()),
@@ -90,7 +91,7 @@ public class FfmpegTranscoder implements VideoTranscoder {
             if (result.exitCode() != 0) {
                 throw new Rejected(Reason.UNSUPPORTED);
             }
-            if (Files.size(video) <= properties.maxSizeBytes()) {
+            if (Files.size(video) <= maxSizeBytes) {
                 return;
             }
         }

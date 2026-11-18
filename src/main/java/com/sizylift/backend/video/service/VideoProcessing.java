@@ -112,7 +112,7 @@ public class VideoProcessing {
             var output = directory.resolve(VIDEO_FILE);
             var preview = directory.resolve(PREVIEW_FILE);
             storage.download(video.sourceKey(), source);
-            var result = transcoder.transcode(source, output, preview);
+            var result = transcoder.transcode(source, output, preview, properties.limits().of(video.kind()));
             storage.upload(video.videoKey(), VideoService.VIDEO_CONTENT_TYPE, output);
             storage.upload(video.previewKey(), VideoService.PREVIEW_CONTENT_TYPE, preview);
             if (service.finishProcessing(video.id(), Files.size(output), Files.size(preview), result.durationMs())) {

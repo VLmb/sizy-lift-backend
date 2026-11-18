@@ -42,6 +42,7 @@ class VideoApiTest extends CoachWorkspaceApiSupport {
     static final int VIDEO_BYTES = 3 * 1024 * 1024;
     static final int PREVIEW_BYTES = 20_000;
     static final long MAX_VIDEO_BYTES = 26_214_400;
+    static final long MAX_TECHNIQUE_BYTES = 52_428_800;
     static final long MAX_PREVIEW_BYTES = 204_800;
     static final int DURATION_MS = 24_000;
     static final int REJECTED = 403;
@@ -357,6 +358,33 @@ class VideoApiTest extends CoachWorkspaceApiSupport {
         var videoWithoutExercise = comment(workout, "Видео");
         videoWithoutExercise.put("videoId", video.toString());
         assertThat(rejected(athlete, videoWithoutExercise)).isEqualTo("invalid_payload");
+    }
+
+    @Test
+    void techniqueVideoMayBeTwiceAsLongAndLarger() throws Exception {
+        var longSet = request(UUID.randomUUID(), "set", VIDEO_BYTES, PREVIEW_BYTES);
+        longSet.put("durationMs", 100_000);
+        create(athlete, longSet).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("video_too_long"));
+        create(athlete, request(UUID.randomUUID(), "set", MAX_VIDEO_BYTES + 1, PREVIEW_BYTES))
+                .andExpect(status().isUnprocessableContent());
+        var tooLongTechnique = request(UUID.randomUUID(), "technique", VIDEO_BYTES, PREVIEW_BYTES);
+        tooLongTechnique.put("durationMs", 120_001);
+        create(coach, tooLongTechnique).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("video_too_long"));
+        create(coach, request(UUID.randomUUID(), "technique", MAX_TECHNIQUE_BYTES + 1, PREVIEW_BYTES))
+                .andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.code").value("video_too_large"));
+
+        var id = UUID.randomUUID();
+        var video = VideoFiles.mp4(40 * 1024 * 1024, 110_000);
+        var place = request(id, "technique", video.length, PREVIEW_BYTES);
+        place.put("durationMs", 110_000);
+        var upload = body(create(coach, place).andExpect(status().isOk())).get("upload");
+        assertThat(put(upload.get("videoUrl").asString(), "video/mp4", video)).isEqualTo(200);
+        assertThat(put(upload.get("previewUrl").asString(), "image/jpeg", VideoFiles.jpeg(PREVIEW_BYTES)))
+                .isEqualTo(200);
+        call(coach, post("/api/v2/videos/" + id + "/complete")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.durationMs").value(110_000));
     }
 
     @Test

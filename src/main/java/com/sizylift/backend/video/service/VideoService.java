@@ -128,8 +128,9 @@ public class VideoService {
         if (video.isEmpty() || video.get().status() != VideoStatus.PROCESSING) {
             return false;
         }
+        var maxDuration = properties.limits().of(video.get().kind()).maxDuration().toMillis();
         return videos.markProcessed(id, sizeBytes, previewSizeBytes,
-                (int) Math.max(1, Math.min(durationMs, properties.maxDuration().toMillis())), now());
+                (int) Math.max(1, Math.min(durationMs, maxDuration)), now());
     }
 
     /** Исходник из браузера не перекодировать: ролик удаляется и снимается с комментариев и программ. */
@@ -147,10 +148,11 @@ public class VideoService {
         if (duration.isEmpty()) {
             throw rejected(video, Reason.UNSUPPORTED);
         }
-        if (duration.getAsLong() > properties.maxDuration().plus(properties.durationTolerance()).toMillis()) {
+        var maxDuration = properties.limits().of(video.kind()).maxDuration();
+        if (duration.getAsLong() > maxDuration.plus(properties.durationTolerance()).toMillis()) {
             throw rejected(video, Reason.TOO_LONG);
         }
-        return (int) Math.max(1, Math.min(duration.getAsLong(), properties.maxDuration().toMillis()));
+        return (int) Math.max(1, Math.min(duration.getAsLong(), maxDuration.toMillis()));
     }
 
     private VideoFailure rejected(Video video, Reason reason) {
@@ -299,11 +301,12 @@ public class VideoService {
                 || request.sizeBytes() <= 0 || request.previewSizeBytes() <= 0 || request.durationMs() <= 0) {
             throw new VideoFailure(Reason.INVALID_VIDEO);
         }
-        if (request.sizeBytes() > properties.maxSizeBytes()
+        var limits = properties.limits().of(kind);
+        if (request.sizeBytes() > limits.maxSizeBytes()
                 || request.previewSizeBytes() > properties.maxPreviewSizeBytes()) {
             throw new VideoFailure(Reason.TOO_LARGE);
         }
-        requireLength(request.durationMs());
+        requireLength(limits, request.durationMs());
         return new Video(request.id(), callerId, kind, VideoStatus.PENDING, request.sizeBytes(),
                 request.previewSizeBytes(), request.durationMs(), title(kind, request), request.exerciseId(),
                 text(request.exerciseName()), now(), null, null, null);
@@ -315,6 +318,7 @@ public class VideoService {
      */
     private Video browserDraft(UUID callerId, VideoKind kind, CreateVideoRequest request) {
         var browser = properties.browser();
+        var limits = properties.limits().of(kind);
         if (request.sizeBytes() == null || request.sizeBytes() <= 0
                 || (request.durationMs() != null && request.durationMs() <= 0)) {
             throw new VideoFailure(Reason.INVALID_VIDEO);
@@ -322,19 +326,19 @@ public class VideoService {
         if (request.contentType() == null || !browser.contentTypes().contains(request.contentType())) {
             throw new VideoFailure(Reason.UNSUPPORTED);
         }
-        if (request.sizeBytes() > browser.maxSourceSizeBytes()) {
+        if (request.sizeBytes() > limits.maxSourceSizeBytes()) {
             throw new VideoFailure(Reason.TOO_LARGE);
         }
-        var maxDuration = (int) properties.maxDuration().toMillis();
+        var maxDuration = (int) limits.maxDuration().toMillis();
         var duration = request.durationMs() == null ? maxDuration : request.durationMs();
-        requireLength(duration);
-        return new Video(request.id(), callerId, kind, VideoStatus.PENDING, properties.maxSizeBytes(),
+        requireLength(limits, duration);
+        return new Video(request.id(), callerId, kind, VideoStatus.PENDING, limits.maxSizeBytes(),
                 properties.maxPreviewSizeBytes(), duration, title(kind, request), request.exerciseId(),
                 text(request.exerciseName()), now(), null, request.contentType(), request.sizeBytes());
     }
 
-    private void requireLength(int durationMs) {
-        if (durationMs > properties.maxDuration().toMillis()) {
+    private static void requireLength(VideoProperties.Limits limits, int durationMs) {
+        if (durationMs > limits.maxDuration().toMillis()) {
             throw new VideoFailure(Reason.TOO_LONG);
         }
     }

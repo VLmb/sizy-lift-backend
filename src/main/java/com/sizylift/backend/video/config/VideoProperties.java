@@ -5,12 +5,14 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
+import com.sizylift.backend.video.entity.VideoKind;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
- * Видео (ADR-0012). Пределы — настройки, а не константы: {@code maxSizeBytes} и {@code maxPreviewSizeBytes} —
- * ролик и кадр-превью, {@code maxDuration} — длина ролика, {@code quota} — на пользователя по видам,
+ * Видео (ADR-0012). Пределы — настройки, а не константы: {@code limits} — длина и размер ролика по видам
+ * (видео техники длиннее видео подхода), {@code maxPreviewSizeBytes} — кадр-превью, {@code quota} — на
+ * пользователя по видам,
  * {@code bucketLimitBytes} — всё хранилище, {@code pendingTtl} — сколько живёт незавершённая загрузка.
  * {@code durationTolerance} — насколько настоящая длина ролика может превысить предел (сжатие немного её меняет),
  * {@code maxIndexBytes} — предел индекса MP4 ({@code moov}), который сервер читает при проверке содержимого,
@@ -26,9 +28,8 @@ public record VideoProperties(
         Storage storage,
         Duration uploadUrlTtl,
         Duration viewUrlTtl,
-        long maxSizeBytes,
+        KindLimits limits,
         long maxPreviewSizeBytes,
-        Duration maxDuration,
         Quota quota,
         long bucketLimitBytes,
         Duration pendingTtl,
@@ -49,11 +50,26 @@ public record VideoProperties(
     public record Quota(long setBytes, long techniqueBytes) {
     }
 
+    /** Пределы ролика по видам. */
+    public record KindLimits(Limits set, Limits technique) {
+
+        public Limits of(VideoKind kind) {
+            return kind == VideoKind.TECHNIQUE ? technique : set;
+        }
+    }
+
     /**
-     * Загрузка из браузера. {@code maxSourceSizeBytes} — предел исходника, {@code contentTypes} — допустимые
-     * типы исходника, {@code processing} — перекодирование.
+     * {@code maxDuration} — длина ролика, {@code maxSizeBytes} — ролик после сжатия (приложением или сервером),
+     * {@code maxSourceSizeBytes} — исходник из браузера до перекодирования.
      */
-    public record Browser(long maxSourceSizeBytes, List<String> contentTypes, Processing processing) {
+    public record Limits(Duration maxDuration, long maxSizeBytes, long maxSourceSizeBytes) {
+    }
+
+    /**
+     * Загрузка из браузера. {@code contentTypes} — допустимые типы исходника, {@code processing} —
+     * перекодирование; пределы исходника — в {@link Limits}.
+     */
+    public record Browser(List<String> contentTypes, Processing processing) {
     }
 
     /**

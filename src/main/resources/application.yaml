@@ -61,9 +61,17 @@ sizylift:
     enabled: ${VIDEO_ENABLED:true}
     upload-url-ttl: 15m
     view-url-ttl: 10m
-    max-size-bytes: 26214400
+    # Пределы по видам: подход — до минуты, видео техники — до двух минут (разбор движения тренером).
+    limits:
+      set:
+        max-duration: 60s
+        max-size-bytes: 26214400
+        max-source-size-bytes: 314572800
+      technique:
+        max-duration: 120s
+        max-size-bytes: 52428800
+        max-source-size-bytes: 629145600
     max-preview-size-bytes: 204800
-    max-duration: 60s
     quota:
       set-bytes: 314572800
       technique-bytes: 1073741824
@@ -79,7 +87,6 @@ sizylift:
     fill-check-interval: 10m
     # Загрузка с сайта и из PWA: исходник как есть, сервер перекодирует в MP4 720p и делает превью.
     browser:
-      max-source-size-bytes: 314572800
       content-types: [video/mp4, video/quicktime, video/webm, video/x-matroska, video/3gpp]
       processing:
         ffmpeg: ffmpeg
