@@ -33,8 +33,10 @@ public class VideoRepository {
                 title, exercise_id, exercise_name, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
-    private static final String MARK_READY =
-            "UPDATE sizylift.video SET status = 'ready', uploaded_at = ? WHERE id = ? AND status = 'pending'";
+    private static final String MARK_READY = """
+            UPDATE sizylift.video SET status = 'ready', duration_ms = ?, uploaded_at = ?
+            WHERE id = ? AND status = 'pending'
+            """;
     private static final String DELETE = "DELETE FROM sizylift.video WHERE id = ?";
     private static final String USED_BYTES = """
             SELECT coalesce(sum(size_bytes + preview_size_bytes), 0) FROM sizylift.video
@@ -51,6 +53,14 @@ public class VideoRepository {
             """;
     private static final String STALE_PENDING =
             "SELECT id FROM sizylift.video WHERE status = 'pending' AND created_at < ? ORDER BY id";
+    /** Ролики, на которые ссылаются комментарии, но которых на сервере нет: отменены или так и не загружены. */
+    private static final String ORPHAN_COMMENT_VIDEOS = """
+            SELECT DISTINCT c.video_id FROM sizylift.workout_comment c
+            WHERE c.video_id IS NOT NULL AND c.created_at < ?
+              AND NOT EXISTS (SELECT 1 FROM sizylift.video v WHERE v.id = c.video_id)
+            ORDER BY c.video_id
+            LIMIT ?
+            """;
     private static final String OWNED_IDS = "SELECT id FROM sizylift.video WHERE owner_user_id = ? ORDER BY id";
 
     private static final String COMMENT_USES = """
@@ -121,8 +131,8 @@ public class VideoRepository {
                 video.exerciseName(), Timestamp.from(video.createdAt()));
     }
 
-    public void markReady(UUID id, Instant uploadedAt) {
-        jdbc.update(MARK_READY, Timestamp.from(uploadedAt), id);
+    public void markReady(UUID id, int durationMs, Instant uploadedAt) {
+        jdbc.update(MARK_READY, durationMs, Timestamp.from(uploadedAt), id);
     }
 
     public void delete(UUID id) {
@@ -145,6 +155,11 @@ public class VideoRepository {
 
     public List<UUID> stalePending(Instant createdBefore) {
         return jdbc.query(STALE_PENDING, (row, n) -> row.getObject("id", UUID.class), Timestamp.from(createdBefore));
+    }
+
+    public List<UUID> orphanCommentVideos(Instant createdBefore, int limit) {
+        return jdbc.query(ORPHAN_COMMENT_VIDEOS, (row, n) -> row.getObject("video_id", UUID.class),
+                Timestamp.from(createdBefore), limit);
     }
 
     public List<UUID> ownedIds(UUID ownerId) {

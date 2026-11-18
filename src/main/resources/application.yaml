@@ -69,6 +69,14 @@ sizylift:
       technique-bytes: 1073741824
     bucket-limit-bytes: 8589934592
     pending-ttl: 24h
+    # Проверка содержимого при завершении загрузки: настоящая длина ролика из индекса MP4.
+    duration-tolerance: 1s
+    max-index-bytes: 4194304
+    # Комментарий со ссылкой на ролик, которого на сервере так и нет, отпускает его через неделю.
+    orphan-ttl: 7d
+    # Предупреждение в журнал при заполнении общего предела хранилища (оповещений в проекте пока нет).
+    fill-warnings: [0.7, 0.9]
+    fill-check-interval: 10m
     cleanup-cron: "0 47 4 * * *"
     removal-interval: 1m
   notifications:

@@ -68,8 +68,8 @@ class VideoApiTest extends CoachWorkspaceApiSupport {
     @Test
     void garageTakesSignedUploadsAndServesRangesBeforeTheWholeFileIsRead() throws Exception {
         var id = UUID.randomUUID();
-        var video = bytes(VIDEO_BYTES);
-        var preview = bytes(PREVIEW_BYTES);
+        var video = VideoFiles.mp4(VIDEO_BYTES, DURATION_MS);
+        var preview = VideoFiles.jpeg(PREVIEW_BYTES);
         var created = body(create(athlete, request(id, "set", VIDEO_BYTES, PREVIEW_BYTES)).andExpect(status().isOk()));
         var upload = created.get("upload");
         assertThat(created.get("video").get("status").asString()).isEqualTo("pending");
@@ -360,6 +360,124 @@ class VideoApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void completionChecksTheContentAndKeepsTheRealLength() throws Exception {
+        var shorter = UUID.randomUUID();
+        putFiles(athlete, shorter, "set", VideoFiles.mp4(VIDEO_BYTES, 20_400), VideoFiles.jpeg(PREVIEW_BYTES));
+        call(athlete, post("/api/v2/videos/" + shorter + "/complete")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.durationMs").value(20_400));
+
+        var slightlyLonger = UUID.randomUUID();
+        putFiles(athlete, slightlyLonger, "set", VideoFiles.mp4(VIDEO_BYTES, 60_700), VideoFiles.jpeg(PREVIEW_BYTES));
+        call(athlete, post("/api/v2/videos/" + slightlyLonger + "/complete")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.durationMs").value(60_000));
+
+        var tooLong = UUID.randomUUID();
+        putFiles(athlete, tooLong, "set", VideoFiles.mp4(VIDEO_BYTES, 95_000), VideoFiles.jpeg(PREVIEW_BYTES));
+        call(athlete, post("/api/v2/videos/" + tooLong + "/complete")).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("video_too_long"));
+        call(athlete, get("/api/v2/videos/" + tooLong)).andExpect(status().isNotFound());
+
+        var notAMovie = UUID.randomUUID();
+        putFiles(athlete, notAMovie, "set", bytes(VIDEO_BYTES), VideoFiles.jpeg(PREVIEW_BYTES));
+        call(athlete, post("/api/v2/videos/" + notAMovie + "/complete")).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("video_unsupported"));
+
+        var notAPicture = UUID.randomUUID();
+        putFiles(athlete, notAPicture, "set", VideoFiles.mp4(VIDEO_BYTES, DURATION_MS), bytes(PREVIEW_BYTES));
+        call(athlete, post("/api/v2/videos/" + notAPicture + "/complete")).andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("video_unsupported"));
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.video_removal WHERE video_id IN (?, ?, ?)",
+                Integer.class, tooLong, notAMovie, notAPicture)).as("файлы отклонённых — в очереди удаления")
+                .isEqualTo(3);
+        var list = body(call(athlete, get("/api/v2/videos").param("kind", "set")).andExpect(status().isOk()));
+        assertThat(list.get("quota").get("usedBytes").asLong()).as("отклонённые не занимают квоту")
+                .isEqualTo(2L * (VIDEO_BYTES + PREVIEW_BYTES));
+    }
+
+    @Test
+    void rejectedUploadIsTakenOffTheComment() throws Exception {
+        var id = UUID.randomUUID();
+        var workout = UUID.randomUUID();
+        var payload = workout();
+        push(athlete, item("workout", workout, null, 0, 1, payload));
+        var exercise = UUID.fromString(payload.get("blocks").get(0).get("exercises").get(0).get("id").asString());
+        var comment = UUID.randomUUID();
+        push(athlete, item("workout_comment", comment, null, 0, 1, exerciseComment(workout, "Глянь", exercise, 2, id)));
+        putFiles(athlete, id, "set", bytes(VIDEO_BYTES), VideoFiles.jpeg(PREVIEW_BYTES));
+
+        call(athlete, post("/api/v2/videos/" + id + "/complete")).andExpect(status().isUnprocessableContent());
+
+        var kept = body(call(coach, get("/api/v2/web/workouts/" + workout).param("ownerId", athleteId.toString()))
+                .andExpect(status().isOk())).get("comments").get(0).get("payload");
+        assertThat(kept.get("videoId").isNull()).isTrue();
+        assertThat(kept.get("text").asString()).isEqualTo("Глянь");
+    }
+
+    @Test
+    void cancelledUploadIsTakenOffWhatTheCallerCanEditOnly() throws Exception {
+        var never = UUID.randomUUID();
+        var workout = UUID.randomUUID();
+        var payload = workout();
+        push(athlete, item("workout", workout, null, 0, 1, payload));
+        var exercise = UUID.fromString(payload.get("blocks").get(0).get("exercises").get(0).get("id").asString());
+        var comment = UUID.randomUUID();
+        push(athlete, item("workout_comment", comment, null, 0, 1, exerciseComment(workout, "", exercise, 4, never)));
+        var technique = UUID.randomUUID();
+        var assigned = UUID.randomUUID();
+        push(coach, item("program", assigned, athleteId, 0, 1, programWith(technique)));
+
+        // Чужой комментарий тренер не правит.
+        call(coach, delete("/api/v2/videos/" + never)).andExpect(status().isNotFound());
+        call(athlete, delete("/api/v2/videos/" + UUID.randomUUID())).andExpect(status().isNotFound());
+
+        var forgotten = body(call(athlete, delete("/api/v2/videos/" + never)).andExpect(status().isOk()));
+        assertThat(forgotten.get("removedFrom").get("comments").get(0).get("commentId").asString())
+                .isEqualTo(comment.toString());
+        assertThat(body(call(coach, get("/api/v2/web/workouts/" + workout).param("ownerId", athleteId.toString()))
+                .andExpect(status().isOk())).get("comments")).as("комментарий только с видео удалён").isEmpty();
+
+        var detached = body(call(coach, delete("/api/v2/videos/" + technique)).andExpect(status().isOk()));
+        assertThat(names(detached.get("removedFrom").get("programs"))).hasSize(1);
+        assertThat(body(call(athlete, get("/api/v2/web/programs/" + assigned)).andExpect(status().isOk()))
+                .toString()).doesNotContain(technique.toString());
+    }
+
+    @Test
+    void commentsLetGoOfVideosThatNeverArrived() throws Exception {
+        var lost = UUID.randomUUID();
+        var recent = UUID.randomUUID();
+        var pending = UUID.randomUUID();
+        var workout = UUID.randomUUID();
+        var payload = workout();
+        push(athlete, item("workout", workout, null, 0, 1, payload));
+        var exercise = UUID.fromString(payload.get("blocks").get(0).get("exercises").get(0).get("id").asString());
+        var lostComment = UUID.randomUUID();
+        push(athlete, item("workout_comment", lostComment, null, 0, 1,
+                exerciseComment(workout, "Подход", exercise, 1, lost)));
+        push(athlete, item("workout_comment", UUID.randomUUID(), null, 0, 1,
+                exerciseComment(workout, "Ещё", exercise, 2, recent).put("createdAt", T10.plusSeconds(1).toString())));
+        push(athlete, item("workout_comment", UUID.randomUUID(), null, 0, 1,
+                exerciseComment(workout, "Грузится", exercise, 3, pending).put("createdAt", T10.plusSeconds(2).toString())));
+        create(athlete, request(pending, "set", VIDEO_BYTES, PREVIEW_BYTES)).andExpect(status().isOk());
+        jdbc.update("UPDATE sizylift.workout_comment SET created_at = now() - interval '8 days' WHERE video_id IN (?, ?)",
+                lost, pending);
+        jdbc.update("UPDATE sizylift.workout_comment SET created_at = now() - interval '2 days' WHERE video_id = ?",
+                recent);
+
+        maintenance.dropStalePending();
+
+        var comments = body(call(coach, get("/api/v2/web/workouts/" + workout).param("ownerId", athleteId.toString()))
+                .andExpect(status().isOk())).get("comments");
+        var videos = new HashMap<String, String>();
+        comments.forEach(c -> videos.put(c.get("payload").get("text").asString(),
+                c.get("payload").get("videoId").isNull() ? null : c.get("payload").get("videoId").asString()));
+        assertThat(videos).containsEntry("Подход", null)
+                .as("неделя ещё не прошла").containsEntry("Ещё", recent.toString())
+                .as("загрузка идёт").containsEntry("Грузится", pending.toString());
+    }
+
+    @Test
     void staleUnfinishedUploadsAreDropped() throws Exception {
         var stale = UUID.randomUUID();
         var fresh = UUID.randomUUID();
@@ -380,14 +498,19 @@ class VideoApiTest extends CoachWorkspaceApiSupport {
 
     private UUID uploaded(String subject, String kind) throws Exception {
         var id = UUID.randomUUID();
-        var upload = body(create(subject, request(id, kind, VIDEO_BYTES, PREVIEW_BYTES)).andExpect(status().isOk()))
-                .get("upload");
-        assertThat(put(upload.get("videoUrl").asString(), upload.get("videoContentType").asString(),
-                bytes(VIDEO_BYTES))).isEqualTo(200);
-        assertThat(put(upload.get("previewUrl").asString(), upload.get("previewContentType").asString(),
-                bytes(PREVIEW_BYTES))).isEqualTo(200);
+        putFiles(subject, id, kind, VideoFiles.mp4(VIDEO_BYTES, DURATION_MS), VideoFiles.jpeg(PREVIEW_BYTES));
         call(subject, post("/api/v2/videos/" + id + "/complete")).andExpect(status().isOk());
         return id;
+    }
+
+    /** Место под ролик и оба файла в хранилище; загрузка не подтверждена. */
+    private void putFiles(String subject, UUID id, String kind, byte[] video, byte[] preview) throws Exception {
+        var upload = body(create(subject, request(id, kind, video.length, preview.length))
+                .andExpect(status().isOk())).get("upload");
+        assertThat(put(upload.get("videoUrl").asString(), upload.get("videoContentType").asString(), video))
+                .isEqualTo(200);
+        assertThat(put(upload.get("previewUrl").asString(), upload.get("previewContentType").asString(), preview))
+                .isEqualTo(200);
     }
 
     private ResultActions create(String subject, Map<String, Object> request) throws Exception {
@@ -425,9 +548,7 @@ class VideoApiTest extends CoachWorkspaceApiSupport {
     }
 
     private static byte[] bytes(int size) {
-        var content = new byte[size];
-        new java.util.Random(size).nextBytes(content);
-        return content;
+        return VideoFiles.random(size, size);
     }
 
     private ObjectNode comment(UUID workout, String text) {

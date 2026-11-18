@@ -47,6 +47,12 @@ class S3VideoStorage implements VideoStorage {
     }
 
     @Override
+    public byte[] read(String key, long offset, int length) {
+        var range = "bytes=" + offset + "-" + (offset + length - 1);
+        return client.getObjectAsBytes(get -> get.bucket(bucket).key(key).range(range)).asByteArray();
+    }
+
+    @Override
     public void delete(String key) {
         client.deleteObject(delete -> delete.bucket(bucket).key(key));
     }

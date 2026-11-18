@@ -15,5 +15,8 @@ public interface VideoStorage {
     /** Размер объекта; пусто — объекта нет. */
     OptionalLong size(String key);
 
+    /** Часть объекта: {@code length} байт начиная с {@code offset}; для проверки содержимого, не для выдачи. */
+    byte[] read(String key, long offset, int length);
+
     void delete(String key);
 }

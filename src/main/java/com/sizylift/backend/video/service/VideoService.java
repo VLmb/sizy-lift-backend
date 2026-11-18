@@ -91,8 +91,12 @@ public class VideoService {
         return new UploadResponse(response(draft, Usage.NONE), uploadTarget(draft));
     }
 
-    /** Подтверждает загрузку: оба объекта на месте и их размер совпадает с заявленным. */
-    @Transactional
+    /**
+     * Подтверждает загрузку: оба объекта на месте, их размер совпадает с заявленным, ролик — MP4 не длиннее
+     * предела, превью — JPEG. Не прошедший проверку ролик удаляется сразу (повтор той же загрузки не поможет)
+     * и снимается с комментариев и программ; сохраняется настоящая длина ролика, а не заявленная.
+     */
+    @Transactional(noRollbackFor = VideoFailure.class)
     public VideoResponse complete(UUID callerId, UUID id) {
         requireEnabled();
         var video = videos.lock(id).filter(found -> found.ownerId().equals(callerId))
@@ -102,9 +106,31 @@ public class VideoService {
                     || !uploaded(video.previewKey(), video.previewSizeBytes())) {
                 throw new VideoFailure(Reason.UPLOAD_INCOMPLETE);
             }
-            videos.markReady(id, now());
+            videos.markReady(id, measuredDuration(video), now());
         }
         return view(callerId, videos.find(id).orElseThrow());
+    }
+
+    private int measuredDuration(Video video) {
+        if (!Mp4Probe.jpeg(storage.read(video.previewKey(), 0, Mp4Probe.JPEG_SIGNATURE_LENGTH))) {
+            throw rejected(video, Reason.UNSUPPORTED);
+        }
+        var duration = Mp4Probe.durationMs((offset, length) -> storage.read(video.videoKey(), offset, length),
+                video.sizeBytes(), properties.maxIndexBytes());
+        if (duration.isEmpty()) {
+            throw rejected(video, Reason.UNSUPPORTED);
+        }
+        if (duration.getAsLong() > properties.maxDuration().plus(properties.durationTolerance()).toMillis()) {
+            throw rejected(video, Reason.TOO_LONG);
+        }
+        return (int) Math.max(1, Math.min(duration.getAsLong(), properties.maxDuration().toMillis()));
+    }
+
+    private VideoFailure rejected(Video video, Reason reason) {
+        detach(video.id(), videos.commentUses(List.of(video.id())), videos.programUses(List.of(video.id())));
+        videos.delete(video.id());
+        videos.queueRemoval(video.id(), video.ownerId(), now());
+        return new VideoFailure(reason);
     }
 
     @Transactional(readOnly = true)
@@ -141,17 +167,49 @@ public class VideoService {
     /**
      * Удаляет ролик владельца и снимает его с комментариев и программ: комментарий без текста удаляется,
      * остальные агрегаты получают новую ревизию. Файлы убирает {@link VideoMaintenance}.
+     * Ролика, до которого загрузка так и не дошла (приложение отменило её), на сервере нет: тогда он только
+     * снимается с того, что вызывающий может править сам, — своих комментариев, своих программ и программ
+     * действующих подопечных.
      */
     @Transactional
     public DeleteResponse delete(UUID callerId, UUID id) {
-        var video = videos.find(id).filter(found -> found.ownerId().equals(callerId))
+        var found = videos.find(id);
+        if (found.isEmpty()) {
+            return forget(callerId, id);
+        }
+        var video = found.filter(owned -> owned.ownerId().equals(callerId))
                 .orElseThrow(() -> new VideoFailure(Reason.NOT_FOUND));
         var removedFrom = usage(callerId, List.of(id)).getOrDefault(id, Usage.NONE);
-        detach(id);
+        detach(id, videos.commentUses(List.of(id)), videos.programUses(List.of(id)));
         videos.lock(id);
         videos.delete(id);
         videos.queueRemoval(id, video.ownerId(), now());
         return new DeleteResponse(id, removedFrom);
+    }
+
+    private DeleteResponse forget(UUID callerId, UUID id) {
+        Set<UUID> editable = new HashSet<>(videos.activeAthletesOf(callerId));
+        editable.add(callerId);
+        var comments = videos.commentUses(List.of(id)).stream()
+                .filter(use -> use.ownerId().equals(callerId)).toList();
+        var programs = videos.programUses(List.of(id)).stream()
+                .filter(use -> editable.contains(use.ownerId())).toList();
+        if (comments.isEmpty() && programs.isEmpty()) {
+            throw new VideoFailure(Reason.NOT_FOUND);
+        }
+        detach(id, comments, programs);
+        return new DeleteResponse(id, usage(comments, programs));
+    }
+
+    /**
+     * Комментарии, которые ссылаются на ролик, так и не появившийся на сервере дольше {@code orphanTtl}, его
+     * отпускают: иначе у тренера навсегда висит «Видео загружается». Возвращает, сколько роликов отпущено.
+     */
+    @Transactional
+    public int detachOrphans(Instant createdBefore, int limit) {
+        var orphans = videos.orphanCommentVideos(createdBefore, limit);
+        orphans.forEach(id -> detach(id, videos.commentUses(List.of(id)), videos.programUses(List.of(id))));
+        return orphans.size();
     }
 
     /** Перед удалением аккаунта: файлы всех его роликов ставятся в очередь удаления. */
@@ -161,9 +219,7 @@ public class VideoService {
         videos.ownedIds(ownerId).forEach(id -> videos.queueRemoval(id, ownerId, now));
     }
 
-    private void detach(UUID videoId) {
-        var comments = videos.commentUses(List.of(videoId));
-        var programs = videos.programUses(List.of(videoId));
+    private void detach(UUID videoId, List<CommentUse> comments, List<ProgramUse> programs) {
         if (comments.isEmpty() && programs.isEmpty()) {
             return;
         }
@@ -314,12 +370,15 @@ public class VideoService {
                 .filter(use -> visibleOwners.contains(use.ownerId()))
                 .collect(Collectors.groupingBy(ProgramUse::videoId));
         var ids = new ArrayList<>(videoIds);
-        return ids.stream().collect(Collectors.toMap(id -> id, id -> new Usage(
-                comments.getOrDefault(id, List.of()).stream().map(use -> new CommentUsage(use.commentId(),
-                        use.ownerId(), use.workoutId(), use.workoutDate(), use.workoutExerciseId(),
-                        use.setNumber())).toList(),
-                programs.getOrDefault(id, List.of()).stream().map(use -> new ProgramUsage(use.programId(),
-                        use.ownerId(), use.name())).toList())));
+        return ids.stream().collect(Collectors.toMap(id -> id, id -> usage(
+                comments.getOrDefault(id, List.of()), programs.getOrDefault(id, List.of()))));
+    }
+
+    private static Usage usage(List<CommentUse> comments, List<ProgramUse> programs) {
+        return new Usage(
+                comments.stream().map(use -> new CommentUsage(use.commentId(), use.ownerId(), use.workoutId(),
+                        use.workoutDate(), use.workoutExerciseId(), use.setNumber())).toList(),
+                programs.stream().map(use -> new ProgramUsage(use.programId(), use.ownerId(), use.name())).toList());
     }
 
     private Instant now() {
