@@ -1,6 +1,8 @@
 package com.sizylift.backend.video.config;
 
+import com.sizylift.backend.video.service.FfmpegTranscoder;
 import com.sizylift.backend.video.service.VideoStorage;
+import com.sizylift.backend.video.service.VideoTranscoder;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +20,11 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(VideoProperties.class)
 class VideoConfiguration {
+
+    @Bean
+    VideoTranscoder videoTranscoder(VideoProperties properties) {
+        return new FfmpegTranscoder(properties);
+    }
 
     @Bean
     VideoStorage videoStorage(VideoProperties properties) {

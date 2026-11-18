@@ -12,9 +12,14 @@ public final class VideoDtos {
     private VideoDtos() {
     }
 
-    /** {@code id} придумывает приложение; {@code title} обязателен для видео техники. */
+    /**
+     * {@code id} придумывает клиент; {@code title} обязателен для видео техники. {@code source}: {@code device}
+     * (по умолчанию) — приложение уже сжало ролик и сделало превью; {@code browser} — исходный файл как есть,
+     * {@code sizeBytes} — его размер, {@code contentType} — его тип, превью делает сервер.
+     */
     public record CreateVideoRequest(UUID id, String kind, Long sizeBytes, Long previewSizeBytes, Integer durationMs,
-                                     String title, UUID exerciseId, String exerciseName) {
+                                     String title, UUID exerciseId, String exerciseName, String source,
+                                     String contentType) {
     }
 
     /**
@@ -41,7 +46,10 @@ public final class VideoDtos {
     public record ProgramUsage(UUID programId, UUID ownerId, String name) {
     }
 
-    /** Ссылки PUT; заголовок {@code Content-Type} и размер тела должны совпасть с подписанными. */
+    /**
+     * Ссылки PUT; заголовок {@code Content-Type} и размер тела должны совпасть с подписанными. У загрузки
+     * из браузера одна ссылка — на исходник, {@code previewUrl} и {@code previewContentType} пусты.
+     */
     public record UploadTarget(URI videoUrl, String videoContentType, URI previewUrl, String previewContentType,
                                Instant expiresAt) {
     }

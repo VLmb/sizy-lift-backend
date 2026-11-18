@@ -92,6 +92,7 @@ public class VideoMaintenance {
             transactions.executeWithoutResult(status -> videos.nextRemovals(REMOVAL_BATCH).forEach(removal -> {
                 storage.delete(Video.videoKey(removal.ownerId(), removal.videoId()));
                 storage.delete(Video.previewKey(removal.ownerId(), removal.videoId()));
+                storage.delete(Video.sourceKey(removal.ownerId(), removal.videoId()));
                 videos.removalDone(removal.videoId());
             }));
         } catch (RuntimeException e) {

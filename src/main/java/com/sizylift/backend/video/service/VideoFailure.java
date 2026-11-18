@@ -24,8 +24,7 @@ public class VideoFailure extends RuntimeException {
         ID_CONFLICT("id_conflict", HttpStatus.CONFLICT, "Идентификатор видео занят"),
         TOO_LARGE("video_too_large", HttpStatus.UNPROCESSABLE_CONTENT, "Видео больше допустимого размера"),
         TOO_LONG("video_too_long", HttpStatus.UNPROCESSABLE_CONTENT, "Видео длиннее допустимого"),
-        UNSUPPORTED("video_unsupported", HttpStatus.UNPROCESSABLE_CONTENT,
-                "Файл не похож на ролик MP4 с кадром JPEG"),
+        UNSUPPORTED("video_unsupported", HttpStatus.UNPROCESSABLE_CONTENT, "Этот файл не читается как видео"),
         QUOTA_EXCEEDED("quota_exceeded", HttpStatus.CONFLICT, "Место для видео закончилось: удалите старые ролики"),
         STORAGE_FULL("storage_full", HttpStatus.SERVICE_UNAVAILABLE, "Хранилище видео заполнено"),
         UPLOAD_INCOMPLETE("upload_incomplete", HttpStatus.CONFLICT, "Файлы видео не загружены полностью");

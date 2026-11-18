@@ -22,7 +22,7 @@ public class VideoRepository {
 
     private static final String COLUMNS = """
             id, owner_user_id, kind, status, size_bytes, preview_size_bytes, duration_ms, title, exercise_id,
-            exercise_name, created_at, uploaded_at
+            exercise_name, created_at, uploaded_at, source_content_type, source_size_bytes
             """;
     private static final String LOCK_OWNER = "SELECT id FROM sizylift.user_account WHERE id = ? FOR UPDATE";
     private static final String COACH_ENABLED = "SELECT coach_enabled FROM sizylift.user_account WHERE id = ?";
@@ -30,20 +30,46 @@ public class VideoRepository {
     private static final String FIND_FOR_UPDATE = FIND + " FOR UPDATE";
     private static final String INSERT = """
             INSERT INTO sizylift.video (id, owner_user_id, kind, status, size_bytes, preview_size_bytes, duration_ms,
-                title, exercise_id, exercise_name, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                title, exercise_id, exercise_name, created_at, source_content_type, source_size_bytes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String MARK_READY = """
             UPDATE sizylift.video SET status = 'ready', duration_ms = ?, uploaded_at = ?
             WHERE id = ? AND status = 'pending'
+            """;
+    private static final String MARK_PROCESSING =
+            "UPDATE sizylift.video SET status = 'processing' WHERE id = ? AND status = 'pending'";
+    /** Следующий исходник: ещё не взят или взят давно (обработчик упал вместе с сервером). */
+    private static final String NEXT_PROCESSING = "SELECT " + COLUMNS + """
+            FROM sizylift.video
+            WHERE status = 'processing' AND (processing_started_at IS NULL OR processing_started_at < ?)
+            ORDER BY created_at, id
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+            """;
+    private static final String START_PROCESSING = """
+            UPDATE sizylift.video SET processing_started_at = ?, processing_attempts = processing_attempts + 1
+            WHERE id = ?
+            RETURNING processing_attempts
+            """;
+    private static final String RELEASE_PROCESSING =
+            "UPDATE sizylift.video SET processing_started_at = NULL WHERE id = ? AND status = 'processing'";
+    private static final String MARK_PROCESSED = """
+            UPDATE sizylift.video
+            SET status = 'ready', size_bytes = ?, preview_size_bytes = ?, duration_ms = ?, uploaded_at = ?,
+                source_size_bytes = NULL, processing_started_at = NULL
+            WHERE id = ? AND status = 'processing'
             """;
     private static final String DELETE = "DELETE FROM sizylift.video WHERE id = ?";
     private static final String USED_BYTES = """
             SELECT coalesce(sum(size_bytes + preview_size_bytes), 0) FROM sizylift.video
             WHERE owner_user_id = ? AND kind = ?
             """;
-    private static final String TOTAL_BYTES =
-            "SELECT coalesce(sum(size_bytes + preview_size_bytes), 0) FROM sizylift.video";
+    /** Всё хранилище: ролики, превью и исходники из браузера, которые ещё не перекодированы. */
+    private static final String TOTAL_BYTES = """
+            SELECT coalesce(sum(size_bytes + preview_size_bytes + coalesce(source_size_bytes, 0)), 0)
+            FROM sizylift.video
+            """;
     private static final String LIST = "SELECT " + COLUMNS + """
             FROM sizylift.video
             WHERE owner_user_id = ? AND kind = ?
@@ -128,11 +154,37 @@ public class VideoRepository {
     public void insert(Video video) {
         jdbc.update(INSERT, video.id(), video.ownerId(), video.kind().code(), video.status().code(),
                 video.sizeBytes(), video.previewSizeBytes(), video.durationMs(), video.title(), video.exerciseId(),
-                video.exerciseName(), Timestamp.from(video.createdAt()));
+                video.exerciseName(), Timestamp.from(video.createdAt()), video.sourceContentType(),
+                video.sourceSizeBytes());
     }
 
     public void markReady(UUID id, int durationMs, Instant uploadedAt) {
         jdbc.update(MARK_READY, durationMs, Timestamp.from(uploadedAt), id);
+    }
+
+    public void markProcessing(UUID id) {
+        jdbc.update(MARK_PROCESSING, id);
+    }
+
+    /** Берёт следующий исходник под блокировку; {@code abandonedBefore} — когда взятый считается брошенным. */
+    public Optional<Video> nextProcessing(Instant abandonedBefore) {
+        return jdbc.query(NEXT_PROCESSING, VideoRepository::video, Timestamp.from(abandonedBefore)).stream()
+                .findFirst();
+    }
+
+    /** Отмечает начало перекодирования; возвращает номер попытки. */
+    public int startProcessing(UUID id, Instant startedAt) {
+        return jdbc.queryForObject(START_PROCESSING, Integer.class, Timestamp.from(startedAt), id);
+    }
+
+    /** Сбой не из-за файла: ролик снова ждёт обработчика. */
+    public void releaseProcessing(UUID id) {
+        jdbc.update(RELEASE_PROCESSING, id);
+    }
+
+    /** {@code false} — ролика уже нет или он не ждал перекодирования (владелец удалил его). */
+    public boolean markProcessed(UUID id, long sizeBytes, long previewSizeBytes, int durationMs, Instant readyAt) {
+        return jdbc.update(MARK_PROCESSED, sizeBytes, previewSizeBytes, durationMs, Timestamp.from(readyAt), id) > 0;
     }
 
     public void delete(UUID id) {
@@ -209,7 +261,8 @@ public class VideoRepository {
                 VideoKind.parse(row.getString("kind")).orElseThrow(), VideoStatus.of(row.getString("status")),
                 row.getLong("size_bytes"), row.getLong("preview_size_bytes"), row.getInt("duration_ms"),
                 row.getString("title"), row.getObject("exercise_id", UUID.class), row.getString("exercise_name"),
-                row.getTimestamp("created_at").toInstant(), uploadedAt == null ? null : uploadedAt.toInstant());
+                row.getTimestamp("created_at").toInstant(), uploadedAt == null ? null : uploadedAt.toInstant(),
+                row.getString("source_content_type"), row.getObject("source_size_bytes", Long.class));
     }
 
     private static CommentUse commentUse(ResultSet row, int rowNumber) throws SQLException {

@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.OptionalLong;
 import java.util.Random;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class Mp4ProbeTest {
 
@@ -37,6 +40,21 @@ class Mp4ProbeTest {
         var file = concat(ftyp(), largeMdat, moov(mvhdV0(1000, 12_345)));
 
         assertThat(probe(file)).hasValue(12_345);
+    }
+
+    /** Настоящие файлы ffmpeg: MP4 с индексом в конце (как пишет Android) и QuickTime .mov (как iPhone). */
+    @Test
+    void readsRealFilesFromFfmpeg(@TempDir Path directory) throws Exception {
+        for (var name : new String[] {"end.mp4", "phone.mov"}) {
+            var file = directory.resolve(name);
+            var process = new ProcessBuilder("ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
+                    "testsrc=size=320x240:rate=30", "-f", "lavfi", "-i", "sine", "-t", "2.5", "-c:v", "libx264",
+                    "-preset", "ultrafast", "-c:a", "aac", file.toString()).redirectErrorStream(true).start();
+            assertThat(process.waitFor()).as(new String(process.getInputStream().readAllBytes())).isZero();
+            var bytes = Files.readAllBytes(file);
+
+            assertThat(probe(bytes).orElseThrow()).as(name).isBetween(2_450L, 2_600L);
+        }
     }
 
     @Test

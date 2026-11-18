@@ -1,6 +1,7 @@
 package com.sizylift.backend.video.config;
 
 import java.net.URI;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
@@ -15,6 +16,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * {@code maxIndexBytes} — предел индекса MP4 ({@code moov}), который сервер читает при проверке содержимого,
  * {@code orphanTtl} — через сколько комментарий отпускает ролик, который так и не появился на сервере,
  * {@code fillWarnings} — доли общего предела, на которых сервер пишет предупреждение в журнал.
+ * {@code browser} — загрузка с сайта и из PWA: исходник как есть, перекодирует сервер.
  * {@code enabled} — флаг функции: выключенные видео клиенты прячут ({@code videoAvailable} в {@code /api/v1/me}),
  * а сервер не выдаёт и не принимает ролики; удаление работает.
  */
@@ -33,7 +35,8 @@ public record VideoProperties(
         Duration durationTolerance,
         long maxIndexBytes,
         Duration orphanTtl,
-        List<Double> fillWarnings) {
+        List<Double> fillWarnings,
+        Browser browser) {
 
     /**
      * S3-совместимое хранилище. {@code endpoint} — адрес для сервера, {@code publicEndpoint} — адрес в
@@ -44,5 +47,22 @@ public record VideoProperties(
     }
 
     public record Quota(long setBytes, long techniqueBytes) {
+    }
+
+    /**
+     * Загрузка из браузера. {@code maxSourceSizeBytes} — предел исходника, {@code contentTypes} — допустимые
+     * типы исходника, {@code processing} — перекодирование.
+     */
+    public record Browser(long maxSourceSizeBytes, List<String> contentTypes, Processing processing) {
+    }
+
+    /**
+     * Перекодирование ffmpeg: один ролик за раз, {@code threads} потоков с пониженным приоритетом
+     * ({@code niceness}), чтобы не занять оба vCPU. {@code timeout} — предел одного запуска ffmpeg,
+     * {@code maxAttempts} — сколько раз ролик пробуют перекодировать после сбоев, {@code workDir} — временные
+     * файлы.
+     */
+    public record Processing(String ffmpeg, String ffprobe, int niceness, int threads, Duration timeout,
+                             int maxAttempts, Path workDir) {
     }
 }
