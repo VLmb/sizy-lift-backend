@@ -44,6 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class VideoService {
 
     public static final String VIDEO_CONTENT_TYPE = "video/mp4";
+    public static final String SOURCE_DEVICE = "device";
+    public static final String SOURCE_BROWSER = "browser";
     public static final String PREVIEW_CONTENT_TYPE = "image/jpeg";
     public static final int MAX_TITLE_LENGTH = 200;
     public static final int DEFAULT_PAGE_SIZE = 30;
@@ -91,20 +93,73 @@ public class VideoService {
         return new UploadResponse(response(draft, Usage.NONE), uploadTarget(draft));
     }
 
-    /** Подтверждает загрузку: оба объекта на месте и их размер совпадает с заявленным. */
-    @Transactional
+    /**
+     * Подтверждает загрузку: оба объекта на месте, их размер совпадает с заявленным, ролик — MP4 не длиннее
+     * предела, превью — JPEG. Не прошедший проверку ролик удаляется сразу (повтор той же загрузки не поможет)
+     * и снимается с комментариев и программ; сохраняется настоящая длина ролика, а не заявленная.
+     */
+    @Transactional(noRollbackFor = VideoFailure.class)
     public VideoResponse complete(UUID callerId, UUID id) {
         requireEnabled();
         var video = videos.lock(id).filter(found -> found.ownerId().equals(callerId))
                 .orElseThrow(() -> new VideoFailure(Reason.NOT_FOUND));
-        if (!video.ready()) {
+        if (video.status() == VideoStatus.PENDING && video.fromBrowser()) {
+            if (!uploaded(video.sourceKey(), video.sourceSizeBytes())) {
+                throw new VideoFailure(Reason.UPLOAD_INCOMPLETE);
+            }
+            videos.markProcessing(id);
+        } else if (video.status() == VideoStatus.PENDING) {
             if (!uploaded(video.videoKey(), video.sizeBytes())
                     || !uploaded(video.previewKey(), video.previewSizeBytes())) {
                 throw new VideoFailure(Reason.UPLOAD_INCOMPLETE);
             }
-            videos.markReady(id, now());
+            videos.markReady(id, measuredDuration(video), now());
         }
         return view(callerId, videos.find(id).orElseThrow());
+    }
+
+    /**
+     * Перекодированный ролик готов; {@code false} — владелец удалил его, пока шло перекодирование, и файлы
+     * результата надо убрать.
+     */
+    @Transactional
+    public boolean finishProcessing(UUID id, long sizeBytes, long previewSizeBytes, int durationMs) {
+        var video = videos.lock(id);
+        if (video.isEmpty() || video.get().status() != VideoStatus.PROCESSING) {
+            return false;
+        }
+        var maxDuration = properties.limits().of(video.get().kind()).maxDuration().toMillis();
+        return videos.markProcessed(id, sizeBytes, previewSizeBytes,
+                (int) Math.max(1, Math.min(durationMs, maxDuration)), now());
+    }
+
+    /** Исходник из браузера не перекодировать: ролик удаляется и снимается с комментариев и программ. */
+    @Transactional
+    public void failProcessing(UUID id, Reason reason) {
+        videos.lock(id).filter(video -> !video.ready()).ifPresent(video -> rejected(video, reason));
+    }
+
+    private int measuredDuration(Video video) {
+        if (!Mp4Probe.jpeg(storage.read(video.previewKey(), 0, Mp4Probe.JPEG_SIGNATURE_LENGTH))) {
+            throw rejected(video, Reason.UNSUPPORTED);
+        }
+        var duration = Mp4Probe.durationMs((offset, length) -> storage.read(video.videoKey(), offset, length),
+                video.sizeBytes(), properties.maxIndexBytes());
+        if (duration.isEmpty()) {
+            throw rejected(video, Reason.UNSUPPORTED);
+        }
+        var maxDuration = properties.limits().of(video.kind()).maxDuration();
+        if (duration.getAsLong() > maxDuration.plus(properties.durationTolerance()).toMillis()) {
+            throw rejected(video, Reason.TOO_LONG);
+        }
+        return (int) Math.max(1, Math.min(duration.getAsLong(), maxDuration.toMillis()));
+    }
+
+    private VideoFailure rejected(Video video, Reason reason) {
+        detach(video.id(), videos.commentUses(List.of(video.id())), videos.programUses(List.of(video.id())));
+        videos.delete(video.id());
+        videos.queueRemoval(video.id(), video.ownerId(), now());
+        return new VideoFailure(reason);
     }
 
     @Transactional(readOnly = true)
@@ -141,17 +196,49 @@ public class VideoService {
     /**
      * Удаляет ролик владельца и снимает его с комментариев и программ: комментарий без текста удаляется,
      * остальные агрегаты получают новую ревизию. Файлы убирает {@link VideoMaintenance}.
+     * Ролика, до которого загрузка так и не дошла (приложение отменило её), на сервере нет: тогда он только
+     * снимается с того, что вызывающий может править сам, — своих комментариев, своих программ и программ
+     * действующих подопечных.
      */
     @Transactional
     public DeleteResponse delete(UUID callerId, UUID id) {
-        var video = videos.find(id).filter(found -> found.ownerId().equals(callerId))
+        var found = videos.find(id);
+        if (found.isEmpty()) {
+            return forget(callerId, id);
+        }
+        var video = found.filter(owned -> owned.ownerId().equals(callerId))
                 .orElseThrow(() -> new VideoFailure(Reason.NOT_FOUND));
         var removedFrom = usage(callerId, List.of(id)).getOrDefault(id, Usage.NONE);
-        detach(id);
+        detach(id, videos.commentUses(List.of(id)), videos.programUses(List.of(id)));
         videos.lock(id);
         videos.delete(id);
         videos.queueRemoval(id, video.ownerId(), now());
         return new DeleteResponse(id, removedFrom);
+    }
+
+    private DeleteResponse forget(UUID callerId, UUID id) {
+        Set<UUID> editable = new HashSet<>(videos.activeAthletesOf(callerId));
+        editable.add(callerId);
+        var comments = videos.commentUses(List.of(id)).stream()
+                .filter(use -> use.ownerId().equals(callerId)).toList();
+        var programs = videos.programUses(List.of(id)).stream()
+                .filter(use -> editable.contains(use.ownerId())).toList();
+        if (comments.isEmpty() && programs.isEmpty()) {
+            throw new VideoFailure(Reason.NOT_FOUND);
+        }
+        detach(id, comments, programs);
+        return new DeleteResponse(id, usage(comments, programs));
+    }
+
+    /**
+     * Комментарии, которые ссылаются на ролик, так и не появившийся на сервере дольше {@code orphanTtl}, его
+     * отпускают: иначе у тренера навсегда висит «Видео загружается». Возвращает, сколько роликов отпущено.
+     */
+    @Transactional
+    public int detachOrphans(Instant createdBefore, int limit) {
+        var orphans = videos.orphanCommentVideos(createdBefore, limit);
+        orphans.forEach(id -> detach(id, videos.commentUses(List.of(id)), videos.programUses(List.of(id))));
+        return orphans.size();
     }
 
     /** Перед удалением аккаунта: файлы всех его роликов ставятся в очередь удаления. */
@@ -161,9 +248,7 @@ public class VideoService {
         videos.ownedIds(ownerId).forEach(id -> videos.queueRemoval(id, ownerId, now));
     }
 
-    private void detach(UUID videoId) {
-        var comments = videos.commentUses(List.of(videoId));
-        var programs = videos.programUses(List.of(videoId));
+    private void detach(UUID videoId, List<CommentUse> comments, List<ProgramUse> programs) {
         if (comments.isEmpty() && programs.isEmpty()) {
             return;
         }
@@ -191,9 +276,11 @@ public class VideoService {
     }
 
     private Video draft(UUID callerId, CreateVideoRequest request) {
-        if (request == null || request.id() == null || request.sizeBytes() == null
-                || request.previewSizeBytes() == null || request.durationMs() == null
-                || request.sizeBytes() <= 0 || request.previewSizeBytes() <= 0 || request.durationMs() <= 0) {
+        if (request == null || request.id() == null) {
+            throw new VideoFailure(Reason.INVALID_VIDEO);
+        }
+        var browser = SOURCE_BROWSER.equals(request.source());
+        if (!browser && request.source() != null && !SOURCE_DEVICE.equals(request.source())) {
             throw new VideoFailure(Reason.INVALID_VIDEO);
         }
         var kind = VideoKind.parse(request.kind()).orElseThrow(() -> new VideoFailure(Reason.INVALID_VIDEO));
@@ -201,19 +288,63 @@ public class VideoService {
         if (kind == VideoKind.TECHNIQUE && title == null) {
             throw new VideoFailure(Reason.INVALID_VIDEO);
         }
-        if (request.sizeBytes() > properties.maxSizeBytes()
-                || request.previewSizeBytes() > properties.maxPreviewSizeBytes()) {
-            throw new VideoFailure(Reason.TOO_LARGE);
-        }
-        if (request.durationMs() > properties.maxDuration().toMillis()) {
-            throw new VideoFailure(Reason.TOO_LONG);
-        }
+        var draft = browser ? browserDraft(callerId, kind, request) : deviceDraft(callerId, kind, request);
         if (kind == VideoKind.TECHNIQUE && !videos.coachEnabled(callerId)) {
             throw new VideoFailure(Reason.COACH_REQUIRED);
         }
+        return draft;
+    }
+
+    /** Приложение уже сжало ролик и сделало превью. */
+    private Video deviceDraft(UUID callerId, VideoKind kind, CreateVideoRequest request) {
+        if (request.sizeBytes() == null || request.previewSizeBytes() == null || request.durationMs() == null
+                || request.sizeBytes() <= 0 || request.previewSizeBytes() <= 0 || request.durationMs() <= 0) {
+            throw new VideoFailure(Reason.INVALID_VIDEO);
+        }
+        var limits = properties.limits().of(kind);
+        if (request.sizeBytes() > limits.maxSizeBytes()
+                || request.previewSizeBytes() > properties.maxPreviewSizeBytes()) {
+            throw new VideoFailure(Reason.TOO_LARGE);
+        }
+        requireLength(limits, request.durationMs());
         return new Video(request.id(), callerId, kind, VideoStatus.PENDING, request.sizeBytes(),
-                request.previewSizeBytes(), request.durationMs(), kind == VideoKind.TECHNIQUE ? title : null,
-                request.exerciseId(), text(request.exerciseName()), now(), null);
+                request.previewSizeBytes(), request.durationMs(), title(kind, request), request.exerciseId(),
+                text(request.exerciseName()), now(), null, null, null);
+    }
+
+    /**
+     * Исходник из браузера как есть. В квоте под результат откладывается предельный размер ролика и превью;
+     * длина, которую браузер прочитать не смог, — предельная, настоящую узнает сервер.
+     */
+    private Video browserDraft(UUID callerId, VideoKind kind, CreateVideoRequest request) {
+        var browser = properties.browser();
+        var limits = properties.limits().of(kind);
+        if (request.sizeBytes() == null || request.sizeBytes() <= 0
+                || (request.durationMs() != null && request.durationMs() <= 0)) {
+            throw new VideoFailure(Reason.INVALID_VIDEO);
+        }
+        if (request.contentType() == null || !browser.contentTypes().contains(request.contentType())) {
+            throw new VideoFailure(Reason.UNSUPPORTED);
+        }
+        if (request.sizeBytes() > limits.maxSourceSizeBytes()) {
+            throw new VideoFailure(Reason.TOO_LARGE);
+        }
+        var maxDuration = (int) limits.maxDuration().toMillis();
+        var duration = request.durationMs() == null ? maxDuration : request.durationMs();
+        requireLength(limits, duration);
+        return new Video(request.id(), callerId, kind, VideoStatus.PENDING, limits.maxSizeBytes(),
+                properties.maxPreviewSizeBytes(), duration, title(kind, request), request.exerciseId(),
+                text(request.exerciseName()), now(), null, request.contentType(), request.sizeBytes());
+    }
+
+    private static void requireLength(VideoProperties.Limits limits, int durationMs) {
+        if (durationMs > limits.maxDuration().toMillis()) {
+            throw new VideoFailure(Reason.TOO_LONG);
+        }
+    }
+
+    private static String title(VideoKind kind, CreateVideoRequest request) {
+        return kind == VideoKind.TECHNIQUE ? text(request.title()) : null;
     }
 
     private static String text(String value) {
@@ -228,12 +359,17 @@ public class VideoService {
 
     /** Повторный запрос места: тот же владелец и те же файлы, иначе id занят. */
     private UploadResponse repeated(UUID callerId, Video existing, Video draft) {
+        // Исходник после перекодирования уже удалён: сверять его размер не с чем.
+        var sameFiles = draft.fromBrowser()
+                ? existing.status() != VideoStatus.PENDING
+                        || draft.sourceSizeBytes().equals(existing.sourceSizeBytes())
+                : existing.sizeBytes() == draft.sizeBytes() && existing.previewSizeBytes() == draft.previewSizeBytes();
         if (!existing.ownerId().equals(callerId) || existing.kind() != draft.kind()
-                || existing.sizeBytes() != draft.sizeBytes()
-                || existing.previewSizeBytes() != draft.previewSizeBytes()) {
+                || existing.fromBrowser() != draft.fromBrowser() || !sameFiles) {
             throw new VideoFailure(Reason.ID_CONFLICT);
         }
-        return new UploadResponse(view(callerId, existing), existing.ready() ? null : uploadTarget(existing));
+        return new UploadResponse(view(callerId, existing),
+                existing.status() == VideoStatus.PENDING ? uploadTarget(existing) : null);
     }
 
     private void requireRoom(Video draft) {
@@ -251,15 +387,19 @@ public class VideoService {
 
     private UploadTarget uploadTarget(Video video) {
         var ttl = properties.uploadUrlTtl();
+        if (video.fromBrowser()) {
+            return new UploadTarget(storage.uploadUrl(video.sourceKey(), video.sourceContentType(),
+                    video.sourceSizeBytes(), ttl), video.sourceContentType(), null, null, now().plus(ttl));
+        }
         return new UploadTarget(
                 storage.uploadUrl(video.videoKey(), VIDEO_CONTENT_TYPE, video.sizeBytes(), ttl), VIDEO_CONTENT_TYPE,
                 storage.uploadUrl(video.previewKey(), PREVIEW_CONTENT_TYPE, video.previewSizeBytes(), ttl),
                 PREVIEW_CONTENT_TYPE, now().plus(ttl));
     }
 
-    private boolean uploaded(String key, long expectedSize) {
+    private boolean uploaded(String key, Long expectedSize) {
         var size = storage.size(key);
-        return size.isPresent() && size.getAsLong() == expectedSize;
+        return size.isPresent() && expectedSize != null && size.getAsLong() == expectedSize;
     }
 
     /**
@@ -314,12 +454,15 @@ public class VideoService {
                 .filter(use -> visibleOwners.contains(use.ownerId()))
                 .collect(Collectors.groupingBy(ProgramUse::videoId));
         var ids = new ArrayList<>(videoIds);
-        return ids.stream().collect(Collectors.toMap(id -> id, id -> new Usage(
-                comments.getOrDefault(id, List.of()).stream().map(use -> new CommentUsage(use.commentId(),
-                        use.ownerId(), use.workoutId(), use.workoutDate(), use.workoutExerciseId(),
-                        use.setNumber())).toList(),
-                programs.getOrDefault(id, List.of()).stream().map(use -> new ProgramUsage(use.programId(),
-                        use.ownerId(), use.name())).toList())));
+        return ids.stream().collect(Collectors.toMap(id -> id, id -> usage(
+                comments.getOrDefault(id, List.of()), programs.getOrDefault(id, List.of()))));
+    }
+
+    private static Usage usage(List<CommentUse> comments, List<ProgramUse> programs) {
+        return new Usage(
+                comments.stream().map(use -> new CommentUsage(use.commentId(), use.ownerId(), use.workoutId(),
+                        use.workoutDate(), use.workoutExerciseId(), use.setNumber())).toList(),
+                programs.stream().map(use -> new ProgramUsage(use.programId(), use.ownerId(), use.name())).toList());
     }
 
     private Instant now() {

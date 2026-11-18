@@ -12,6 +12,10 @@ COPY --from=extract /build/extracted/dependencies/ ./
 COPY --from=extract /build/extracted/spring-boot-loader/ ./
 COPY --from=extract /build/extracted/snapshot-dependencies/ ./
 COPY --from=extract /build/extracted/application/ ./
+# ffmpeg перекодирует видео, загруженные с сайта и из PWA (docs/video.md); временные файлы — в /tmp.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 USER 1000:1000
 ENV SPRING_PROFILES_ACTIVE=prod \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"

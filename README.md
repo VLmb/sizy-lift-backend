@@ -14,6 +14,7 @@ AI-импорт текста, XLS/XLSX/CSV и публичных Google Sheets �
 
 - JDK 25 (`JAVA_HOME` должен указывать на JDK).
 - Docker Engine и Docker Compose v2; Docker нужен и интеграционным тестам.
+- ffmpeg и ffprobe в `PATH`: сервер перекодирует видео, загруженные с сайта и из PWA; тесты видео тоже.
 - Gradle устанавливать отдельно не нужно — используйте `./gradlew`.
 
 ## Конфигурация

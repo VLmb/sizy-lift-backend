@@ -61,14 +61,42 @@ sizylift:
     enabled: ${VIDEO_ENABLED:true}
     upload-url-ttl: 15m
     view-url-ttl: 10m
-    max-size-bytes: 26214400
+    # Пределы по видам: подход — до минуты, видео техники — до двух минут (разбор движения тренером).
+    limits:
+      set:
+        max-duration: 60s
+        max-size-bytes: 26214400
+        max-source-size-bytes: 314572800
+      technique:
+        max-duration: 120s
+        max-size-bytes: 52428800
+        max-source-size-bytes: 629145600
     max-preview-size-bytes: 204800
-    max-duration: 60s
     quota:
       set-bytes: 314572800
       technique-bytes: 1073741824
     bucket-limit-bytes: 8589934592
     pending-ttl: 24h
+    # Проверка содержимого при завершении загрузки: настоящая длина ролика из индекса MP4.
+    duration-tolerance: 1s
+    max-index-bytes: 4194304
+    # Комментарий со ссылкой на ролик, которого на сервере так и нет, отпускает его через неделю.
+    orphan-ttl: 7d
+    # Предупреждение в журнал при заполнении общего предела хранилища (оповещений в проекте пока нет).
+    fill-warnings: [0.7, 0.9]
+    fill-check-interval: 10m
+    # Загрузка с сайта и из PWA: исходник как есть, сервер перекодирует в MP4 720p и делает превью.
+    browser:
+      content-types: [video/mp4, video/quicktime, video/webm, video/x-matroska, video/3gpp]
+      processing:
+        ffmpeg: ffmpeg
+        ffprobe: ffprobe
+        niceness: 10
+        threads: 1
+        timeout: 15m
+        max-attempts: 3
+        poll-interval: 10s
+        work-dir: ${java.io.tmpdir}/sizy-video
     cleanup-cron: "0 47 4 * * *"
     removal-interval: 1m
   notifications:
