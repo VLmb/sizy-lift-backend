@@ -31,6 +31,10 @@
 	reverse_proxy web:80
 }
 
+pwa.sizylab.ru {
+	reverse_proxy pwa-prototype:80
+}
+
 www.{$WEB_DOMAIN} {
 	redir https://{$WEB_DOMAIN}{uri} permanent
 }
