@@ -27,16 +27,14 @@ class ImportPromptTest {
     private static final LocalDate MONDAY = LocalDate.of(2026, 11, 9);
 
     @Test
-    void promptsMentionOnlyKnownKeysAndTheWeeksPromptUsesRpeForEffort() {
+    void promptsMentionOnlyKnownKeysAndTheWeeksPromptAllSetKeys() {
         for (var prompt : List.of(ImportPrompt.UNDERSTAND, ImportPrompt.MATCH, ImportPrompt.WEEKS)) {
             assertThat(prompt).doesNotContain("{{").doesNotContain("}}");
             var known = new HashSet<>(TemplateVocabulary.allKeys(Scope.IMPORT));
             known.addAll(STRUCTURE);
             assertThat(known).containsAll(mentioned(prompt));
         }
-        var weeksKeys = new HashSet<>(TemplateVocabulary.allKeys(Scope.IMPORT));
-        weeksKeys.remove(TemplateVocabulary.key("RIR"));
-        assertThat(mentioned(ImportPrompt.WEEKS)).containsAll(weeksKeys).doesNotContain(TemplateVocabulary.key("RIR"));
+        assertThat(mentioned(ImportPrompt.WEEKS)).containsAll(TemplateVocabulary.allKeys(Scope.IMPORT));
     }
 
     /** Примеры этапов 1–3 вместе: понимание даёт правила, упражнения и план, сопоставление и неделя 1 — по ним. */
@@ -80,7 +78,7 @@ class ImportPromptTest {
                 .containsExactly("2", "20", "20–35 с");
 
         var pullSet = week1.workouts().get(1).blocks().getFirst().exercises().getFirst().sets().getFirst();
-        assertThat(List.of(pullSet.rpe(), pullSet.note())).containsExactly("7", "RIR 3");
+        assertThat(List.of(pullSet.rpe(), pullSet.rir())).containsExactly("7", "3");
     }
 
     private static HashSet<String> mentioned(String prompt) {
@@ -205,6 +203,55 @@ class ImportPromptTest {
         var input = new ProgramParserModel.Input(new com.sizylift.backend.imports.entity.ImportSession.Source(List.of()), MONDAY,
                 List.of(), ProgramParserModel.Task.weeks(outline, List.of(2), List.of("Присед | тип=вес_повторы")), "");
         assertThat(ModelInputRenderer.render(input)).contains("Правило: вес из журнала — у первого упражнения дня");
+    }
+
+    @Test
+    void repairsOmittedTableFieldsAndUsesTheSelectedWeeksRir() {
+        var assembly = new ImportAssembly(new ExerciseResolver(VoiceTestCatalog.system(), List.of(
+                new SourceItem("sheet:0!C2", "Рабочая зона"),
+                new SourceItem("sheet:0!D2", "2–3 повторения в запасе (RIR 2–3)"),
+                new SourceItem("sheet:0!B5", "Упражнение"),
+                new SourceItem("sheet:0!C5", "Отдых (мин)"),
+                new SourceItem("sheet:0!D5", "Неделя 1 (RIR 3)"),
+                new SourceItem("sheet:0!E5", "Неделя 2"),
+                new SourceItem("sheet:0!F5", "Техника"),
+                new SourceItem("sheet:0!B6", "Присед со штангой"),
+                new SourceItem("sheet:0!C6", "2–3"),
+                new SourceItem("sheet:0!D6", "45 кг (RIR 1–2)"),
+                new SourceItem("sheet:0!E6", "50 кг (RPE 9)"),
+                new SourceItem("sheet:0!B7", "Жим штанги лёжа"),
+                new SourceItem("sheet:0!F7", "Пауза 2 секунды на груди")
+        )), MONDAY, ImportLanguage.RUSSIAN);
+        var cursor = assembly.cursor(null);
+        for (var line : """
+                Программа: Два дня
+                Упражнения:
+                - Присед со штангой | тип=вес_повторы
+                - Жим штанги лёжа | тип=вес_повторы
+                План:
+                Неделя: 1 | дни=Пн
+                Неделя: 2 | дни=Пн
+                Тренировки:
+                Неделя: 1
+                День: Пн
+                Упражнение: Присед со штангой
+                Подход: кол=3 | повт=5 | RPE=7
+                Неделя: 2
+                День: Пн
+                Упражнение: Присед со штангой
+                Подход: кол=3 | повт=5 | RPE=9
+                Упражнение: Жим штанги лёжа
+                Подход: кол=3 | повт=5
+                """.split("\n")) cursor.line(line);
+        cursor.end(false);
+        var weeks = assembly.snapshot(true).programDraft().cycles().getFirst().weeks();
+        var first = weeks.getFirst().workouts().getFirst().blocks().getFirst().exercises().getFirst().sets().getFirst();
+        assertThat(List.of(first.restSeconds(), first.rir(), first.rpe())).containsExactly("150", "1-2", "8.5");
+        var secondDay = weeks.get(1).workouts().getFirst().blocks();
+        var explicitRpe = secondDay.getFirst().exercises().getFirst().sets().getFirst();
+        var defaultRir = secondDay.get(1).exercises().getFirst().sets().getFirst();
+        assertThat(List.of(explicitRpe.rir(), explicitRpe.rpe())).containsExactly("", "9");
+        assertThat(List.of(defaultRir.restSeconds(), defaultRir.rir(), defaultRir.rpe())).containsExactly("", "2-3", "7.5");
     }
 
     @Test

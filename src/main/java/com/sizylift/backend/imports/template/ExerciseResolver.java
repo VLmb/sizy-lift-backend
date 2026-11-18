@@ -27,6 +27,8 @@ public final class ExerciseResolver {
     private final VoiceCatalog catalog;
     private final List<SourceItem> source;
 
+    List<SourceItem> source() { return source; }
+
     /** Решение по упражнению и тип результата, по которому разбираются его подходы. */
     public record Resolved(Resolution resolution, String resultType, String catalogName) { }
 

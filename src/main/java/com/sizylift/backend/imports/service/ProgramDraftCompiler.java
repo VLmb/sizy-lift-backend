@@ -19,6 +19,8 @@ import com.sizylift.backend.imports.entity.ImportLanguage;
 import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.entity.LiftClass;
+import com.sizylift.backend.template.SetLine;
+import com.sizylift.backend.template.TemplateVocabulary;
 import com.sizylift.backend.web.dto.WebDtos.CatalogExercise;
 import jakarta.validation.Validator;
 import org.springframework.stereotype.Component;
@@ -246,7 +248,12 @@ public class ProgramDraftCompiler {
         }
         if (!source.rir().isBlank()) {
             notes.add("RIR: " + source.rir());
-            warnings.add(language.text("RIR сохранён в заметках.", "RIR was kept in the notes."));
+            if (rpe == null && source.rpe().isBlank()
+                    && TemplateVocabulary.keysFor(exercise.resultType(), TemplateVocabulary.Scope.IMPORT).contains("rpe")) {
+                var converted = SetLine.rpeFromRir(source.rir());
+                if (converted != null) rpe = (int) Math.round(converted * TENTHS);
+            }
+            if (rpe == null) warnings.add(language.text("RIR сохранён в заметках.", "RIR was kept in the notes."));
         }
         if (percent != null && (percent < PERCENT_MIN || percent > PERCENT_MAX || exercise.liftClass() == LiftClass.OTHER
                 || !exercise.resultType().equals("weight_reps"))) {

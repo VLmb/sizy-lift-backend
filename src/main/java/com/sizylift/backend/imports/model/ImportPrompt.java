@@ -56,10 +56,7 @@ public final class ImportPrompt {
         var types = TemplateVocabulary.exerciseTypes().stream()
                 .map(t -> "  " + t.word() + " — " + t.description()).collect(Collectors.joining("\n"));
         var keys = TemplateVocabulary.exerciseTypes().stream()
-                .map(t -> {
-                    var allowed = t.keys(Scope.IMPORT).stream().filter(k -> !"RIR".equals(k)).toList();
-                    return "  " + t.word() + ": " + (allowed.isEmpty() ? "только заметка" : String.join(", ", allowed));
-                })
+                .map(t -> "  " + t.word() + ": " + (t.keys(Scope.IMPORT).isEmpty() ? "только заметка" : String.join(", ", t.keys(Scope.IMPORT))))
                 .collect(Collectors.joining("\n"));
         var sets = TemplateVocabulary.setTypes(Scope.IMPORT).stream()
                 .map(t -> "  " + (t.byDefault() ? t.word() + " (без ключа тип)" : "тип=" + t.word()) + " — "
