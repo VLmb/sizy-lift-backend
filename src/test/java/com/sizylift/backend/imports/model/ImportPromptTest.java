@@ -27,21 +27,23 @@ class ImportPromptTest {
     private static final LocalDate MONDAY = LocalDate.of(2026, 11, 9);
 
     @Test
-    void promptsMentionOnlyKnownKeysAndTheWeeksPromptAllSetKeys() {
+    void promptsMentionOnlyKnownKeysAndTheWeeksPromptUsesRpeForEffort() {
         for (var prompt : List.of(ImportPrompt.UNDERSTAND, ImportPrompt.MATCH, ImportPrompt.WEEKS)) {
             assertThat(prompt).doesNotContain("{{").doesNotContain("}}");
             var known = new HashSet<>(TemplateVocabulary.allKeys(Scope.IMPORT));
             known.addAll(STRUCTURE);
             assertThat(known).containsAll(mentioned(prompt));
         }
-        assertThat(mentioned(ImportPrompt.WEEKS)).containsAll(TemplateVocabulary.allKeys(Scope.IMPORT));
+        var weeksKeys = new HashSet<>(TemplateVocabulary.allKeys(Scope.IMPORT));
+        weeksKeys.remove(TemplateVocabulary.key("RIR"));
+        assertThat(mentioned(ImportPrompt.WEEKS)).containsAll(weeksKeys).doesNotContain(TemplateVocabulary.key("RIR"));
     }
 
     /** Примеры этапов 1–3 вместе: понимание даёт правила, упражнения и план, сопоставление и неделя 1 — по ним. */
     @Test
     void exampleAnswersOfTheStagesAreParsedWithoutWarnings() {
         var assembly = parse(example(ImportPrompt.UNDERSTAND));
-        assertThat(assembly.snapshot(false).rules()).hasSize(4);
+        assertThat(assembly.snapshot(false).rules()).hasSize(2);
         assertThat(assembly.pendingWeeks()).containsExactly(1, 2);
         assertThat(assembly.unresolved()).contains("Подтягивания / верхний блок | тип=вес_повторы");
         for (var line : example(ImportPrompt.MATCH).split("\n")) {
@@ -54,7 +56,7 @@ class ImportPromptTest {
         assertThat(cursor.end(false)).containsExactly(1);
         var draft = assembly.snapshot(false);
         assertThat(draft.warnings()).isEmpty();
-        assertThat(draft.programDraft().name()).isEqualTo("POWERBUILDING");
+        assertThat(draft.programDraft().name()).isEqualTo("Силовая подготовка");
         assertThat(draft.plan()).extracting(ImportDraftV1.PlannedWeek::status).containsExactly(ImportDraftV1.DONE, ImportDraftV1.PENDING);
 
         var resolutions = draft.exerciseResolutions();
@@ -65,12 +67,20 @@ class ImportPromptTest {
 
         var week1 = draft.programDraft().cycles().getFirst().weeks().getFirst();
         assertThat(week1.workouts()).extracting(ImportDraftV1.Day::dayOffset).containsExactly(0, 1);
-        assertThat(week1.workouts().getFirst().title()).isEqualTo("Ноги / жим");
+        assertThat(week1.workouts().getFirst().title()).isEqualTo("Ноги и корпус");
         var squat = week1.workouts().getFirst().blocks().getFirst().exercises().getFirst();
-        assertThat(squat.comment()).startsWith("соревновательный").contains("Без отказа");
+        assertThat(squat.comment()).startsWith("соревновательный");
         var set = squat.sets().getFirst();
-        assertThat(List.of(set.count(), set.repetitions(), set.percentOneRm(), set.weightKg(), set.rpe(), set.setType()))
-                .containsExactly("4", "6", "67", "105", "7", "working");
+        assertThat(List.of(set.count(), set.repetitions(), set.rpe(), set.setType()))
+                .containsExactly("1", "5", "7.5", "working");
+        assertThat(set.note()).contains("1–2 подхода", "RPE 7–8");
+
+        var plankSet = week1.workouts().getFirst().blocks().get(1).exercises().getFirst().sets().getFirst();
+        assertThat(List.of(plankSet.count(), plankSet.durationSeconds(), plankSet.note()))
+                .containsExactly("2", "20", "20–35 с");
+
+        var pullSet = week1.workouts().get(1).blocks().getFirst().exercises().getFirst().sets().getFirst();
+        assertThat(List.of(pullSet.rpe(), pullSet.note())).containsExactly("7", "RIR 3");
     }
 
     private static HashSet<String> mentioned(String prompt) {

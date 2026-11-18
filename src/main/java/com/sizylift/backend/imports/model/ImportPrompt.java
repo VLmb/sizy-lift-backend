@@ -18,7 +18,7 @@ import org.springframework.core.io.ClassPathResource;
  */
 public final class ImportPrompt {
     /** Версия промптов — в логах и метриках, чтобы понимать, какими текстами разобран импорт. */
-    public static final String VERSION = "v1";
+    public static final String VERSION = "v2";
     static final String UNDERSTAND = fill(read("imports/understand-prompt." + VERSION + ".txt"));
     static final String MATCH = fill(read("imports/match-prompt." + VERSION + ".txt"));
     static final String WEEKS = fill(read("imports/weeks-prompt." + VERSION + ".txt"));
@@ -56,7 +56,10 @@ public final class ImportPrompt {
         var types = TemplateVocabulary.exerciseTypes().stream()
                 .map(t -> "  " + t.word() + " — " + t.description()).collect(Collectors.joining("\n"));
         var keys = TemplateVocabulary.exerciseTypes().stream()
-                .map(t -> "  " + t.word() + ": " + (t.keys(Scope.IMPORT).isEmpty() ? "только заметка" : String.join(", ", t.keys(Scope.IMPORT))))
+                .map(t -> {
+                    var allowed = t.keys(Scope.IMPORT).stream().filter(k -> !"RIR".equals(k)).toList();
+                    return "  " + t.word() + ": " + (allowed.isEmpty() ? "только заметка" : String.join(", ", allowed));
+                })
                 .collect(Collectors.joining("\n"));
         var sets = TemplateVocabulary.setTypes(Scope.IMPORT).stream()
                 .map(t -> "  " + (t.byDefault() ? t.word() + " (без ключа тип)" : "тип=" + t.word()) + " — "
