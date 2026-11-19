@@ -19,6 +19,8 @@ import com.sizylift.backend.video.config.VideoProperties;
 import com.sizylift.backend.video.dto.VideoDtos.CommentUsage;
 import com.sizylift.backend.video.dto.VideoDtos.CreateVideoRequest;
 import com.sizylift.backend.video.dto.VideoDtos.DeleteResponse;
+import com.sizylift.backend.video.dto.VideoDtos.ExerciseUsage;
+import com.sizylift.backend.video.dto.VideoDtos.RenameRequest;
 import com.sizylift.backend.video.dto.VideoDtos.ProgramUsage;
 import com.sizylift.backend.video.dto.VideoDtos.QuotaResponse;
 import com.sizylift.backend.video.dto.VideoDtos.UploadResponse;
@@ -29,6 +31,7 @@ import com.sizylift.backend.video.dto.VideoDtos.VideoResponse;
 import com.sizylift.backend.video.entity.Video;
 import com.sizylift.backend.video.entity.VideoKind;
 import com.sizylift.backend.video.entity.VideoStatus;
+import com.sizylift.backend.video.repository.ExerciseVideoRepository;
 import com.sizylift.backend.video.repository.VideoRepository;
 import com.sizylift.backend.video.repository.VideoRepository.CommentUse;
 import com.sizylift.backend.video.repository.VideoRepository.ProgramUse;
@@ -58,11 +61,14 @@ public class VideoService {
     private final AccessPolicy access;
     private final ServerRewrites rewrites;
     private final BetweenDataRepository between;
+    private final ExerciseVideoRepository exerciseVideos;
     private final Clock clock;
 
     VideoService(VideoRepository videos, VideoStorage storage, VideoProperties properties, AccessPolicy access,
-                 ServerRewrites rewrites, BetweenDataRepository between, Clock clock) {
+                 ServerRewrites rewrites, BetweenDataRepository between, ExerciseVideoRepository exerciseVideos,
+                 Clock clock) {
         this.videos = videos;
+        this.exerciseVideos = exerciseVideos;
         this.storage = storage;
         this.properties = properties;
         this.access = access;
@@ -227,7 +233,7 @@ public class VideoService {
             throw new VideoFailure(Reason.NOT_FOUND);
         }
         detach(id, comments, programs);
-        return new DeleteResponse(id, usage(comments, programs));
+        return new DeleteResponse(id, usage(comments, programs, List.of()));
     }
 
     /**
@@ -239,6 +245,19 @@ public class VideoService {
         var orphans = videos.orphanCommentVideos(createdBefore, limit);
         orphans.forEach(id -> detach(id, videos.commentUses(List.of(id)), videos.programUses(List.of(id))));
         return orphans.size();
+    }
+
+    /** Переименовывает свой ролик. У видео техники название обязательно, у видео подхода пустое — снимает его. */
+    @Transactional
+    public VideoResponse rename(UUID callerId, UUID id, RenameRequest request) {
+        var video = videos.lock(id).filter(found -> found.ownerId().equals(callerId))
+                .orElseThrow(() -> new VideoFailure(Reason.NOT_FOUND));
+        var title = text(request == null ? null : request.title());
+        if (video.kind() == VideoKind.TECHNIQUE && title == null) {
+            throw new VideoFailure(Reason.INVALID_VIDEO);
+        }
+        videos.rename(id, title);
+        return view(callerId, videos.find(id).orElseThrow());
     }
 
     /** Перед удалением аккаунта: файлы всех его роликов ставятся в очередь удаления. */
@@ -308,7 +327,7 @@ public class VideoService {
         }
         requireLength(limits, request.durationMs());
         return new Video(request.id(), callerId, kind, VideoStatus.PENDING, request.sizeBytes(),
-                request.previewSizeBytes(), request.durationMs(), title(kind, request), request.exerciseId(),
+                request.previewSizeBytes(), request.durationMs(), text(request.title()), request.exerciseId(),
                 text(request.exerciseName()), now(), null, null, null);
     }
 
@@ -333,7 +352,7 @@ public class VideoService {
         var duration = request.durationMs() == null ? maxDuration : request.durationMs();
         requireLength(limits, duration);
         return new Video(request.id(), callerId, kind, VideoStatus.PENDING, limits.maxSizeBytes(),
-                properties.maxPreviewSizeBytes(), duration, title(kind, request), request.exerciseId(),
+                properties.maxPreviewSizeBytes(), duration, text(request.title()), request.exerciseId(),
                 text(request.exerciseName()), now(), null, request.contentType(), request.sizeBytes());
     }
 
@@ -341,10 +360,6 @@ public class VideoService {
         if (durationMs > limits.maxDuration().toMillis()) {
             throw new VideoFailure(Reason.TOO_LONG);
         }
-    }
-
-    private static String title(VideoKind kind, CreateVideoRequest request) {
-        return kind == VideoKind.TECHNIQUE ? text(request.title()) : null;
     }
 
     private static String text(String value) {
@@ -414,7 +429,8 @@ public class VideoService {
             return access.activeCoach(video.ownerId()).filter(callerId::equals).isPresent();
         }
         return access.activeCoach(callerId).filter(video.ownerId()::equals).isPresent()
-                && videos.attachedToProgramOf(callerId, video.id());
+                && (videos.attachedToProgramOf(callerId, video.id())
+                        || exerciseVideos.linked(video.ownerId(), video.id()));
     }
 
     private VideoResponse view(UUID callerId, Video video) {
@@ -453,16 +469,21 @@ public class VideoService {
         var programs = videos.programUses(videoIds).stream()
                 .filter(use -> visibleOwners.contains(use.ownerId()))
                 .collect(Collectors.groupingBy(ProgramUse::videoId));
+        var exercises = exerciseVideos.uses(videoIds).stream()
+                .collect(Collectors.groupingBy(ExerciseVideoRepository.Use::videoId));
         var ids = new ArrayList<>(videoIds);
         return ids.stream().collect(Collectors.toMap(id -> id, id -> usage(
-                comments.getOrDefault(id, List.of()), programs.getOrDefault(id, List.of()))));
+                comments.getOrDefault(id, List.of()), programs.getOrDefault(id, List.of()),
+                exercises.getOrDefault(id, List.of()))));
     }
 
-    private static Usage usage(List<CommentUse> comments, List<ProgramUse> programs) {
+    private static Usage usage(List<CommentUse> comments, List<ProgramUse> programs,
+                               List<ExerciseVideoRepository.Use> exercises) {
         return new Usage(
                 comments.stream().map(use -> new CommentUsage(use.commentId(), use.ownerId(), use.workoutId(),
                         use.workoutDate(), use.workoutExerciseId(), use.setNumber())).toList(),
-                programs.stream().map(use -> new ProgramUsage(use.programId(), use.ownerId(), use.name())).toList());
+                programs.stream().map(use -> new ProgramUsage(use.programId(), use.ownerId(), use.name())).toList(),
+                exercises.stream().map(use -> new ExerciseUsage(use.exerciseId(), use.exerciseName())).toList());
     }
 
     private Instant now() {

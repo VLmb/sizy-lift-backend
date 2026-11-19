@@ -140,3 +140,6 @@ databaseChangeLog:
   - include:
       file: changes/048-product-feedback.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/049-exercise-video.sql
+      relativeToChangelogFile: true

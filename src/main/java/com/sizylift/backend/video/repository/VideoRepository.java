@@ -61,6 +61,7 @@ public class VideoRepository {
             WHERE id = ? AND status = 'processing'
             """;
     private static final String DELETE = "DELETE FROM sizylift.video WHERE id = ?";
+    private static final String RENAME = "UPDATE sizylift.video SET title = ? WHERE id = ?";
     private static final String USED_BYTES = """
             SELECT coalesce(sum(size_bytes + preview_size_bytes), 0) FROM sizylift.video
             WHERE owner_user_id = ? AND kind = ?
@@ -185,6 +186,10 @@ public class VideoRepository {
     /** {@code false} — ролика уже нет или он не ждал перекодирования (владелец удалил его). */
     public boolean markProcessed(UUID id, long sizeBytes, long previewSizeBytes, int durationMs, Instant readyAt) {
         return jdbc.update(MARK_PROCESSED, sizeBytes, previewSizeBytes, durationMs, Timestamp.from(readyAt), id) > 0;
+    }
+
+    public void rename(UUID id, String title) {
+        jdbc.update(RENAME, title, id);
     }
 
     public void delete(UUID id) {
