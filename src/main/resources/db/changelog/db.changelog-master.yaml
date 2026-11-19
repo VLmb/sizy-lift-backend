@@ -134,3 +134,6 @@ databaseChangeLog:
   - include:
       file: changes/046-video-browser-upload.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/047-planned-repetition-ranges.sql
+      relativeToChangelogFile: true

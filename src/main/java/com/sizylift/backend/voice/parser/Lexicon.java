@@ -52,7 +52,7 @@ final class Lexicon {
     private static final Map<String, Entry> STEMS = new HashMap<>();
 
     static {
-        exact(entry(Kind.PREPOSITION), "по", "под", "на", "с", "со", "х", "x", "в", "во", "до", "от", "к", "за", "из", "у", "при");
+        exact(entry(Kind.PREPOSITION), "по", "под", "на", "с", "со", "х", "x", "×", "в", "во", "до", "от", "к", "за", "из", "у", "при");
         exact(entry(Kind.RPE), "rpe", "рпе", "рпэ", "рпи", "эрпе", "эрпэе", "эрпээ");
         exact(entry(Kind.RIR), "rir", "рир");
         exact(entry(Kind.CORRECTION), "нет", "вернее", "точнее", "ой", "стоп");

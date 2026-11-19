@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.sizylift.backend.PostgresIntegrationTest;
+import com.sizylift.backend.publication.repository.ProgramDataRepository;
+import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +56,12 @@ class PublicationApiTest extends PostgresIntegrationTest {
     @Autowired
     MeterRegistry meters;
 
+    @Autowired
+    ProgramDataRepository programs;
+
+    @Autowired
+    WorkoutDataRepository workouts;
+
     String subject;
 
     @BeforeEach
@@ -77,6 +85,32 @@ class PublicationApiTest extends PostgresIntegrationTest {
                 JOIN sizylift.workout_exercise e ON e.user_id = s.user_id AND e.id = s.workout_exercise_id
                 WHERE s.user_id = ? AND e.exercise_id = ? AND s.completion_status = 'completed'
                 """, Integer.class, userId(), SQUAT)).isEqualTo(120000);
+    }
+
+    @Test
+    void publishesBothRepetitionBoundsInProgramsAndWorkoutSnapshots() throws Exception {
+        var program = fixture("program");
+        var planSet = (ObjectNode) program.at("/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0");
+        planSet.put("repetitionsMax", 8);
+        var workout = fixture("workout");
+        var snapshot = (ObjectNode) workout.at("/planSetSnapshots/0");
+        snapshot.put("repetitionsMax", 8);
+
+        assertThat(statuses(publish(item("program", PROGRAM, 1, program), item("workout", WORKOUT, 1, workout))))
+                .containsExactly("accepted", "accepted");
+
+        var stored = programs.find(userId(), PROGRAM).orElseThrow().cycles().getFirst().weeks().getFirst()
+                .workouts().getFirst().blocks().getFirst().exercises().getFirst().sets().getFirst();
+        assertThat(stored.repetitions()).isEqualTo(5);
+        assertThat(stored.repetitionsMax()).isEqualTo(8);
+        var storedSnapshot = workouts.find(userId(), WORKOUT).orElseThrow().planSetSnapshots().getFirst();
+        assertThat(storedSnapshot.repetitions()).isEqualTo(5);
+        assertThat(storedSnapshot.repetitionsMax()).isEqualTo(8);
+
+        planSet.put("repetitionsMax", 4);
+        snapshot.put("repetitionsMax", 4);
+        assertThat(statuses(publish(item("program", PROGRAM, 2, program), item("workout", WORKOUT, 2, workout))))
+                .containsExactly("rejected", "rejected");
     }
 
     @Test

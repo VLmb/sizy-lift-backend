@@ -8,6 +8,8 @@ final class Token {
     enum Kind {
         /** Число; {@code value}. */
         NUMBER,
+        /** Границы явно продиктованного диапазона и его единица, если названа. */
+        RANGE,
         /** Единица измерения без числа; {@code unit}. */
         UNIT,
         /** Число с единицей: «3 подхода», «80 кг», «2 минуты» (уже в секундах); {@code unit}, {@code value}. */
@@ -53,6 +55,7 @@ final class Token {
     final String stem;
     Kind kind;
     double value;
+    double upper;
     Unit unit;
     boolean covered;
 

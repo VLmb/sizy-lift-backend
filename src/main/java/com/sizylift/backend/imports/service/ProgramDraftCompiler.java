@@ -227,13 +227,19 @@ public class ProgramDraftCompiler {
         var notes = new ArrayList<String>();
         notes.add(source.note());
         Integer reps = null;
+        Integer repsMax = null;
         if (!source.repetitions().isBlank()) {
-            if (source.repetitions().matches("\\d{1,4}")) reps = positiveInt(source.repetitions(), REPETITIONS);
-            else {
-                if (!source.repetitions().matches("[1-9]\\d{0,3}-[1-9]\\d{0,3}|AMRAP"))
-                    throw ImportFailure.invalid("Некорректное предписание повторений.");
+            if ("AMRAP".equals(source.repetitions())) {
                 notes.add(language.text("Повторения: ", "Reps: ") + source.repetitions());
-                warnings.add(language.text("Диапазоны повторений и AMRAP сохранены в заметках.", "Rep ranges and AMRAP were kept in the notes."));
+                warnings.add(language.text("AMRAP сохранено в заметке.", "AMRAP was kept in the note."));
+            } else if (source.repetitions().matches("[1-9]\\d{0,3}-[1-9]\\d{0,3}")) {
+                var bounds = source.repetitions().split("-");
+                reps = positiveInt(bounds[0], REPETITIONS);
+                repsMax = positiveInt(bounds[1], REPETITIONS);
+                if (repsMax < reps) throw ImportFailure.invalid("Некорректный диапазон повторений.");
+                if (repsMax.equals(reps)) repsMax = null;
+            } else {
+                reps = positiveInt(source.repetitions(), REPETITIONS);
             }
         }
         Integer weight = weight(source.weightKg(), notes, warnings, language);
@@ -270,7 +276,7 @@ public class ProgramDraftCompiler {
             throw ImportFailure.invalid("Тип выбранного упражнения несовместим с подходами. Выберите другое или создайте своё.");
         return new ProgramPayloadV1.Set(id(session, source.key() + ":" + index), position,
                 source.setType().isBlank() ? "working" : source.setType(), weight, reps, duration, distance,
-                rpe, false, percent, scaled(source.restSeconds(), MILLIS_PER_SECOND), withNotes(comments, notes));
+                rpe, false, percent, scaled(source.restSeconds(), MILLIS_PER_SECOND), withNotes(comments, notes), null, repsMax);
     }
 
     private String describe(ImportDraftV1.Prescription value, ImportLanguage language) {

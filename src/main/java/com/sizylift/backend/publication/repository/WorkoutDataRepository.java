@@ -59,8 +59,8 @@ public class WorkoutDataRepository {
     private static final String INSERT_PLAN_SNAPSHOT = """
             INSERT INTO sizylift.workout_plan_set_snapshot (user_id, id, workout_id, actual_set_id,
                 source_planned_exercise_id, source_planned_set_id, position, result_type, set_type,
-                target_weight_grams, repetitions, duration_ms, target_distance_m, target_rpe_tenths, rest_ms, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                target_weight_grams, repetitions, duration_ms, target_distance_m, target_rpe_tenths, rest_ms, note, repetitions_max)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
     private static final String INSERT_RECORD_EVENT = """
             INSERT INTO sizylift.workout_record_event (user_id, id, workout_id, workout_exercise_id, actual_set_id,
@@ -92,7 +92,7 @@ public class WorkoutDataRepository {
     private static final String SELECT_PLAN_SNAPSHOTS = """
             SELECT id, actual_set_id, source_planned_exercise_id, source_planned_set_id, position, result_type,
                 set_type, target_weight_grams, repetitions, duration_ms, target_distance_m, target_rpe_tenths,
-                rest_ms, note
+                rest_ms, note, repetitions_max
             FROM sizylift.workout_plan_set_snapshot WHERE user_id = ? AND workout_id = ? ORDER BY position, id
             """;
     private static final String SELECT_RECORD_EVENTS = """
@@ -191,7 +191,7 @@ public class WorkoutDataRepository {
                         snapshot.sourcePlannedExerciseId(), snapshot.sourcePlannedSetId(), snapshot.position(),
                         snapshot.resultType(), snapshot.setType(), snapshot.targetWeightGrams(),
                         snapshot.repetitions(), snapshot.durationMs(), snapshot.targetDistanceM(),
-                        snapshot.targetRpeTenths(), snapshot.restMs(), snapshot.note()})
+                        snapshot.targetRpeTenths(), snapshot.restMs(), snapshot.note(), snapshot.repetitionsMax()})
                 .toList();
     }
 
@@ -234,7 +234,7 @@ public class WorkoutDataRepository {
                 uuid(row, "source_planned_exercise_id"), uuid(row, "source_planned_set_id"), row.getInt("position"),
                 row.getString("result_type"), row.getString("set_type"), integer(row, "target_weight_grams"),
                 integer(row, "repetitions"), integer(row, "duration_ms"), integer(row, "target_distance_m"),
-                integer(row, "target_rpe_tenths"), integer(row, "rest_ms"), row.getString("note"));
+                integer(row, "target_rpe_tenths"), integer(row, "rest_ms"), row.getString("note"), integer(row, "repetitions_max"));
     }
 
     private static RecordEvent recordEvent(ResultSet row, int rowNumber) throws SQLException {

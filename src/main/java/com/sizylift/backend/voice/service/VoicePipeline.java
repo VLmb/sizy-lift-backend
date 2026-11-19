@@ -15,9 +15,8 @@ import com.sizylift.backend.voice.template.TemplatePrompt;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Звук → текст → разбор → ответ. Разбор по флагу {@code sizylift.voice.parser}: алгоритм с запасной моделью
- * для непонятых кусков (только если они есть) или модель, которая переписывает фразу в строгий шаблон, и
- * строгий разборщик шаблона (docs/voice.md, «Разбор шаблоном»).
+ * Звук → текст → шаблон модели → ответ. Устаревший режим {@code parser=algorithm}
+ * разбирает текст алгоритмом с запасной моделью для непонятых фрагментов.
  * Без базы и Spring: собирается в {@link com.sizylift.backend.voice.config.VoiceConfiguration} и в живых тестах.
  * Текст речи живёт только внутри вызова.
  */
@@ -78,9 +77,9 @@ public class VoicePipeline {
     /** Всё после распознавания: разбор и, при непонятых кусках, запасная модель. */
     public Outcome fromText(UUID requestId, UUID ownerId, String text, VoiceCatalog catalog) {
         long start = System.nanoTime();
-        if (parser == VoiceProperties.Parser.MODEL && !text.isBlank()) return fromTemplate(requestId, ownerId, text, catalog);
-        if (text.isBlank()) return new Outcome(VoiceDraft.of(new WorkoutTextParser(catalog.dictionary()).parse(""))
-                .toResponse(requestId, ownerId, false), 0, System.nanoTime() - start, 0, Fallback.SKIPPED, 0, 0);
+        if (text.isBlank()) return new Outcome(new ParseResponse(requestId, ownerId, false, List.of(), List.of()),
+                0, System.nanoTime() - start, 0, Fallback.SKIPPED, 0, 0);
+        if (parser == VoiceProperties.Parser.MODEL) return fromTemplate(requestId, ownerId, text, catalog);
         var draft = VoiceDraft.of(new WorkoutTextParser(catalog.dictionary()).parse(text));
         long parsed = System.nanoTime();
         trace.parsed(requestId, draft.toResponse(requestId, ownerId, true));
