@@ -41,7 +41,7 @@ class ImportPromptTest {
     @Test
     void exampleAnswersOfTheStagesAreParsedWithoutWarnings() {
         var assembly = parse(example(ImportPrompt.UNDERSTAND));
-        assertThat(assembly.snapshot(false).rules()).hasSize(4);
+        assertThat(assembly.snapshot(false).rules()).hasSize(2);
         assertThat(assembly.pendingWeeks()).containsExactly(1, 2);
         assertThat(assembly.unresolved()).contains("Подтягивания / верхний блок | тип=вес_повторы");
         for (var line : example(ImportPrompt.MATCH).split("\n")) {
@@ -54,7 +54,7 @@ class ImportPromptTest {
         assertThat(cursor.end(false)).containsExactly(1);
         var draft = assembly.snapshot(false);
         assertThat(draft.warnings()).isEmpty();
-        assertThat(draft.programDraft().name()).isEqualTo("POWERBUILDING");
+        assertThat(draft.programDraft().name()).isEqualTo("Силовая подготовка");
         assertThat(draft.plan()).extracting(ImportDraftV1.PlannedWeek::status).containsExactly(ImportDraftV1.DONE, ImportDraftV1.PENDING);
 
         var resolutions = draft.exerciseResolutions();
@@ -65,12 +65,20 @@ class ImportPromptTest {
 
         var week1 = draft.programDraft().cycles().getFirst().weeks().getFirst();
         assertThat(week1.workouts()).extracting(ImportDraftV1.Day::dayOffset).containsExactly(0, 1);
-        assertThat(week1.workouts().getFirst().title()).isEqualTo("Ноги / жим");
+        assertThat(week1.workouts().getFirst().title()).isEqualTo("Ноги и корпус");
         var squat = week1.workouts().getFirst().blocks().getFirst().exercises().getFirst();
-        assertThat(squat.comment()).startsWith("соревновательный").contains("Без отказа");
+        assertThat(squat.comment()).startsWith("соревновательный");
         var set = squat.sets().getFirst();
-        assertThat(List.of(set.count(), set.repetitions(), set.percentOneRm(), set.weightKg(), set.rpe(), set.setType()))
-                .containsExactly("4", "6", "67", "105", "7", "working");
+        assertThat(List.of(set.count(), set.repetitions(), set.rpe(), set.setType()))
+                .containsExactly("1", "5", "7.5", "working");
+        assertThat(set.note()).contains("1–2 подхода", "RPE 7–8");
+
+        var plankSet = week1.workouts().getFirst().blocks().get(1).exercises().getFirst().sets().getFirst();
+        assertThat(List.of(plankSet.count(), plankSet.durationSeconds(), plankSet.note()))
+                .containsExactly("2", "20", "20–35 с");
+
+        var pullSet = week1.workouts().get(1).blocks().getFirst().exercises().getFirst().sets().getFirst();
+        assertThat(List.of(pullSet.rpe(), pullSet.rir())).containsExactly("7", "3");
     }
 
     private static HashSet<String> mentioned(String prompt) {
@@ -195,6 +203,55 @@ class ImportPromptTest {
         var input = new ProgramParserModel.Input(new com.sizylift.backend.imports.entity.ImportSession.Source(List.of()), MONDAY,
                 List.of(), ProgramParserModel.Task.weeks(outline, List.of(2), List.of("Присед | тип=вес_повторы")), "");
         assertThat(ModelInputRenderer.render(input)).contains("Правило: вес из журнала — у первого упражнения дня");
+    }
+
+    @Test
+    void repairsOmittedTableFieldsAndUsesTheSelectedWeeksRir() {
+        var assembly = new ImportAssembly(new ExerciseResolver(VoiceTestCatalog.system(), List.of(
+                new SourceItem("sheet:0!C2", "Рабочая зона"),
+                new SourceItem("sheet:0!D2", "2–3 повторения в запасе (RIR 2–3)"),
+                new SourceItem("sheet:0!B5", "Упражнение"),
+                new SourceItem("sheet:0!C5", "Отдых (мин)"),
+                new SourceItem("sheet:0!D5", "Неделя 1 (RIR 3)"),
+                new SourceItem("sheet:0!E5", "Неделя 2"),
+                new SourceItem("sheet:0!F5", "Техника"),
+                new SourceItem("sheet:0!B6", "Присед со штангой"),
+                new SourceItem("sheet:0!C6", "2–3"),
+                new SourceItem("sheet:0!D6", "45 кг (RIR 1–2)"),
+                new SourceItem("sheet:0!E6", "50 кг (RPE 9)"),
+                new SourceItem("sheet:0!B7", "Жим штанги лёжа"),
+                new SourceItem("sheet:0!F7", "Пауза 2 секунды на груди")
+        )), MONDAY, ImportLanguage.RUSSIAN);
+        var cursor = assembly.cursor(null);
+        for (var line : """
+                Программа: Два дня
+                Упражнения:
+                - Присед со штангой | тип=вес_повторы
+                - Жим штанги лёжа | тип=вес_повторы
+                План:
+                Неделя: 1 | дни=Пн
+                Неделя: 2 | дни=Пн
+                Тренировки:
+                Неделя: 1
+                День: Пн
+                Упражнение: Присед со штангой
+                Подход: кол=3 | повт=5 | RPE=7
+                Неделя: 2
+                День: Пн
+                Упражнение: Присед со штангой
+                Подход: кол=3 | повт=5 | RPE=9
+                Упражнение: Жим штанги лёжа
+                Подход: кол=3 | повт=5
+                """.split("\n")) cursor.line(line);
+        cursor.end(false);
+        var weeks = assembly.snapshot(true).programDraft().cycles().getFirst().weeks();
+        var first = weeks.getFirst().workouts().getFirst().blocks().getFirst().exercises().getFirst().sets().getFirst();
+        assertThat(List.of(first.restSeconds(), first.rir(), first.rpe())).containsExactly("150", "1-2", "8.5");
+        var secondDay = weeks.get(1).workouts().getFirst().blocks();
+        var explicitRpe = secondDay.getFirst().exercises().getFirst().sets().getFirst();
+        var defaultRir = secondDay.get(1).exercises().getFirst().sets().getFirst();
+        assertThat(List.of(explicitRpe.rir(), explicitRpe.rpe())).containsExactly("", "9");
+        assertThat(List.of(defaultRir.restSeconds(), defaultRir.rir(), defaultRir.rpe())).containsExactly("", "2-3", "7.5");
     }
 
     @Test

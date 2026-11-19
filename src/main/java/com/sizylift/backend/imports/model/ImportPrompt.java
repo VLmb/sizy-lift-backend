@@ -18,7 +18,7 @@ import org.springframework.core.io.ClassPathResource;
  */
 public final class ImportPrompt {
     /** Версия промптов — в логах и метриках, чтобы понимать, какими текстами разобран импорт. */
-    public static final String VERSION = "v1";
+    public static final String VERSION = "v2";
     static final String UNDERSTAND = fill(read("imports/understand-prompt." + VERSION + ".txt"));
     static final String MATCH = fill(read("imports/match-prompt." + VERSION + ".txt"));
     static final String WEEKS = fill(read("imports/weeks-prompt." + VERSION + ".txt"));

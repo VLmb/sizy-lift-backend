@@ -21,6 +21,7 @@ public final class SetLine {
     private static final int MAX_REPS = 1000;
     private static final double MAX_WEIGHT = 1000;
     private static final double MAX_RPE = 10;
+    private static final double MIN_IMPORT_RPE = 5;
     private static final int SECONDS_IN_MINUTE = 60;
     private static final int SECONDS_IN_HOUR = 3600;
     private static final int METERS_IN_KILOMETER = 1000;
@@ -32,7 +33,10 @@ public final class SetLine {
     private static final Pattern KG = Pattern.compile("^" + NUMBER + "\\s*(?:кг)?$");
     private static final Pattern PERCENT = Pattern.compile("^" + NUMBER + "\\s*%?$");
     private static final Pattern PLAIN = Pattern.compile("^" + NUMBER + "$");
-    private static final Pattern RANGE = Pattern.compile("^" + NUMBER + "(?:\\s*[-–]\\s*" + NUMBER + ")?$");
+    private static final Pattern RANGE = Pattern.compile("^" + NUMBER + "(?:\\s*[-–—]\\s*" + NUMBER + ")?$");
+    private static final String REST_UNIT = "(с|сек(?:унд[аы]?)?|мин(?:ут[аы]?)?|ч(?:ас(?:а|ов)?)?|s|sec(?:ond[s]?)?|min(?:ute[s]?)?|h|hour[s]?)";
+    private static final Pattern IMPORT_REST = Pattern.compile("^" + NUMBER + "\\s*(?:" + REST_UNIT
+            + "\\s*)?(?:[-–—]\\s*" + NUMBER + "\\s*)?" + REST_UNIT + "\\.?$");
     private static final Pattern TIME = Pattern.compile("^" + NUMBER + "\\s*(с|сек|мин|ч)\\.?$");
     private static final Pattern DISTANCE = Pattern.compile("^" + NUMBER + "\\s*(м|км)\\.?$");
 
@@ -127,7 +131,7 @@ public final class SetLine {
         Integer seconds = line.seconds(values.get("время"), "время", false);
         Integer meters = line.meters(values.get("дистанция"));
         // «Без отдыха» — отдых 0: значение, а не «не сказано».
-        Integer rest = line.seconds(values.get("отдых"), "отдых", true);
+        Integer rest = scope == Scope.IMPORT ? line.importRest(values.get("отдых")) : line.seconds(values.get("отдых"), "отдых", true);
         String type = null;
         var typeText = values.get("тип");
         if (typeText != null) {
@@ -192,6 +196,13 @@ public final class SetLine {
             return m.group(2) == null ? m.group(1) : m.group(1) + "-" + m.group(2);
         }
 
+        Integer importRest(String text) {
+            if (text == null) return null;
+            var value = importRestSeconds(text);
+            if (value == null) reject("отдых", text);
+            return value;
+        }
+
         Integer seconds(String text, String key, boolean zero) {
             if (text == null) return null;
             var m = TIME.matcher(text.toLowerCase(Locale.ROOT));
@@ -200,9 +211,7 @@ public final class SetLine {
                 return null;
             }
             var value = parse(m.group(1));
-            var unit = m.group(2);
-            int factor = unit.startsWith("мин") ? SECONDS_IN_MINUTE : "ч".equals(unit) ? SECONDS_IN_HOUR : 1;
-            var total = (int) Math.round(value * factor);
+            var total = (int) Math.round(value * timeFactor(m.group(2)));
             return total < 0 || total == 0 && !zero ? null : total;
         }
 
@@ -216,6 +225,36 @@ public final class SetLine {
             var total = (int) Math.round(parse(m.group(1)) * ("км".equals(m.group(2)) ? METERS_IN_KILOMETER : 1));
             return total <= 0 ? null : total;
         }
+    }
+
+    /** Средний отдых по исходному диапазону, в целых секундах. */
+    public static Integer importRestSeconds(String text) {
+        if (text == null) return null;
+        var clean = text.strip().toLowerCase(Locale.ROOT);
+        if (clean.equals("без отдыха") || clean.equals("no rest")) return 0;
+        var m = IMPORT_REST.matcher(clean);
+        if (!m.matches() || (m.group(2) != null && m.group(3) == null)) return null;
+        double lower = parse(m.group(1)) * timeFactor(m.group(2) == null ? m.group(4) : m.group(2));
+        double upper = m.group(3) == null ? lower : parse(m.group(3)) * timeFactor(m.group(4));
+        if (!Double.isFinite(upper) || upper < lower) return null;
+        long seconds = Math.round(lower + (upper - lower) / 2);
+        return seconds <= Integer.MAX_VALUE / 1000 ? (int) seconds : null;
+    }
+
+    private static int timeFactor(String unit) {
+        if (unit.startsWith("мин") || unit.startsWith("min")) return SECONDS_IN_MINUTE;
+        return unit.startsWith("ч") || unit.startsWith("h") ? SECONDS_IN_HOUR : 1;
+    }
+
+    /** Переводит исходный RIR в поддерживаемый RPE, округляя среднее к ближайшим 0,5. */
+    public static Double rpeFromRir(String rir) {
+        if (rir == null) return null;
+        var m = RANGE.matcher(rir.strip().replace('—', '-'));
+        if (!m.matches()) return null;
+        double lower = parse(m.group(1));
+        double upper = m.group(2) == null ? lower : parse(m.group(2));
+        if (upper < lower || MAX_RPE - upper < MIN_IMPORT_RPE) return null;
+        return Math.round((MAX_RPE - (lower + upper) / 2) * 2) / 2.0;
     }
 
     private static Integer bounded(int value, int max) { return value < 1 || value > max ? null : value; }

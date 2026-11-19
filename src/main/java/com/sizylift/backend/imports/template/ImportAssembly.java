@@ -21,6 +21,7 @@ import com.sizylift.backend.imports.dto.ImportDtos.Progress;
 import com.sizylift.backend.imports.dto.ImportPlan;
 import com.sizylift.backend.imports.entity.ImportLanguage;
 import com.sizylift.backend.template.SetLine;
+import com.sizylift.backend.template.TemplateVocabulary;
 import com.sizylift.backend.template.TemplateVocabulary.Scope;
 
 import static com.sizylift.backend.imports.dto.ImportDraftV1.ACTIVE;
@@ -56,6 +57,7 @@ public final class ImportAssembly {
             "гигантсет", new String[] {GROUP, "giant_set"}, "круг", new String[] {"circuit", ""},
             "интервалы", new String[] {"interval", ""});
     private final ExerciseResolver resolver;
+    private final SourcePrescriptions sourcePrescriptions;
     private final LocalDate startDate;
     private final ImportLanguage language;
     private final TreeMap<Integer, PlanWeek> plan = new TreeMap<>();
@@ -73,6 +75,7 @@ public final class ImportAssembly {
 
     public ImportAssembly(ExerciseResolver resolver, LocalDate startDate, ImportLanguage language) {
         this.resolver = resolver;
+        this.sourcePrescriptions = new SourcePrescriptions(resolver.source());
         this.startDate = startDate;
         this.language = language;
     }
@@ -315,6 +318,18 @@ public final class ImportAssembly {
 
         private void finishWeek() {
             if (week == null) return;
+            for (var workout : week.days) {
+                for (var block : workout.blocks()) {
+                    for (var exercise : block.items()) {
+                        if (!exercise.sets().isEmpty()) continue;
+                        var name = exercises.get(exercise.key()).resolved().resolution().originalName();
+                        if (sourcePrescriptions.forExercise(name, week.number).hasValues()) {
+                            warn(language.text("Пропущены подходы с назначениями из таблицы: ",
+                                    "Sets with spreadsheet prescriptions are missing: ") + quote(name));
+                        }
+                    }
+                }
+            }
             week.status = DONE;
             finished.add(week.number);
             var planned = plan.get(week.number);
@@ -535,14 +550,15 @@ public final class ImportAssembly {
             var dayKey = weekKey + "d" + (d + 1);
             int offset = day.offset() != null ? day.offset() : offsets.get(d);
             var blocks = new ArrayList<ImportDraftV1.Block>();
-            for (int b = 0; b < day.blocks().size(); b++) {
-                var block = day.blocks().get(b);
+            var sourceBlocks = restoreSupersets(day.blocks());
+            for (int b = 0; b < sourceBlocks.size(); b++) {
+                var block = sourceBlocks.get(b);
                 var blockKey = dayKey + "b" + (b + 1);
                 var items = new ArrayList<ImportDraftV1.Exercise>();
                 for (int i = 0; i < block.items().size(); i++) {
                     var item = block.items().get(i);
                     used.add(item.key());
-                    items.add(exercise(blockKey + "x" + (i + 1), item));
+                    items.add(exercise(blockKey + "x" + (i + 1), item, number));
                 }
                 blocks.add(new ImportDraftV1.Block(blockKey, block.type(), block.label(), block.title(), block.note(), items));
             }
@@ -551,15 +567,59 @@ public final class ImportAssembly {
         return new ImportDraftV1.Week(weekKey, number, title, days);
     }
 
-    private ImportDraftV1.Exercise exercise(String key, ItemState item) {
-        var refs = exercises.get(item.key()).resolved().resolution().sourceRefs();
+    private List<BlockState> restoreSupersets(List<BlockState> source) {
+        var blocks = new ArrayList<BlockState>();
+        for (int i = 0; i < source.size(); i++) {
+            var first = source.get(i);
+            if (i + 1 < source.size() && formsSuperset(first, source.get(i + 1))) {
+                var second = source.get(++i);
+                blocks.add(new BlockState(GROUP, "superset", "", "", List.of(first.items().getFirst(), second.items().getFirst())));
+            } else blocks.add(first);
+        }
+        return blocks;
+    }
+
+    private boolean formsSuperset(BlockState first, BlockState second) {
+        if (!SINGLE.equals(first.type()) || !SINGLE.equals(second.type()) || first.items().size() != 1 || second.items().size() != 1)
+            return false;
+        var left = exercises.get(first.items().getFirst().key()).resolved().resolution().originalName();
+        var right = exercises.get(second.items().getFirst().key()).resolved().resolution().originalName();
+        return sourcePrescriptions.formsSuperset(left, right);
+    }
+
+    private ImportDraftV1.Exercise exercise(String key, ItemState item, int week) {
+        var resolved = exercises.get(item.key()).resolved();
+        var resolution = resolved.resolution();
+        var targets = sourcePrescriptions.forExercise(resolution.originalName(), week);
+        var allowed = TemplateVocabulary.keysFor(resolved.resultType(), Scope.IMPORT);
+        boolean canSetEffort = allowed.contains("rpe");
         var sets = new ArrayList<Prescription>();
         for (int s = 0; s < item.sets().size(); s++) {
             var p = item.sets().get(s);
-            sets.add(new Prescription(key + "s" + (s + 1), p.count(), p.repetitions(), p.weightKg(), p.percentOneRm(),
-                    p.durationSeconds(), p.distanceMeters(), p.rpe(), p.rir(), p.restSeconds(), p.setType(), p.note(), refs));
+            var rest = p.restSeconds();
+            if (targets.restSeconds() != null && (rest.isBlank() || item.sets().size() == 1))
+                rest = targets.restSeconds().toString();
+
+            var rpe = p.rpe();
+            var rir = p.rir();
+            if (canSetEffort && !targets.explicitRpe() && !"warmup".equals(p.setType())) {
+                if (targets.rir() != null) {
+                    rir = targets.rir();
+                    rpe = plain(SetLine.rpeFromRir(rir));
+                } else if (rpe.isBlank()) {
+                    if (rir.isBlank() && "working".equals(p.setType()) && !p.repetitions().isBlank()
+                            && targets.defaultRir() != null) rir = targets.defaultRir();
+                    rpe = plain(SetLine.rpeFromRir(rir));
+                }
+            }
+            var percent = p.percentOneRm();
+            if (percent.isBlank() && allowed.contains("процент") && targets.percentOneRm() != null && "working".equals(p.setType()))
+                percent = targets.percentOneRm();
+            sets.add(new Prescription(key + "s" + (s + 1), p.count(), p.repetitions(), p.weightKg(), percent,
+                    p.durationSeconds(), p.distanceMeters(), rpe, rir, rest, p.setType(), p.note(), resolution.sourceRefs()));
         }
-        return new ImportDraftV1.Exercise(key, item.key(), limit(String.join("; ", item.comments()), NOTE_CHARS), refs, sets);
+        return new ImportDraftV1.Exercise(key, item.key(), limit(String.join("; ", item.comments()), NOTE_CHARS),
+                resolution.sourceRefs(), sets);
     }
 
     private static Prescription prescription(SetLine.Values v, String note) {

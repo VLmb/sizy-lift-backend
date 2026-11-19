@@ -663,18 +663,20 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
-    void missingValuesAndRangesRemainUnknownAndRirIsPreservedInTheExerciseComment() throws Exception {
-        when(parser.parse(any(), any())).thenAnswer(reply(draftWithSet("Подход: кол=3 | повт=8-12 | RIR=2", matched())));
-        var id = create(owner, "Присед 3×8-12 RIR 2", null, UUID.randomUUID());
+    void convertsRirAndRestWhilePreservingRepRangesAndMissingWeight() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draftWithSet("Подход: кол=3 | повт=8-12 | RIR=1–2 | отдых=3–5 мин", matched())));
+        var id = create(owner, "Присед 3×8-12 RIR 1–2, отдых 3–5 мин", null, UUID.randomUUID());
         worker.processOne();
         var view = view(owner, id);
         assertThat(view.get("canCommit").asBoolean()).isTrue();
         var actual = view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0");
-        for (var field : List.of("repetitions", "targetWeightGrams", "targetRpeTenths", "restMs"))
+        for (var field : List.of("repetitions", "targetWeightGrams"))
             assertThat(actual.get(field).isNull()).as(field).isTrue();
+        assertThat(actual.get("targetRpeTenths").asInt()).isEqualTo(85);
+        assertThat(actual.get("restMs").asInt()).isEqualTo(240_000);
         assertThat(actual.get("note").isNull()).isTrue();
         assertThat(view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/planComment").asString())
-                .contains("8-12", "RIR: 2");
+                .contains("8-12", "RIR: 1-2").doesNotContain("3–5 мин");
     }
 
     @Test
