@@ -30,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -756,11 +757,15 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
 
     @Test
     void invalidSheetUrlIsRejectedBeforeTheModelIsCalled() throws Exception {
-        var request = new java.util.HashMap<>(input(null, null, UUID.randomUUID()));
-        request.put("source", "sheet"); request.remove("text"); request.put("url", "http://169.254.169.254/latest/meta-data");
-        var created = body(postJson(owner, BASE, request).andExpect(status().isAccepted()));
-        worker.processOne();
-        assertThat(view(owner, UUID.fromString(created.get("id").asString())).at("/error/code").asString()).isEqualTo("sheet_unavailable");
+        // Сторонний адрес — сразу 400 с понятным кодом, без сессии импорта (QA-11), а не «таблица закрыта» потом.
+        for (var url : List.of("http://169.254.169.254/latest/meta-data", "https://example.com/not-a-spreadsheet",
+                "https://docs.google.com/document/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/edit")) {
+            var request = new java.util.HashMap<>(input(null, null, UUID.randomUUID()));
+            request.put("source", "sheet"); request.remove("text"); request.put("url", url);
+            postJson(owner, BASE, request).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("sheet_url_invalid"));
+        }
+        assertThat(worker.processOne()).isFalse();
         verifyNoInteractions(parser);
     }
 

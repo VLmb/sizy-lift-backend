@@ -1,5 +1,6 @@
 package com.sizylift.backend.imports.service;
 
+import com.sizylift.backend.web.service.SheetImportService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import tools.jackson.databind.node.ObjectNode;
@@ -228,6 +229,8 @@ public class ImportService {
             case "sheet" -> {
                 if (input.url() == null || input.url().isBlank() || input.text() != null || bytes != null)
                     throw ImportFailure.invalid("Добавьте ссылку на Google Таблицу.");
+                // Сторонний адрес — сразу понятная ошибка, а не сессия, которая потом «не может открыть таблицу».
+                if (!SheetImportService.isSheetUrl(input.url())) throw ImportFailure.notSheetUrl();
             }
             case "file" -> {
                 if (bytes == null || bytes.length == 0 || bytes.length > limits.maxFileBytes() || input.text() != null || input.url() != null)
