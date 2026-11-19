@@ -40,6 +40,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
 
+    /** Действующая редакция условий использования (keycloak-provider, TermsAgreement). */
+    static final String TERMS_VERSION = "2026-11-16";
+    static final String TERMS_URL = "https://sizylab.ru/legal/2026-11-16/terms.html";
+    /** Пользователь, заведённый админом, уже принял условия: иначе вход ждёт обязательного действия. */
+    static final String TERMS_ACCEPTED = """
+            {"sizy_terms_acceptance":["{\\"version\\":\\"%s\\",\\"url\\":\\"%s\\",\\"acceptedAt\\":\\"2026-11-16T00:00:00Z\\"}"]}"""
+            .formatted(TERMS_VERSION, TERMS_URL);
     static final String REALM = "sizylift";
     static final String CLIENT_ID = "sizylift-mobile";
     static final String PASSWORD = "correct-horse-battery";
@@ -95,9 +102,9 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
         email = "lifter-" + UUID.randomUUID() + "@example.com";
         send(adminRequest(admin, "/users").POST(json("""
                 {"username": "%s", "email": "%s", "emailVerified": true, "enabled": true,
-                 "firstName": "Test", "lastName": "Lifter",
+                 "firstName": "Test", "lastName": "Lifter", "attributes": %s,
                  "credentials": [{"type": "password", "value": "%s", "temporary": false}]}
-                """.formatted(email, email, PASSWORD))), 201);
+                """.formatted(email, email, TERMS_ACCEPTED, PASSWORD))), 201);
     }
 
     @AfterAll
@@ -176,10 +183,18 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
             var registration = open(browser, authorizationUrl("registrations", "ru"));
             assertThat(registration.body()).contains("id=\"termsAccepted\"", "https://legal.example.test/consent/v1")
                     .doesNotContain("checked=\"checked\"");
+            assertThat(registration.body()).contains("id=\"sizyTermsAccepted\"", TERMS_URL);
             var userEmail = "consent-" + UUID.randomUUID() + "@example.com";
             var data = registrationData(userEmail);
 
-            var missing = submit(browser, registration, "kc-register-form", data);
+            // Условия использования обязательны всегда, отдельно от настраиваемого согласия.
+            data.remove("sizyTermsAccepted");
+            var noTerms = submit(browser, registration, "kc-register-form", data);
+            assertThat(noTerms.body()).contains("Примите условия использования");
+            assertThat(findUsers(admin, userEmail)).isEmpty();
+            data.put("sizyTermsAccepted", "on");
+
+            var missing = submit(browser, noTerms, "kc-register-form", data);
             assertThat(missing.body()).contains("Подтвердите согласие");
             assertThat(findUsers(admin, userEmail)).isEmpty();
 
@@ -194,7 +209,8 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
             assertThat(accepted.statusCode()).isLessThan(500);
             var users = findUsers(admin, userEmail);
             assertThat(users).hasSize(1);
-            assertThat(users.getFirst().toString()).contains("sizy_account_consent", "registration-v1", "acceptedAt")
+            assertThat(users.getFirst().toString()).contains("sizy_terms_acceptance", TERMS_VERSION)
+                    .contains("sizy_account_consent", "registration-v1", "acceptedAt")
                     .doesNotContain("forged-version");
             assertThat(users.getFirst().get("requiredActions").toString()).contains("VERIFY_EMAIL", "UPDATE_PASSWORD");
         } finally {
@@ -230,9 +246,9 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
         var userEmail = "existing-" + UUID.randomUUID() + "@example.com";
         send(adminRequest(admin, "/users").POST(json("""
                 {"username":"%s","email":"%s","emailVerified":true,"enabled":true,
-                 "firstName":"Test","lastName":"Lifter",
+                 "firstName":"Test","lastName":"Lifter","attributes":%s,
                  "credentials":[{"type":"password","value":"%s","temporary":false}]}
-                """.formatted(userEmail, userEmail, PASSWORD))), 201);
+                """.formatted(userEmail, userEmail, TERMS_ACCEPTED, PASSWORD))), 201);
         setLegalConfig(admin, true, "existing-v1");
         try {
             var browser = browser();
@@ -288,11 +304,11 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
         var userEmail = "owner-" + UUID.randomUUID() + "@example.com";
         send(adminRequest(admin, "/users").POST(json("""
                 {"username":"%s","email":"%s","emailVerified":true,"enabled":true,
-                 "firstName":"Owner","lastName":"Sizy",
+                 "firstName":"Owner","lastName":"Sizy","attributes":%s,
                  "credentials":[{"type":"password","value":"%s","temporary":false},
                  {"type":"otp","secretData":"{\\"value\\":\\"12345678901234567890\\"}",
                   "credentialData":"{\\"subType\\":\\"totp\\",\\"digits\\":6,\\"counter\\":0,\\"period\\":30,\\"algorithm\\":\\"HmacSHA1\\"}"}]}
-                """.formatted(userEmail, userEmail, PASSWORD))), 201);
+                """.formatted(userEmail, userEmail, TERMS_ACCEPTED, PASSWORD))), 201);
         var userId = findUsers(admin, userEmail).getFirst().get("id").toString();
         var role = send(adminRequest(admin, "/roles/sizy-admin").GET(), 200);
         send(adminRequest(admin, "/users/" + userId + "/role-mappings/realm").POST(json("[" + role + "]")), 204);
@@ -393,7 +409,7 @@ class KeycloakAuthenticationIntegrationTest extends PostgresIntegrationTest {
 
     private static Map<String, String> registrationData(String userEmail) {
         return new HashMap<>(Map.of("email", userEmail, "firstName", "Test", "lastName", "Lifter",
-                "password", PASSWORD, "password-confirm", PASSWORD));
+                "password", PASSWORD, "password-confirm", PASSWORD, "sizyTermsAccepted", "on"));
     }
 
     private static void setLegalConfig(String admin, boolean enabled, String version) throws Exception {

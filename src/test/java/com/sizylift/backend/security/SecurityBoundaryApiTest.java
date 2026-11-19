@@ -30,8 +30,10 @@ class SecurityBoundaryApiTest extends PostgresIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping routes;
 
-    /** Единственный открытый маршрут API — страница приглашения до входа (docs/coaching.md, CR-02). */
+    /** Открытые маршруты API: страница приглашения до входа (docs/coaching.md, CR-02)… */
     static final String PUBLIC_INVITE = "GET /api/v2/coaching/invites/{token}/public";
+    /** …и отзыв о Sizy: его можно оставить и без входа (FeedbackController, SecurityConfiguration). */
+    static final String PUBLIC_FEEDBACK = "POST /api/v1/feedback";
 
     @Test
     void everyApiRouteRequiresBearerBeforeParsingItsInput() throws Exception {
@@ -41,10 +43,13 @@ class SecurityBoundaryApiTest extends PostgresIntegrationTest {
                 if (!path.startsWith("/api/")) continue;
                 for (var method : mapping.getMethodsCondition().getMethods()) {
                     var concrete = path.replaceAll("\\{[^}]+}", UUID.randomUUID().toString());
-                    var open = PUBLIC_INVITE.equals(method.name() + " " + path);
+                    var route = method.name() + " " + path;
+                    var open = PUBLIC_INVITE.equals(route);
+                    // Анонимный отзыв проходит без токена и сразу проверяет тело: пустой — 400, без сессии и куки.
+                    var feedback = PUBLIC_FEEDBACK.equals(route);
                     var result = mvc.perform(request(HttpMethod.valueOf(method.name()), concrete)
                                     .contentType(MediaType.APPLICATION_JSON).content("{}"))
-                            .andExpect(open ? status().isNotFound() : status().isUnauthorized())
+                            .andExpect(open ? status().isNotFound() : feedback ? status().isBadRequest() : status().isUnauthorized())
                             .andExpect(header().doesNotExist("Set-Cookie"))
                             .andReturn();
                     assertThat(result.getRequest().getSession(false)).as("%s %s", method, path).isNull();
