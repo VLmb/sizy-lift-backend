@@ -1,6 +1,5 @@
 package com.sizylift.backend.sync.service;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -34,7 +33,6 @@ class CoachExerciseAdoption {
     /** Клиент записи копии: её создаёт сервер, а не устройство. */
     static final String SERVER_CLIENT_ID = "server:coach-exercise-copy";
     static final long SERVER_CLIENT_VERSION = 1;
-    private static final String COPY_ID_PREFIX = "sizylift:coach-exercise-copy:";
 
     private final AthleteDataRepository exercises;
     private final PublishedAggregateRepository aggregates;
@@ -54,8 +52,7 @@ class CoachExerciseAdoption {
 
     /** Id копии упражнения тренера у подопечного; одинаковый при каждой записи программы. */
     static UUID copyId(UUID athleteId, UUID coachExerciseId) {
-        return UUID.nameUUIDFromBytes((COPY_ID_PREFIX + athleteId + ":" + coachExerciseId)
-                .getBytes(StandardCharsets.UTF_8));
+        return CoachExerciseCopies.copyId(athleteId, coachExerciseId);
     }
 
     /**

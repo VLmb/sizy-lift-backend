@@ -32,10 +32,34 @@ public final class VideoDtos {
                                 Usage usage) {
     }
 
-    /** Где ролик используется: комментарии к упражнениям и программы. */
-    public record Usage(List<CommentUsage> comments, List<ProgramUsage> programs) {
+    /** Где ролик используется: комментарии к упражнениям, программы и упражнения (видео упражнения). */
+    public record Usage(List<CommentUsage> comments, List<ProgramUsage> programs, List<ExerciseUsage> exercises) {
 
-        public static final Usage NONE = new Usage(List.of(), List.of());
+        public static final Usage NONE = new Usage(List.of(), List.of(), List.of());
+    }
+
+    /** Упражнение тренера, к которому ролик прикреплён для всех подопечных. */
+    public record ExerciseUsage(UUID exerciseId, String exerciseName) {
+    }
+
+    /** Новое название ролика; у видео техники обязательно. */
+    public record RenameRequest(String title) {
+    }
+
+    /** Прикрепить видео техники к упражнению; {@code exerciseName} — для «Где используется». */
+    public record ExerciseVideoRequest(UUID videoId, String exerciseName) {
+    }
+
+    /**
+     * Видео упражнения. {@code exerciseId} — в пространстве того, кто спрашивает: у подопечного упражнение
+     * тренера из его библиотеки — копия под производным id. {@code own} — своё видео, иначе — тренера.
+     */
+    public record ExerciseVideoResponse(UUID exerciseId, String exerciseName, UUID videoId, UUID ownerId,
+                                        String title, String status, int durationMs, URI previewUrl,
+                                        Instant urlExpiresAt, boolean own) {
+    }
+
+    public record ExerciseVideoListResponse(List<ExerciseVideoResponse> exercises) {
     }
 
     /** {@code workoutDate} — {@code null}, пока тренировка не опубликована. */

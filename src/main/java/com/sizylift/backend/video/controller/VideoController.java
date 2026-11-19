@@ -5,10 +5,15 @@ import java.util.UUID;
 import com.sizylift.backend.identity.controller.AuthenticatedAccount;
 import com.sizylift.backend.video.dto.VideoDtos.CreateVideoRequest;
 import com.sizylift.backend.video.dto.VideoDtos.DeleteResponse;
+import com.sizylift.backend.video.dto.VideoDtos.ExerciseVideoListResponse;
+import com.sizylift.backend.video.dto.VideoDtos.ExerciseVideoRequest;
+import com.sizylift.backend.video.dto.VideoDtos.ExerciseVideoResponse;
+import com.sizylift.backend.video.dto.VideoDtos.RenameRequest;
 import com.sizylift.backend.video.dto.VideoDtos.Failure;
 import com.sizylift.backend.video.dto.VideoDtos.UploadResponse;
 import com.sizylift.backend.video.dto.VideoDtos.VideoListResponse;
 import com.sizylift.backend.video.dto.VideoDtos.VideoResponse;
+import com.sizylift.backend.video.service.ExerciseVideoService;
 import com.sizylift.backend.video.service.VideoFailure;
 import com.sizylift.backend.video.service.VideoService;
 import org.springframework.http.ResponseEntity;
@@ -17,8 +22,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -31,10 +38,36 @@ public class VideoController {
 
     private final AuthenticatedAccount accounts;
     private final VideoService videos;
+    private final ExerciseVideoService exerciseVideos;
 
-    public VideoController(AuthenticatedAccount accounts, VideoService videos) {
+    public VideoController(AuthenticatedAccount accounts, VideoService videos, ExerciseVideoService exerciseVideos) {
         this.accounts = accounts;
         this.videos = videos;
+        this.exerciseVideos = exerciseVideos;
+    }
+
+    /** Видео упражнений: свои и действующего тренера (docs/video.md, «Видео упражнения»). */
+    @GetMapping("/exercises")
+    public ExerciseVideoListResponse exerciseVideos(@AuthenticationPrincipal Jwt jwt) {
+        return exerciseVideos.list(accounts.resolve(jwt).id());
+    }
+
+    @PutMapping("/exercises/{exerciseId}")
+    public ExerciseVideoResponse attachToExercise(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId,
+                                                  @RequestBody ExerciseVideoRequest request) {
+        return exerciseVideos.attach(accounts.resolve(jwt).id(), exerciseId, request);
+    }
+
+    @DeleteMapping("/exercises/{exerciseId}")
+    public ResponseEntity<Void> detachFromExercise(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID exerciseId) {
+        exerciseVideos.detach(accounts.resolve(jwt).id(), exerciseId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}")
+    public VideoResponse rename(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
+                                @RequestBody RenameRequest request) {
+        return videos.rename(accounts.resolve(jwt).id(), id, request);
     }
 
     @PostMapping
