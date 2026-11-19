@@ -28,8 +28,12 @@ public final class SetLine {
     private static final Pattern PAIR = Pattern.compile("^([а-яёa-z_]+)\\s*=\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final String NUMBER = "(\\d+(?:[.,]\\d+)?)";
     private static final Pattern COUNT = Pattern.compile("^(\\d{1,3})$");
+    private static final Pattern VOICE_COUNT = Pattern.compile("^(\\d{1,3})(?:\\s*[-–—]\\s*(\\d{1,3}))?$");
     private static final Pattern REPS = Pattern.compile("^(\\d{1,4})(?:\\s*[-–—]\\s*(\\d{1,4}))?$");
     private static final Pattern MAX_REPS_WORD = Pattern.compile("^(макс|максимум|amrap|до отказа)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final String EMPTY_BAR_NOTE = "пустой гриф";
+    private static final Pattern EMPTY_BAR = Pattern.compile("пустой гриф|(?:с )?пустым грифом",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern KG = Pattern.compile("^" + NUMBER + "\\s*(?:кг)?$");
     private static final Pattern PERCENT = Pattern.compile("^" + NUMBER + "\\s*%?$");
     private static final Pattern PLAIN = Pattern.compile("^" + NUMBER + "$");
@@ -106,7 +110,7 @@ public final class SetLine {
             values.putIfAbsent(k, m.group(2).strip());
         }
         var line = new Reader(label, skipped, rejected);
-        Integer count = line.count(values.get("кол"), scope.maxSets());
+        Integer count = line.count(values.get("кол"), scope);
         Integer reps = null;
         Integer repsMax = null;
         boolean maxReps = false;
@@ -131,7 +135,9 @@ public final class SetLine {
             }
         }
         var weightKey = values.containsKey("вес") ? "вес" : "доп_вес";
-        Double weight = line.decimal(values.get(weightKey), weightKey, KG, MAX_WEIGHT);
+        var weightText = values.get(weightKey);
+        boolean emptyBar = scope == Scope.VOICE && weightText != null && EMPTY_BAR.matcher(weightText).matches();
+        Double weight = emptyBar ? null : line.decimal(weightText, weightKey, KG, MAX_WEIGHT);
         Double percent = line.decimal(values.get("процент"), "процент", PERCENT, MAX_WEIGHT);
         Double rpe = line.rpe(values.get("rpe"));
         String rir = line.rir(values.get("rir"));
@@ -146,6 +152,8 @@ public final class SetLine {
             if (type == null) line.reject("тип", typeText);
         }
         var noteText = note == null || note.toString().isBlank() ? null : note.toString().strip();
+        if (emptyBar && (noteText == null || !EMPTY_BAR.matcher(noteText).matches()))
+            noteText = noteText == null ? EMPTY_BAR_NOTE : noteText + " · " + EMPTY_BAR_NOTE;
         if (reps == null && !maxReps && weight == null && percent == null && rpe == null && rir == null && seconds == null
                 && meters == null && noteText == null && type == null && rest == null && values.get("кол") == null) {
             return null;
@@ -160,15 +168,24 @@ public final class SetLine {
             rejected.add(key + " " + value);
         }
 
-        Integer count(String text, int max) {
+        Integer count(String text, Scope scope) {
             if (text == null) return null;
-            var m = COUNT.matcher(text);
+            boolean voice = scope == Scope.VOICE;
+            var m = (voice ? VOICE_COUNT : COUNT).matcher(text);
             if (!m.matches()) {
                 reject("кол", text);
                 return null;
             }
-            var value = Integer.parseInt(m.group(1));
-            return value < 1 || value > max ? null : value;
+            int lower = Integer.parseInt(m.group(1));
+            if (!voice || m.group(2) == null) return bounded(lower, scope.maxSets());
+
+            int upper = Integer.parseInt(m.group(2));
+            int mean = (int) Math.round((lower + upper) / 2.0);
+            if (lower < 1 || upper < lower || mean > scope.maxSets()) {
+                reject("кол", text);
+                return null;
+            }
+            return mean;
         }
 
         Double decimal(String text, String key, Pattern format, double max) {

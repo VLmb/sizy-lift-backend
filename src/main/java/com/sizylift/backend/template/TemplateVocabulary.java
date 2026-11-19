@@ -21,7 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
 public final class TemplateVocabulary {
     static final String RESOURCE = "template/template-keys.v1.json";
 
-    /** Где применяется шаблон. Импорт знает всё, что голос, плюс RIR, «повт=макс» и дроп-сет. */
+    /** Где применяется шаблон. Импорт дополнительно поддерживает RPE у подходов на время и дроп-сеты. */
     public enum Scope {
         VOICE(20), IMPORT(200);
 

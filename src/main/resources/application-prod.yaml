@@ -25,8 +25,8 @@ sizylift:
       url: ${DEEPSEEK_API_URL}
   voice:
     enabled: ${VOICE_ENABLED:false}
-    # Кто разбирает текст речи (docs/voice.md, «Разбор шаблоном»): algorithm или model (DeepSeek → шаблон).
-    parser: ${VOICE_PARSER:algorithm}
+    # DeepSeek → шаблон. algorithm — устаревший режим (docs/voice.md).
+    parser: ${VOICE_PARSER:model}
     debug:
       # Отладка (docs/voice-debug.md): текст речи и ответы — в лог, записи — в deploy/voice-debug.
       enabled: ${VOICE_DEBUG_ENABLED:false}
@@ -36,7 +36,7 @@ sizylift:
       api-key: ${DEEPGRAM_API_KEY}
       url: ${DEEPGRAM_API_URL}
     fallback:
-      # Запасная модель — тот же DeepSeek, что у AI-импорта; без ключа просто не вызывается.
+      # DeepSeek для основного режима голосового ввода и запасного разбора в режиме algorithm.
       api-key: ${DEEPSEEK_API_KEY}
       url: ${DEEPSEEK_API_URL}
   admin:

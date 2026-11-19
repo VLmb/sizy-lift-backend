@@ -15,7 +15,7 @@ docker compose up -d --wait
 ```bash
 export SIZYLIFT_VOICE_ENABLED=true
 export SIZYLIFT_VOICE_DEEPGRAM_APIKEY=<ключ Deepgram>
-export SIZYLIFT_VOICE_FALLBACK_APIKEY=<ключ DeepSeek>      # без него запасная модель не вызывается
+export SIZYLIFT_VOICE_FALLBACK_APIKEY=<ключ DeepSeek>      # ключ модели шаблона
 export SIZYLIFT_VOICE_DEBUG_ENABLED=true
 export SIZYLIFT_VOICE_DEBUG_AUDIODIR=$HOME/sizy-voice-debug # необязательно: сохранять записи
 ```
@@ -58,9 +58,9 @@ grep "voice\.debug" backend.log
 
 - **текст уже неправильный** (`transcript`) — распознавание: качество записи (прослушать), подсказки,
   произношение;
-- **текст верный, `parsed` неверный** — разбор `voice.parser`: фразу — в корпус
-  `src/test/resources/voice/corpus.txt`, проверка без сервера `./gradlew -q voiceParse --console=plain`;
-- **`parsed` верный, `response` неверный** — запасная модель (строки `fallback`);
+- **текст верный, `template` неверный** — разбор моделью, сравните шаблон с `transcript`;
+- **шаблон верный, `response` неверный** — проверьте `skipped` и нормализацию полей;
+- **в устаревшем режиме** — `parsed` показывает разбор алгоритмом, `fallback` показывает ответ запасной модели;
 - **`response` верный, в приложении не то** — применение ответа на клиенте.
 
 ## Записи

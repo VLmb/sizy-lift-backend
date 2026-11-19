@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** API голосового ввода на настоящем PostgreSQL; распознавание и модель подменены — сеть не нужна. */
-@SpringBootTest(properties = {"sizylift.voice.enabled=true", "sizylift.voice.daily-limit=4",
+@SpringBootTest(properties = {"sizylift.voice.enabled=true", "sizylift.voice.parser=algorithm", "sizylift.voice.daily-limit=4",
         "sizylift.voice.deepgram.api-key=test-only", "sizylift.voice.deepgram.url=http://127.0.0.1",
         "sizylift.voice.fallback.api-key=test-only", "sizylift.voice.fallback.url=http://127.0.0.1"})
 @AutoConfigureMockMvc

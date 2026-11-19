@@ -58,6 +58,44 @@ class TemplateParserTest {
     }
 
     @Test
+    void roundsSetCountRangeWithoutChangingRepetitionBounds() {
+        var result = parse("Упражнение: Присед со штангой | тип=вес_повторы",
+                "Подход: кол=3-4 | повт=12-15 | вес=120 кг",
+                "Подход: кол=4–6 | повт=8",
+                "Подход: кол=6-4 | повт=10");
+        var lines = result.items().getFirst().lines();
+        assertThat(lines).extracting(Line::count).containsExactly(4, 5, null);
+        assertThat(lines).extracting(Line::reps).containsExactly(12, 8, 10);
+        assertThat(lines).extracting(Line::repsMax).containsExactly(15, null, null);
+        assertThat(result.skipped()).containsExactly("Присед со штангой: кол=6-4");
+    }
+
+    @Test
+    void convertsSpokenReserveAndKeepsTechnicalMaximum() {
+        var result = parse("Упражнение: Подтягивания | тип=вес_повторы",
+                "Подход: кол=1 | повт=12 | RIR=1",
+                "Подход: кол=1 | повт=8-10 | RIR=1-2",
+                "Подход: кол=1 | повт=AMRAP | заметка=максимум чистых повторов без читинга",
+                "Подход: кол=1 | повт=8 | RPE=7.5 | RIR=1");
+        var lines = result.items().getFirst().lines();
+        assertThat(lines).extracting(Line::rpe).containsExactly(9.0, 8.5, null, 7.5);
+        assertThat(lines).extracting(Line::toFailure).containsExactly(false, false, true, false);
+        assertThat(lines.get(2).reps()).isNull();
+        assertThat(lines.get(2).note()).isEqualTo("максимум чистых повторов без читинга");
+        assertThat(result.skipped()).isEmpty();
+    }
+
+    @Test
+    void keepsEmptyBarAsAnInstructionWhenTheModelPutsItInWeight() {
+        var result = parse("Упражнение: Присед в машине Смита | тип=вес_повторы",
+                "Подход: кол=1 | повт=15 | вес=пустой гриф | тип=разминка");
+        var line = result.items().getFirst().lines().getFirst();
+        assertThat(line.weightKg()).isNull();
+        assertThat(line.note()).isEqualTo("пустой гриф");
+        assertThat(result.skipped()).isEmpty();
+    }
+
+    @Test
     void exerciseRestIsSetOnlyWhenAllLinesAgree() {
         var item = only("Упражнение: Жим штанги лёжа | тип=вес_повторы",
                 "Подход: кол=3 | повт=8 | вес=60 кг | отдых=1.5 мин",

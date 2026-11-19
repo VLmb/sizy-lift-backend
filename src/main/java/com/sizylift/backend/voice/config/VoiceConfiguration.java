@@ -25,8 +25,8 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Провайдеры голосового ввода. Включённая функция без ключа Deepgram — ошибка старта. Запасная модель
- * без ключа просто не вызывается: непонятые куски остаются непонятыми.
+ * Провайдеры голосового ввода. Модельный режим использует ключи Deepgram и DeepSeek.
+ * Запасная модель нужна только устаревшему алгоритму.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(VoiceProperties.class)
@@ -46,7 +46,8 @@ public class VoiceConfiguration {
     @Bean
     GapResolver gapResolver(VoiceProperties properties, ObjectMapper json) {
         var fallback = properties.fallback();
-        if (!properties.enabled() || !fallback.enabled() || fallback.apiKey().isBlank()) return new DisabledResolver();
+        if (!properties.enabled() || properties.parser() != VoiceProperties.Parser.ALGORITHM
+                || !fallback.enabled() || fallback.apiKey().isBlank()) return new DisabledResolver();
         return new DeepSeekGapResolver(client(fallback.timeout()), json, fallback.apiKey(), fallback.url(),
                 fallback.model(), fallback.maxOutputTokens());
     }
@@ -54,6 +55,8 @@ public class VoiceConfiguration {
     @Bean
     VoicePipeline voicePipeline(SpeechRecognizer recognizer, GapResolver resolver, ObjectMapper json,
                                 VoiceProperties properties, Clock clock) {
+        if (properties.enabled() && properties.parser() == VoiceProperties.Parser.ALGORITHM)
+            log.warn("Голосовой ввод: выбран устаревший режим algorithm, основной режим — model");
         return new VoicePipeline(recognizer, resolver, json, trace(properties, json, clock), properties.parser(),
                 normalizer(properties, json));
     }
@@ -63,7 +66,8 @@ public class VoiceConfiguration {
      * ошибка старта: иначе каждая диктовка падала бы.
      */
     static TemplateNormalizer normalizer(VoiceProperties properties, ObjectMapper json) {
-        if (!properties.enabled() || properties.parser() != VoiceProperties.Parser.MODEL) return null;
+        if (properties.parser() != VoiceProperties.Parser.MODEL) return null;
+        if (!properties.enabled()) return (instructions, phrase) -> { throw VoiceFailure.disabled(); };
         var fallback = properties.fallback();
         if (fallback.apiKey().isBlank()) throw new IllegalArgumentException("Для разбора моделью нужен ключ DeepSeek");
         var template = properties.template();

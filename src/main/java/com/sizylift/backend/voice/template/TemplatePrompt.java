@@ -9,14 +9,14 @@ import com.sizylift.backend.voice.service.VoiceCatalog;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * Инструкция модели шаблона (docs/voice.md, «Разбор шаблоном»): текст — {@code voice/template-prompt.v1.txt},
+ * Инструкция модели шаблона (docs/voice.md, «Разбор шаблоном»): текст — {@code voice/template-prompt.v2.txt},
  * списки типов, ключей и видов подходов подставляются из словаря {@link TemplateVocabulary}, в конце —
  * каталог. Правила и системный каталог одинаковы у всех запросов и идут первыми — эту часть модель берёт из
  * кэша; свои упражнения и синонимы пользователя — в конце.
  */
 public final class TemplatePrompt {
     /** Версия промпта — в логе отладки, чтобы понимать, каким текстом разобрана диктовка. */
-    public static final String VERSION = "v1";
+    public static final String VERSION = "v2";
     static final String RESOURCE = "voice/template-prompt." + VERSION + ".txt";
     static final String RULES = rules();
 
