@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
+import com.sizylift.backend.feedback.controller.FeedbackController;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
@@ -19,6 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 final class ApiBodyLimitFilter extends OncePerRequestFilter {
     static final int PUBLICATION_BYTES = 1024 * 1024;
     static final int API_BYTES = 16 * PUBLICATION_BYTES;
+    private static final int FEEDBACK_BYTES = 16 * 1024;
     private static final String PUBLICATION_PATH = "/api/v1/publication/batch";
 
     @Override
@@ -29,7 +31,11 @@ final class ApiBodyLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws IOException, ServletException {
-        var limit = request.getRequestURI().equals(PUBLICATION_PATH) ? PUBLICATION_BYTES : API_BYTES;
+        var limit = switch (request.getRequestURI()) {
+            case PUBLICATION_PATH -> PUBLICATION_BYTES;
+            case FeedbackController.PATH -> FEEDBACK_BYTES;
+            default -> API_BYTES;
+        };
         if (request.getContentLengthLong() > limit) {
             response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
             return;
@@ -38,6 +44,10 @@ final class ApiBodyLimitFilter extends OncePerRequestFilter {
         // Предварительное чтение здесь лишает getParts() исходного потока.
         if (request.getContentType() != null && request.getContentType().toLowerCase(java.util.Locale.ROOT)
                 .startsWith("multipart/form-data")) {
+            if (limit == FEEDBACK_BYTES) {
+                response.setStatus(HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE);
+                return;
+            }
             chain.doFilter(request, response);
             return;
         }

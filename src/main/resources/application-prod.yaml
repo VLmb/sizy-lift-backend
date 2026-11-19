@@ -1,6 +1,16 @@
 # Production. Every environment-specific value comes from the environment and has no default:
 # a missing variable stops the application at startup instead of silently using a dev value.
 spring:
+  mail:
+    host: ${SMTP_HOST}
+    port: ${SMTP_PORT}
+    username: ${SMTP_USER}
+    password: ${SMTP_PASSWORD}
+    properties:
+      "[mail.smtp.auth]": ${SMTP_AUTH}
+      "[mail.smtp.ssl.enable]": ${SMTP_SSL}
+      "[mail.smtp.starttls.enable]": ${SMTP_STARTTLS}
+      "[mail.smtp.starttls.required]": ${SMTP_STARTTLS}
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -17,6 +27,9 @@ spring:
           jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
 
 sizylift:
+  feedback:
+    from: ${SMTP_FROM}
+    recipient: ${FEEDBACK_RECIPIENT}
   imports:
     enabled: ${AI_IMPORT_ENABLED:false}
     deepseek:

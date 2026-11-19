@@ -1,6 +1,9 @@
 # Local development against `docker compose up -d --wait` (compose.yaml).
 # Values are throwaway credentials of containers bound to 127.0.0.1, never production secrets.
 spring:
+  mail:
+    host: localhost
+    port: ${MAILPIT_SMTP_PORT:1025}
   datasource:
     url: jdbc:postgresql://localhost:5432/sizylift
     username: sizylift
@@ -13,6 +16,9 @@ spring:
           jwk-set-uri: http://localhost:8180/realms/sizylift/protocol/openid-connect/certs
 
 sizylift:
+  feedback:
+    from: no-reply@sizylift.local
+    recipient: feedback@sizylift.local
   video:
     # Garage из compose.yaml: ключ и бакет создаются при первом запуске контейнера.
     storage:
