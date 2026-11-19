@@ -137,3 +137,6 @@ databaseChangeLog:
   - include:
       file: changes/047-planned-repetition-ranges.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/048-product-feedback.sql
+      relativeToChangelogFile: true
