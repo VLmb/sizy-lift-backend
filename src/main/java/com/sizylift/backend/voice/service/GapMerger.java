@@ -36,7 +36,7 @@ final class GapMerger {
     private static final Pattern FIELD = Pattern.compile(FIELD_NAMES + "=(\\S+)");
     /** Строка целиком из полей, без лишнего текста. */
     private static final Pattern LINE = Pattern.compile("\\s*" + FIELD_NAMES + "=\\S+(?:\\s+" + FIELD_NAMES + "=\\S+)*\\s*");
-    private static final Pattern RANGE = Pattern.compile("(\\d{1,3})-(\\d{1,3})");
+    private static final Pattern RANGE = Pattern.compile("(\\d{1,4})-(\\d{1,4})");
     private static final Pattern INTEGER = Pattern.compile("\\d{1,4}");
     private static final Pattern DECIMAL = Pattern.compile("\\d{1,4}(?:\\.\\d{1,2})?");
     private static final String AMRAP = "AMRAP";
@@ -159,7 +159,7 @@ final class GapMerger {
         var lines = new ArrayList<SetLine>();
         Integer rest = null;
         for (var s : sets) {
-            var parsed = setLine(s.asString(""), numbers);
+            var parsed = setLine(s.asString(""), gap.text(), numbers);
             if (parsed == null) return false;
             lines.add(parsed.line());
             if (parsed.rest() != null) rest = parsed.rest();
@@ -175,7 +175,7 @@ final class GapMerger {
     private record Parsed(SetLine line, Integer rest) { }
 
     /** Строка «n=3 r=10 kg=20»; любое число должно быть сказано в дырке (секунды — возможно, минутами). */
-    private static Parsed setLine(String text, List<Double> numbers) {
+    private static Parsed setLine(String text, String gapText, List<Double> numbers) {
         if (!LINE.matcher(text).matches()) return null;
         var fields = new HashMap<String, String>();
         var m = FIELD.matcher(text);
@@ -190,9 +190,15 @@ final class GapMerger {
                 case "r" -> {
                     if (AMRAP.equals(v)) { failure = true; continue; }
                     var range = RANGE.matcher(v);
-                    if (range.matches()) { reps = Integer.parseInt(range.group(1)); repsMax = Integer.parseInt(range.group(2)); }
-                    else reps = integer(v);
-                    if (reps == null || !said(reps, numbers) || repsMax != null && !said(repsMax, numbers)) return null;
+                    if (range.matches()) {
+                        reps = Integer.parseInt(range.group(1));
+                        int upper = Integer.parseInt(range.group(2));
+                        if (!TextFacts.hasRepetitionRange(gapText, reps, upper)) return null;
+                        repsMax = upper == reps ? null : upper;
+                    } else {
+                        reps = integer(v);
+                        if (reps == null || !said(reps, numbers)) return null;
+                    }
                 }
                 case "kg" -> { kg = decimal(v); if (kg == null || !said(kg, numbers)) return null; }
                 case "pct" -> { pct = decimal(v); if (pct == null || !said(pct, numbers)) return null; }

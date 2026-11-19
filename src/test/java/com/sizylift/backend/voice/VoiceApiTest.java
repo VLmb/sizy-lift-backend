@@ -77,6 +77,18 @@ class VoiceApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void responseCarriesBothSpokenBoundsInOneSetLine() throws Exception {
+        speech("Присед три подхода по восемь тире двенадцать, вес 60 кг");
+        var lines = body(parse(user, UUID.randomUUID(), null, List.of()).andExpect(status().isOk())).at("/items/0/lines");
+        assertThat(lines.size()).isEqualTo(1);
+        assertThat(lines.at("/0/count").asInt()).isEqualTo(3);
+        assertThat(lines.at("/0/reps").asInt()).isEqualTo(8);
+        assertThat(lines.at("/0/repsMax").asInt()).isEqualTo(12);
+        assertThat(lines.at("/0/weightKg").asDouble()).isEqualTo(60.0);
+        verify(resolver, never()).resolve(anyString());
+    }
+
+    @Test
     void unknownExerciseIsAskedFromModelAndCheckedAnswerApplied() throws Exception {
         speech("Жим арнольда четыре по десять по шестнадцать");
         doReturn(new GapResolver.Result("""

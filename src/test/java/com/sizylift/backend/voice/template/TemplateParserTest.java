@@ -44,6 +44,20 @@ class TemplateParserTest {
     }
 
     @Test
+    void normalizesEqualBoundsAndRejectsInvalidRangesWithoutDroppingWeight() {
+        var result = parse("Упражнение: Присед со штангой | тип=вес_повторы",
+                "Подход: кол=3 | повт=8—12 | вес=60 кг",
+                "Подход: кол=1 | повт=10-10 | вес=70 кг",
+                "Подход: кол=1 | повт=12-8 | вес=80 кг",
+                "Подход: кол=1 | повт=0-10 | вес=90 кг");
+        var lines = result.items().getFirst().lines();
+        assertThat(lines).extracting(Line::reps).containsExactly(8, 10, null, null);
+        assertThat(lines).extracting(Line::repsMax).containsExactly(12, null, null, null);
+        assertThat(lines).extracting(Line::weightKg).containsExactly(60.0, 70.0, 80.0, 90.0);
+        assertThat(result.skipped()).containsExactly("Присед со штангой: повт=12-8", "Присед со штангой: повт=0-10");
+    }
+
+    @Test
     void exerciseRestIsSetOnlyWhenAllLinesAgree() {
         var item = only("Упражнение: Жим штанги лёжа | тип=вес_повторы",
                 "Подход: кол=3 | повт=8 | вес=60 кг | отдых=1.5 мин",

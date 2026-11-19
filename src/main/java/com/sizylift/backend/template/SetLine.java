@@ -28,7 +28,7 @@ public final class SetLine {
     private static final Pattern PAIR = Pattern.compile("^([а-яёa-z_]+)\\s*=\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final String NUMBER = "(\\d+(?:[.,]\\d+)?)";
     private static final Pattern COUNT = Pattern.compile("^(\\d{1,3})$");
-    private static final Pattern REPS = Pattern.compile("^(\\d{1,4})(?:\\s*[-–]\\s*(\\d{1,4}))?$");
+    private static final Pattern REPS = Pattern.compile("^(\\d{1,4})(?:\\s*[-–—]\\s*(\\d{1,4}))?$");
     private static final Pattern MAX_REPS_WORD = Pattern.compile("^(макс|максимум|amrap|до отказа)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern KG = Pattern.compile("^" + NUMBER + "\\s*(?:кг)?$");
     private static final Pattern PERCENT = Pattern.compile("^" + NUMBER + "\\s*%?$");
@@ -116,7 +116,14 @@ public final class SetLine {
             if (m.matches()) {
                 reps = bounded(Integer.parseInt(m.group(1)), MAX_REPS);
                 repsMax = m.group(2) == null ? null : bounded(Integer.parseInt(m.group(2)), MAX_REPS);
-                if (reps != null && repsMax != null && repsMax <= reps) repsMax = null;
+                if (scope == Scope.VOICE && m.group(2) != null
+                        && (reps == null || repsMax == null || repsMax < reps)) {
+                    line.reject("повт", repsText);
+                    reps = null;
+                    repsMax = null;
+                } else if (reps != null && repsMax != null && repsMax <= reps) {
+                    repsMax = null;
+                }
             } else if (MAX_REPS_WORD.matcher(repsText.strip()).matches()) {
                 maxReps = true;
             } else {

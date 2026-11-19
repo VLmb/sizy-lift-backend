@@ -38,13 +38,13 @@ public final class WorkoutTextParser {
 
         /** Есть числа или «до отказа», а не только отметки вроде «разминка». */
         boolean hasValues() {
-            return params.stream().anyMatch(p -> p.is(Kind.NUMBER) || p.is(Kind.QUANTITY) || p.is(Kind.TO_FAILURE));
+            return params.stream().anyMatch(p -> p.is(Kind.NUMBER) || p.is(Kind.RANGE) || p.is(Kind.QUANTITY) || p.is(Kind.TO_FAILURE));
         }
     }
 
     public ParsedWorkout parse(String phrase) {
         var text = TextTokenizer.tokenize(phrase);
-        var slots = slots(text.tokens());
+        var slots = slots(SpokenRanges.merge(text.tokens()));
         for (var slot : slots) {
             var params = TextTokenizer.quantities(slot.params);
             slot.params.clear();
