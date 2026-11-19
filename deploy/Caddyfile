@@ -32,7 +32,14 @@
 }
 
 pwa.sizylab.ru {
-	reverse_proxy pwa-prototype:80
+	# Один прокси до API, чтобы ограничение частоты видело адрес клиента.
+	handle /api/v1/feedback {
+		header Cache-Control no-store
+		reverse_proxy backend:8080
+	}
+	handle {
+		reverse_proxy pwa-prototype:80
+	}
 }
 
 www.{$WEB_DOMAIN} {

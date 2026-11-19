@@ -1,6 +1,12 @@
 # Settings shared by every environment. Environment-specific values live in
 # application-dev.yaml and application-prod.yaml; activate one with SPRING_PROFILES_ACTIVE.
 spring:
+  mail:
+    properties:
+      "[mail.smtp.connectiontimeout]": 3000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
+      "[mail.smtp.ssl.checkserveridentity]": true
   servlet:
     multipart:
       max-file-size: 5MB
@@ -115,6 +121,9 @@ server:
   shutdown: graceful
 
 management:
+  health:
+    mail:
+      enabled: false
   # Telemetry goes to an OpenTelemetry collector over OTLP/HTTP (addresses per profile):
   # metrics via Micrometer, traces via Micrometer Tracing, logs via the Logback appender.
   opentelemetry:
