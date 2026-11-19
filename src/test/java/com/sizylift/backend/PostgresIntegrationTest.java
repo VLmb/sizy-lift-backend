@@ -16,12 +16,15 @@ import org.testcontainers.utility.DockerImageName;
 public abstract class PostgresIntegrationTest {
     private static final String TMPFS_ENV = "SIZYLIFT_TEST_POSTGRES_TMPFS";
     private static final String DATA_DIRECTORY = "/var/lib/postgresql";
+    private static final int MAX_CONNECTIONS = 400;
 
     protected static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse(
             "postgres:18@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336")
             .asCompatibleSubstituteFor("postgres"))
             .withDatabaseName("sizylift_test")
-            .withUsername("sizylift");
+            .withUsername("sizylift")
+            // Контексты тестов кэшируются, у каждого свой пул: запас соединений на все.
+            .withCommand("postgres", "-c", "max_connections=" + MAX_CONNECTIONS);
 
     static {
         // В среде с маленьким диском остаётся настоящий PostgreSQL, но временные данные — в tmpfs.

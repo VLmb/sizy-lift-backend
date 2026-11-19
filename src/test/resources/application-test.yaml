@@ -1,6 +1,12 @@
 # Integration tests: the database and, where needed, Keycloak come from Testcontainers
 # through @DynamicPropertySource. Token validation tests override these addresses.
 spring:
+  # Каждый кэшированный контекст тестов держит свой пул к одной базе: без ограничения на полном прогоне
+  # PostgreSQL отвечает «too many clients» (см. и max_connections в PostgresIntegrationTest).
+  datasource:
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 1
   security:
     oauth2:
       resourceserver:
@@ -21,6 +27,12 @@ management:
       otlp:
         enabled: false
 sizylift:
+  video:
+    browser:
+      processing:
+        # Перекодирование в тестах запускается вызовом processWaiting(): фоновый проход другого контекста
+        # иначе забирает ролик посреди проверки.
+        poll-interval: 1h
   web:
     allowed-origins:
       - http://web.test
