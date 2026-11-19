@@ -25,12 +25,11 @@ final class ParameterParser {
     /** «под 3» — так распознавание часто слышит «по 3». */
     private static final Set<String> PO = Set.of("по", "под");
     private static final Set<String> WEIGHT_PREPOSITIONS = Set.of("на", "с", "со");
-    private static final Set<String> TIMES = Set.of("х", "x");
+    private static final Set<String> TIMES = Set.of("х", "x", "×");
     private static final String NA = "на";
     private static final String V = "в";
     private static final String OT = "от";
-    private static final String DO = "до";
-    /** «по 12–15»: шире диапазон повторов не диктуют, иначе это два разных числа. */
+    /** Допуск для двух чисел подряд, когда явного разделителя диапазона нет. */
     private static final double MAX_RANGE_SPAN = 10;
     private static final String WARMUP = "warmup";
     private static final String WORKING = "working";
@@ -96,7 +95,7 @@ final class ParameterParser {
     /** Есть ли в токенах значение, с которого начинаются параметры. */
     static boolean startsParameters(Token t) {
         return switch (t.kind) {
-            case NUMBER, QUANTITY, UNIT, TO_FAILURE, RPE, RIR, WARMUP, WORKING, REST -> true;
+            case NUMBER, RANGE, QUANTITY, UNIT, TO_FAILURE, RPE, RIR, WARMUP, WORKING, REST -> true;
             default -> false;
         };
     }
@@ -119,13 +118,20 @@ final class ParameterParser {
             case CORRECTION -> correction(i);
             case LAST, FIRST -> single(i, t.is(Kind.FIRST));
             case RESERVE -> reserve(i);
-            case TO_FAILURE -> { line(Field.REPS).toFailure = true; yield cover(i, i); }
+            case TO_FAILURE -> {
+                var target = line(Field.REPS);
+                target.values[Field.REPS.ordinal()] = null;
+                target.values[Field.REPS_MAX.ordinal()] = null;
+                target.toFailure = true;
+                yield cover(i, i);
+            }
             case EACH_SIDE -> { noteLine().note = EACH_SIDE_NOTE; yield cover(i, i); }
             case NOTE -> { noteLine().note = t.text; yield cover(i, i); }
             case RPE, RIR -> score(i, t.is(Kind.RPE) ? Field.RPE : Field.RIR);
             case REST, PAUSE -> rest(i);
             case QUANTITY -> quantity(i);
             case NUMBER -> number(i);
+            case RANGE -> explicitRange(i, t);
             case PREPOSITION -> preposition(i);
             default -> i + 1;
         };
@@ -244,6 +250,7 @@ final class ParameterParser {
                 var v = at(i + 2);
                 if (p != null && p.is(Kind.PREPOSITION) && isPo(p) && v != null) {
                     if (v.is(Kind.NUMBER)) { set(Field.REPS, v.value); return range(i, i + 3, v.value); }
+                    if (v.is(Kind.RANGE)) { cover(i, i + 1); return explicitRange(i + 2, v); }
                     if (v.is(Kind.QUANTITY)) { cover(i, i + 1); return quantity(i + 2); }
                 }
             }
@@ -265,6 +272,11 @@ final class ParameterParser {
                 while (at(k) != null && (at(k).is(Kind.PERCENT_BASE) || at(k).is(Kind.PREPOSITION) && OT.equals(at(k).text))) k++;
                 var p = at(k);
                 var b = at(k + 1);
+                if (p != null && p.is(Kind.PREPOSITION) && NA.equals(p.text) && validRepRange(b)) {
+                    pair(Field.PERCENT, q.value, b.value);
+                    setUpper(b);
+                    return cover(i, k + 1);
+                }
                 if (p != null && p.is(Kind.PREPOSITION) && NA.equals(p.text) && b != null
                         && (b.is(Kind.NUMBER) || b.isQuantity(Unit.REPS))) {
                     pair(Field.PERCENT, q.value, b.value);
@@ -291,6 +303,12 @@ final class ParameterParser {
         }
         if (reserveFollows(i + 1)) { set(Field.RIR, a.value); return cover(i, i + 2); }
         if (p == null || !p.is(Kind.PREPOSITION) || b == null) return i + 1;
+        if ((isPo(p) || TIMES.contains(p.text)) && b.is(Kind.RANGE)) {
+            startSpec();
+            set(Field.COUNT, a.value);
+            cover(i, i + 1);
+            return explicitRange(i + 2, b);
+        }
         if ((isPo(p) || TIMES.contains(p.text)) && b.is(Kind.NUMBER)) {
             startSpec();
             set(Field.COUNT, a.value);
@@ -309,6 +327,16 @@ final class ParameterParser {
             set(Field.REPS, b.value);
             return cover(i, i + 2);
         }
+        if (NA.equals(p.text) && validRepRange(b)) {
+            if (a.value <= MAX_SETS && weightFollows(i + 3)) {
+                set(Field.COUNT, a.value);
+                set(Field.REPS, b.value);
+            } else {
+                pair(Field.KG, a.value, b.value);
+            }
+            setUpper(b);
+            return cover(i, i + 2);
+        }
         if (NA.equals(p.text) && (b.is(Kind.NUMBER) || b.isQuantity(Unit.REPS))) {
             // «100 на 6» — вес на повторы; «6 на 100» — повторы на вес: повторов меньше, чем килограммов.
             boolean repsFirst = b.is(Kind.NUMBER) && a.value < b.value;
@@ -323,7 +351,7 @@ final class ParameterParser {
         if (editing == null && (current == null || current.has(value) || current.has(Field.REPS))) newLine();
         var l = editing != null ? editing : current;
         l.values[value.ordinal()] = v;
-        l.values[Field.REPS.ordinal()] = reps;
+        replaceReps(l, reps);
         l.pair = true;
     }
 
@@ -333,17 +361,17 @@ final class ParameterParser {
     }
 
     /**
-     * Покрывает шаблон с {@code from} до {@code k - 1}. «по 12–15», «по двенадцать пятнадцать»: если на {@code k}
+     * Покрывает шаблон с {@code from} до {@code k - 1}. «по двенадцать пятнадцать»: если на {@code k}
      * сразу за повторами большее число, оно — верхняя граница, если только само не начинает «N по M».
      */
     private int range(int from, int k, double reps) {
         var c = at(k);
         boolean number = c != null && (c.is(Kind.NUMBER) || c.isQuantity(Unit.REPS));
-        if (!number || c.value <= reps || c.value - reps > MAX_RANGE_SPAN || c.value != Math.rint(c.value)
+        if (!number || !validBounds(reps, c.value) || c.value <= reps || c.value - reps > MAX_RANGE_SPAN
                 || c.is(Kind.NUMBER) && pairFollows(k) && !NA.equals(at(k + 1).text)) {
             return cover(from, k - 1);
         }
-        set(Field.REPS_MAX, c.value);
+        currentRepsLine().values[Field.REPS_MAX.ordinal()] = c.value;
         return cover(from, k);
     }
 
@@ -352,18 +380,10 @@ final class ParameterParser {
         var p = tokens.get(i);
         var n = at(i + 1);
         if (n == null) return i + 1;
-        if (n.is(Kind.QUANTITY) || n.is(Kind.RPE) || n.is(Kind.RIR) || n.is(Kind.TO_FAILURE) || n.is(Kind.RESERVE)) {
+        if (n.is(Kind.RANGE) || n.is(Kind.QUANTITY) || n.is(Kind.RPE) || n.is(Kind.RIR) || n.is(Kind.TO_FAILURE) || n.is(Kind.RESERVE)) {
             return cover(i, i);
         }
         if (!n.is(Kind.NUMBER)) return i + 1;
-        var to = at(i + 2);
-        if (OT.equals(p.text) && to != null && to.is(Kind.PREPOSITION) && DO.equals(to.text)
-                && at(i + 3) != null && at(i + 3).is(Kind.NUMBER)) {
-            // «от 12 до 15».
-            set(Field.REPS, n.value);
-            set(Field.REPS_MAX, at(i + 3).value);
-            return cover(i, i + 3);
-        }
         if (isPo(p)) {
             // «три по пять по сто»: повторы уже названы, второе «по» — вес.
             boolean weight = current != null && current.has(Field.REPS) && !current.has(Field.KG) && editing == null;
@@ -391,10 +411,46 @@ final class ParameterParser {
         var p = at(numberIndex + 1);
         var b = at(numberIndex + 2);
         return p != null && p.is(Kind.PREPOSITION) && (NA.equals(p.text) || TIMES.contains(p.text) || isPo(p))
-                && b != null && b.is(Kind.NUMBER);
+                && b != null && (b.is(Kind.NUMBER) || validRepRange(b));
     }
 
-    private void set(Field f, double value) { line(f).values[f.ordinal()] = value; }
+    private int explicitRange(int index, Token range) {
+        if (!validRepRange(range) || resultType != null && !ALLOWED.getOrDefault(resultType, Set.of()).contains(Field.REPS))
+            return index + 1;
+        set(Field.REPS, range.value);
+        setUpper(range);
+        return cover(index, index);
+    }
+
+    private static boolean validRepRange(Token token) {
+        return token != null && token.is(Kind.RANGE) && (token.unit == null || token.unit == Unit.REPS)
+                && validBounds(token.value, token.upper);
+    }
+
+    private static boolean validBounds(double lower, double upper) {
+        return lower > 0 && lower == Math.rint(lower) && upper == Math.rint(upper)
+                && lower <= upper && upper <= SpokenRanges.MAX_REPS;
+    }
+
+    private void setUpper(Token range) {
+        if (range.upper > range.value) currentRepsLine().values[Field.REPS_MAX.ordinal()] = range.upper;
+    }
+
+    private Line currentRepsLine() {
+        return editing == null ? current : editing;
+    }
+
+    private void set(Field f, double value) {
+        var target = line(f);
+        if (f == Field.REPS) replaceReps(target, value);
+        else target.values[f.ordinal()] = value;
+    }
+
+    private static void replaceReps(Line line, double reps) {
+        line.values[Field.REPS.ordinal()] = reps;
+        line.values[Field.REPS_MAX.ordinal()] = null;
+        line.toFailure = false;
+    }
 
     private Line line(Field f) {
         if (editing != null) return editing;

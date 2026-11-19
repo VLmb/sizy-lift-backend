@@ -79,9 +79,12 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         assertThat(sessions.find(id).orElseThrow().normalized().language()).isEqualTo("en");
         var preview = view(owner, id);
         // Комментариев к подходу нет: пометки подхода — в комментарии упражнения.
-        assertThat(preview.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0/note").isNull()).isTrue();
+        var set = preview.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0");
+        assertThat(set.get("note").isNull()).isTrue();
+        assertThat(set.get("repetitions").asInt()).isEqualTo(8);
+        assertThat(set.get("repetitionsMax").asInt()).isEqualTo(12);
         assertThat(preview.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/planComment").asString())
-                .contains("Reps: 8-12", "Личная заметка").doesNotContain("Set type not specified");
+                .contains("Личная заметка").doesNotContain("Reps: 8-12", "Set type not specified");
         // Повтор после смены языка не создаёт новую сессию и не меняет первый выбор.
         body.remove("language");
         postJson(owner, BASE, body).andExpect(status().isAccepted());
@@ -670,13 +673,14 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
         var view = view(owner, id);
         assertThat(view.get("canCommit").asBoolean()).isTrue();
         var actual = view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/sets/0");
-        for (var field : List.of("repetitions", "targetWeightGrams"))
-            assertThat(actual.get(field).isNull()).as(field).isTrue();
+        assertThat(actual.get("repetitions").asInt()).isEqualTo(8);
+        assertThat(actual.get("repetitionsMax").asInt()).isEqualTo(12);
+        assertThat(actual.get("targetWeightGrams").isNull()).isTrue();
         assertThat(actual.get("targetRpeTenths").asInt()).isEqualTo(85);
         assertThat(actual.get("restMs").asInt()).isEqualTo(240_000);
         assertThat(actual.get("note").isNull()).isTrue();
         assertThat(view.at("/program/cycles/0/weeks/0/workouts/0/blocks/0/exercises/0/planComment").asString())
-                .contains("8-12", "RIR: 1-2").doesNotContain("3–5 мин");
+                .contains("RIR: 1-2").doesNotContain("8-12", "3–5 мин");
     }
 
     @Test

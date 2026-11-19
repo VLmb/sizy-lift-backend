@@ -14,9 +14,9 @@ import com.sizylift.backend.voice.parser.Token.Unit;
  * ({@link #quantities}) собираются после поиска названий, чтобы «подтягивания с весом» остались названием.
  */
 final class TextTokenizer {
-    private static final Pattern RAW = Pattern.compile("\\d+(?:[.,]\\d+)?|[a-zа-я]+|%|[,.;:!?…—–]");
+    private static final Pattern RAW = Pattern.compile("\\d+(?:[.,]\\d+)?|[a-zа-я]+|[%×]|[-,.;:!?…—–]");
     private static final Pattern DIGITS = Pattern.compile("\\d+(?:[.,]\\d+)?");
-    private static final Pattern SEPARATORS = Pattern.compile("[,.;:!?…—–]");
+    private static final Pattern SEPARATORS = Pattern.compile("[-,.;:!?…—–]");
     private static final String HALF_PREFIX = "пол";
     private static final String WITH = "с";
     private static final String PO = "по";
@@ -27,7 +27,7 @@ final class TextTokenizer {
         String text(int from, int to) {
             var b = new StringBuilder();
             for (int i = from; i < to; i++) {
-                if (SEPARATORS.matcher(words.get(i)).matches()) continue;
+                if (SEPARATORS.matcher(words.get(i)).matches() && !(SpokenRanges.isDash(words.get(i)) && numericHyphen(words, i))) continue;
                 if (!b.isEmpty()) b.append(' ');
                 b.append(words.get(i));
             }
@@ -53,7 +53,22 @@ final class TextTokenizer {
             if (!rest.isEmpty() && isUnit(rest)) { words.add(HALF_PREFIX); words.add(rest); }
             else words.add(w);
         }
-        return words;
+        var result = new ArrayList<String>();
+        for (int i = 0; i < words.size(); i++) {
+            var word = words.get(i);
+            if (!word.equals("-") || numericHyphen(words, i)) result.add(word);
+        }
+        return result;
+    }
+
+    private static boolean numericHyphen(List<String> words, int index) {
+        if (index == 0 || index == words.size() - 1) return false;
+        var left = words.get(index - 1);
+        var right = words.get(index + 1);
+        var first = RussianNumerals.find(left);
+        var second = RussianNumerals.find(right);
+        return (first != null || DIGITS.matcher(left).matches()) && (second != null || DIGITS.matcher(right).matches())
+                && (first == null || second == null || !RussianNumerals.joins(first.order(), second.order()));
     }
 
     private static boolean isUnit(String w) {

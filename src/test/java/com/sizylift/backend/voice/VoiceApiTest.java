@@ -35,7 +35,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** API голосового ввода на настоящем PostgreSQL; распознавание и модель подменены — сеть не нужна. */
-@SpringBootTest(properties = {"sizylift.voice.enabled=true", "sizylift.voice.daily-limit=4",
+@SpringBootTest(properties = {"sizylift.voice.enabled=true", "sizylift.voice.parser=algorithm", "sizylift.voice.daily-limit=4",
         "sizylift.voice.deepgram.api-key=test-only", "sizylift.voice.deepgram.url=http://127.0.0.1",
         "sizylift.voice.fallback.api-key=test-only", "sizylift.voice.fallback.url=http://127.0.0.1"})
 @AutoConfigureMockMvc
@@ -73,6 +73,18 @@ class VoiceApiTest extends CoachWorkspaceApiSupport {
         assertThat(squat.at("/lines/0/weightKg").asDouble()).isEqualTo(100.0);
         assertThat(body.at("/items/1/exerciseId").asString()).isEqualTo(BENCH);
         assertThat(body.at("/items/1/restSeconds").isNull()).isTrue();
+        verify(resolver, never()).resolve(anyString());
+    }
+
+    @Test
+    void responseCarriesBothSpokenBoundsInOneSetLine() throws Exception {
+        speech("Присед три подхода по восемь тире двенадцать, вес 60 кг");
+        var lines = body(parse(user, UUID.randomUUID(), null, List.of()).andExpect(status().isOk())).at("/items/0/lines");
+        assertThat(lines.size()).isEqualTo(1);
+        assertThat(lines.at("/0/count").asInt()).isEqualTo(3);
+        assertThat(lines.at("/0/reps").asInt()).isEqualTo(8);
+        assertThat(lines.at("/0/repsMax").asInt()).isEqualTo(12);
+        assertThat(lines.at("/0/weightKg").asDouble()).isEqualTo(60.0);
         verify(resolver, never()).resolve(anyString());
     }
 

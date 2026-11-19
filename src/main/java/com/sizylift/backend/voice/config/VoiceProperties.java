@@ -14,14 +14,15 @@ public record VoiceProperties(@DefaultValue("false") boolean enabled, @DefaultVa
         @DefaultValue("5000000") int maxAudioBytes, @DefaultValue("10m") Duration idempotencyTtl,
         @DefaultValue("10000") int idempotencyEntries, @DefaultValue("900") int keytermChars,
         @DefaultValue Deepgram deepgram, @DefaultValue Fallback fallback, @DefaultValue Debug debug,
-        @DefaultValue("algorithm") Parser parser, @DefaultValue Template template) {
+        @DefaultValue("model") Parser parser, @DefaultValue Template template) {
 
-    /**
-     * Кто превращает текст речи в подходы (docs/voice.md, «Разбор шаблоном»): {@code algorithm} — разбор живой
-     * речи с запасной моделью для непонятых кусков; {@code model} — DeepSeek переписывает фразу в строгий
-     * шаблон, его разбирает строгий разборщик. Один флаг на весь сервер.
-     */
-    public enum Parser { ALGORITHM, MODEL }
+    /** Режим разбора диктовки. DeepSeek переводит фразу в шаблон по умолчанию. */
+    public enum Parser {
+        /** Устаревший режим для явного переключения в существующих установках. */
+        @Deprecated
+        ALGORITHM,
+        MODEL
+    }
 
     public record Deepgram(@DefaultValue("") String apiKey, @DefaultValue("https://api.deepgram.com") String url,
                            @DefaultValue("nova-3") String model, @DefaultValue("ru") String language,

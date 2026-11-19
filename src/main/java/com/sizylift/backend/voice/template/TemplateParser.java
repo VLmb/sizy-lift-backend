@@ -137,8 +137,15 @@ public final class TemplateParser {
     private static Line set(String body, Draft d, List<String> skipped) {
         var v = SetLine.parse(body, d.resultType, Scope.VOICE, d.name != null ? d.name : d.spoken, skipped, d.issues);
         if (v == null) return null;
+        var fromReserve = SetLine.rpeFromRir(v.rir());
+        var rpe = v.rpe() != null ? v.rpe() : fromReserve;
+        var note = v.note();
+        if (v.rir() != null && fromReserve == null) {
+            var reserve = "В запасе: " + v.rir();
+            note = note == null ? reserve : note + " · " + reserve;
+        }
         return new Line(v.count(), v.reps(), v.repsMax(), v.maxReps(), v.weightKg(), v.percent(), v.seconds(), v.meters(),
-                v.rpe(), null, v.type(), v.note(), v.restSeconds());
+                rpe, null, v.type(), note, v.restSeconds());
     }
 
     private static String key(String name) {
