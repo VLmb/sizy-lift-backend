@@ -23,6 +23,9 @@ public class AccountDeletionRepository {
     private static final String RETIRE = "INSERT INTO sizylift.retired_identity (fingerprint) VALUES (?) ON CONFLICT DO NOTHING";
     private static final String QUEUE = "INSERT INTO sizylift.account_deletion (id, issuer, subject) VALUES (?, ?, ?)";
     private static final String DELETE_ACCOUNT = "DELETE FROM sizylift.user_account WHERE id = ?";
+    private static final String ANONYMIZE_FEEDBACK = """
+            UPDATE sizylift.product_feedback SET email = NULL, username = NULL, name = NULL WHERE account_id = ?
+            """;
     private static final String NEXT = "SELECT id, issuer, subject FROM sizylift.account_deletion ORDER BY requested_at LIMIT 1 FOR UPDATE SKIP LOCKED";
     private static final String PENDING_COUNT = "SELECT count(*) FROM sizylift.account_deletion";
     public long pendingCount() { return jdbc.queryForObject(PENDING_COUNT, Long.class); }
@@ -42,6 +45,7 @@ public class AccountDeletionRepository {
         lockIdentity(account.issuer(), account.subject());
         jdbc.update(RETIRE, fingerprint(account.issuer(), account.subject()));
         jdbc.update(QUEUE, account.id(), account.issuer(), account.subject());
+        jdbc.update(ANONYMIZE_FEEDBACK, account.id());
         jdbc.update(DELETE_ACCOUNT, account.id());
     }
 

@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset sizylift:048-exercise-video
+--changeset sizylift:049-exercise-video
 -- Видео техники у упражнения (docs/video.md, «Видео упражнения»): тренер прикрепляет одно видео к упражнению,
 -- и его видят все действующие подопечные там, где встречается это упражнение. Видео упражнения конкретной
 -- программы (planned_exercise.technique_video_id) остаётся уточнением и перекрывает это.
