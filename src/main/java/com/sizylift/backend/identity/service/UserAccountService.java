@@ -31,7 +31,7 @@ public class UserAccountService {
 
     /**
      * Возвращает аккаунт пользователя из токена: создаёт его при первом запросе
-     * и синхронизирует e-mail с Keycloak.
+     * и синхронизирует данные аккаунта с Keycloak.
      */
     @Transactional
     public UserAccount resolve(ExternalIdentity identity) {
@@ -42,16 +42,18 @@ public class UserAccountService {
         var account = accounts.findByIssuerAndSubject(identity.issuer(), identity.subject())
                 .orElseGet(() -> provision(identity));
         accounts.touch(account.id());
+        var displayName = identity.displayName() != null ? identity.displayName() : account.displayName();
         if (Objects.equals(account.email(), identity.email())
-                && account.emailVerified() == identity.emailVerified()) {
+                && account.emailVerified() == identity.emailVerified()
+                && Objects.equals(account.displayName(), displayName)) {
             return account;
         }
-        return accounts.updateContact(account, identity.email(), identity.emailVerified()).orElse(account);
+        return accounts.updateContact(account, identity.email(), identity.emailVerified(), displayName).orElse(account);
     }
 
     private UserAccount provision(ExternalIdentity identity) {
         if (accounts.insertIfAbsent(identity.issuer(), identity.subject(), identity.email(),
-                identity.emailVerified())) {
+                identity.emailVerified(), identity.displayName())) {
             accountsCreated.increment();
         }
         return accounts.findByIssuerAndSubject(identity.issuer(), identity.subject())

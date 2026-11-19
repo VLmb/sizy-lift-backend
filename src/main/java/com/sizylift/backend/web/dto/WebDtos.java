@@ -101,7 +101,8 @@ public final class WebDtos {
     }
 
     public record PlannedSummary(UUID id, UUID programId, UUID authorId, String title, LocalDate originalDate,
-                                 LocalDate scheduledDate, Instant rescheduledAt, UUID workoutId, LocalDate linkedWorkoutDate) {
+                                 LocalDate scheduledDate, Instant rescheduledAt, UUID workoutId,
+                                 LocalDate linkedWorkoutDate, boolean skipped) {
     }
 
     public record TimelineResponse(UUID ownerId, List<PlannedSummary> planned, List<WorkoutSummary> workouts) {

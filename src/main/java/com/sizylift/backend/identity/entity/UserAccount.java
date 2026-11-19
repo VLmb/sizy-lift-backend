@@ -12,6 +12,7 @@ public record UserAccount(
         String subject,
         String email,
         boolean emailVerified,
+        String displayName,
         Instant createdAt,
         Instant updatedAt) {
 }

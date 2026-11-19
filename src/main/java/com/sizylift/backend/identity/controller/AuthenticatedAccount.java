@@ -23,6 +23,20 @@ public class AuthenticatedAccount {
                 jwt.getClaimAsString(JwtClaimNames.ISS),
                 jwt.getSubject(),
                 jwt.getClaimAsString(StandardClaimNames.EMAIL),
-                Boolean.TRUE.equals(jwt.getClaimAsBoolean(StandardClaimNames.EMAIL_VERIFIED))));
+                Boolean.TRUE.equals(jwt.getClaimAsBoolean(StandardClaimNames.EMAIL_VERIFIED)),
+                displayName(jwt)));
+    }
+
+    private static String displayName(Jwt jwt) {
+        var name = jwt.getClaimAsString(StandardClaimNames.NAME);
+        if (name != null && !name.isBlank()) {
+            return name.strip();
+        }
+        var parts = java.util.stream.Stream.of(jwt.getClaimAsString(StandardClaimNames.GIVEN_NAME),
+                        jwt.getClaimAsString(StandardClaimNames.FAMILY_NAME))
+                .filter(part -> part != null && !part.isBlank())
+                .map(String::strip)
+                .collect(java.util.stream.Collectors.joining(" "));
+        return parts.isEmpty() ? null : parts;
     }
 }

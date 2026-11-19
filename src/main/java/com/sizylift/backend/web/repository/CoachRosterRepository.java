@@ -15,12 +15,14 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class CoachRosterRepository {
     private static final String ROSTER = """
-            SELECT l.id, l.athlete_user_id, p.display_name, w.id AS workout_id, w.workout_date, w.title,
+            SELECT l.id, l.athlete_user_id, coalesce(nullif(btrim(p.display_name), ''), a.display_name) AS display_name,
+                   w.id AS workout_id, w.workout_date, w.title,
                    pl.plan_until,
                    greatest(w.completed_at, s.signal_at, l.created_at) AS activity_at,
                    ev.workout_completed, ev.workout_rescheduled, ev.workout_missed, ev.program_ending,
                    ev.invite_accepted, ev.oldest_unseen_at, t.open_tasks, t.overdue_tasks
             FROM sizylift.coaching_link l
+            JOIN sizylift.user_account a ON a.id = l.athlete_user_id
             LEFT JOIN sizylift.athlete_profile p ON p.user_id = l.athlete_user_id
             LEFT JOIN LATERAL (
                 SELECT id, workout_date, title, completed_at FROM sizylift.workout

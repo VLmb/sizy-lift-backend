@@ -106,13 +106,17 @@ public record ProgramPayloadV1(
             @Min(0) Integer durationMs,
             @Min(0) Integer targetDistanceM,
             @Min(RPE_TENTHS_MIN) @Max(RPE_TENTHS_MAX) Integer targetRpeTenths,
-            boolean targetRpeAuto,
+            Boolean targetRpeAuto,
             @Min(PERCENT_ONE_RM_TENTHS_MIN) @Max(PERCENT_ONE_RM_TENTHS_MAX) Integer targetPercentOneRmTenths,
             @Min(0) Integer restMs,
             @Size(max = LONG_TEXT) String note,
             @Pattern(regexp = "(weight|percent|rpe):(weight|percent|rpe)?(,(weight|percent|rpe))*")
             @Size(max = 64) String targetCalculation,
             @JsonInclude(JsonInclude.Include.NON_NULL) @Min(1) @Max(1000) Integer repetitionsMax) {
+        public Set {
+            targetRpeAuto = Boolean.TRUE.equals(targetRpeAuto);
+        }
+
         public Set(UUID id, int position, String setType, Integer targetWeightGrams, Integer repetitions,
                    Integer durationMs, Integer targetDistanceM, Integer targetRpeTenths, boolean targetRpeAuto,
                    Integer targetPercentOneRmTenths, Integer restMs, String note, String targetCalculation) {

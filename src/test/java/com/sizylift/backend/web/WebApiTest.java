@@ -588,6 +588,35 @@ class WebApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void onlyTheAthleteCanSkipAPlanAndCompletionTakesPriority() throws Exception {
+        var plan = fixture("program").get("cycles").get(0).get("weeks").get(0).get("workouts").get(0);
+        var id = UUID.fromString(plan.get("id").asString());
+        call(owner, put("/api/v2/web/standalone-workouts/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("revision", 0, "workout", plan)))).andExpect(status().isOk());
+        var skip = "/api/v2/web/planned-workouts/" + id + "/skip";
+        var day = plan.get("workoutDate").asString();
+        var timeline = "/api/v2/web/timeline?from=" + day + "&to=" + day;
+
+        mvc.perform(put(skip)).andExpect(status().isUnauthorized());
+        call(stranger, put(skip)).andExpect(status().isNotFound());
+        call(owner, put(skip)).andExpect(status().isNoContent());
+        call(owner, put(skip)).andExpect(status().isNoContent());
+        assertThat(body(call(owner, get(timeline))).get("planned").get(0).get("skipped").asBoolean()).isTrue();
+        call(owner, delete(skip)).andExpect(status().isNoContent());
+        assertThat(body(call(owner, get(timeline))).get("planned").get(0).get("skipped").asBoolean()).isFalse();
+        call(owner, put(skip)).andExpect(status().isNoContent());
+
+        var actual = fixture("workout").put("workoutDate", day).put("plannedWorkoutId", id.toString());
+        assertThat(push(owner, item("workout", id, null, 0, 1, actual)).get("status").asString())
+                .isEqualTo("accepted");
+        var result = body(call(owner, get(timeline)));
+        assertThat(result.get("planned").get(0).get("skipped").asBoolean()).isFalse();
+        assertThat(result.get("planned").get(0).get("workoutId").asString()).isEqualTo(id.toString());
+        assertThat(result.get("workouts")).hasSize(1);
+        call(owner, put(skip)).andExpect(status().isNotFound());
+    }
+
+    @Test
     void ownerStandalonePlanIsReadOnlyToActiveCoachAndUnavailableToStrangersOrFormerCoach() throws Exception {
         var workout = fixture("program").get("cycles").get(0).get("weeks").get(0).get("workouts").get(0);
         var path = "/api/v2/web/standalone-workouts/" + workout.get("id").asString();

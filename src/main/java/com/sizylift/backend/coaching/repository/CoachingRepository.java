@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -51,8 +52,12 @@ public class CoachingRepository {
     private static final String ACTIVE_AS_ATHLETE = """
             SELECT %s FROM sizylift.coaching_link WHERE athlete_user_id = ? AND ended_at IS NULL
             """.formatted(LINK_COLUMNS);
-    private static final String DISPLAY_NAME =
-            "SELECT display_name FROM sizylift.athlete_profile WHERE user_id = ? AND display_name IS NOT NULL";
+    private static final String DISPLAY_NAME = """
+            SELECT coalesce(nullif(btrim(p.display_name), ''), a.display_name)
+            FROM sizylift.user_account a
+            LEFT JOIN sizylift.athlete_profile p ON p.user_id = a.id
+            WHERE a.id = ?
+            """;
 
     private static final String SELECT_CARD = """
             SELECT coach_notes, start_date, start_name, target_exercise_ids, goal_texts, goal_exercise_ids,
@@ -209,9 +214,10 @@ public class CoachingRepository {
         return jdbc.query(ACTIVE_AS_ATHLETE, CoachingRepository::link, athleteId).stream().findFirst();
     }
 
-    /** Имя из профиля спортсмена; {@code null}, если профиль не опубликован. */
+    /** Имя из профиля Sizy или из аккаунта Keycloak. */
     public String displayName(UUID userId) {
-        return jdbc.query(DISPLAY_NAME, (row, n) -> row.getString(1), userId).stream().findFirst().orElse(null);
+        return jdbc.query(DISPLAY_NAME, (row, n) -> row.getString(1), userId).stream().filter(Objects::nonNull)
+                .findFirst().orElse(null);
     }
 
     private static CoachingInvite invite(ResultSet row, int rowNumber) throws SQLException {

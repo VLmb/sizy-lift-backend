@@ -28,10 +28,12 @@ public class DiaryReadRepository {
             SELECT pw.id, pw.program_id, pw.title, pw.workout_date AS original_date,
                    coalesce(r.scheduled_date, pw.workout_date) AS scheduled_date,
                    r.updated_at AS rescheduled_at,
-                   actual.id AS workout_id, actual.workout_date AS linked_workout_date
+                   actual.id AS workout_id, actual.workout_date AS linked_workout_date,
+                   actual.id IS NULL AND sk.planned_workout_id IS NOT NULL AS skipped
             FROM sizylift.planned_workout pw
             JOIN sizylift.program p ON p.user_id = pw.user_id AND p.id = pw.program_id
             LEFT JOIN sizylift.workout_reschedule r ON r.user_id = pw.user_id AND r.planned_workout_id = pw.id
+            LEFT JOIN sizylift.planned_workout_skip sk ON sk.user_id = pw.user_id AND sk.planned_workout_id = pw.id
             LEFT JOIN LATERAL (
                 SELECT w.id, w.workout_date FROM sizylift.workout w WHERE w.user_id = pw.user_id
                   AND w.planned_workout_id = pw.id ORDER BY w.completed_at DESC, w.id LIMIT 1
@@ -39,6 +41,24 @@ public class DiaryReadRepository {
             WHERE pw.user_id = ? AND p.status = 'active'
               AND coalesce(r.scheduled_date, pw.workout_date) BETWEEN ? AND ?
             ORDER BY scheduled_date, pw.position, pw.id
+            """;
+    private static final String SKIP = """
+            WITH target(user_id, id) AS (VALUES (?::uuid, ?::uuid))
+            INSERT INTO sizylift.planned_workout_skip (user_id, planned_workout_id)
+            SELECT t.user_id, t.id FROM target t
+            WHERE (EXISTS (
+                SELECT 1 FROM sizylift.planned_workout pw
+                JOIN sizylift.program p ON p.user_id = pw.user_id AND p.id = pw.program_id
+                WHERE pw.user_id = t.user_id AND pw.id = t.id AND p.status = 'active'
+            ) OR EXISTS (
+                SELECT 1 FROM sizylift.standalone_workout s WHERE s.user_id = t.user_id AND s.id = t.id
+            )) AND NOT EXISTS (
+                SELECT 1 FROM sizylift.workout w WHERE w.user_id = t.user_id AND w.planned_workout_id = t.id
+            )
+            ON CONFLICT (user_id, planned_workout_id) DO UPDATE SET planned_workout_id = excluded.planned_workout_id
+            """;
+    private static final String UNSKIP = """
+            DELETE FROM sizylift.planned_workout_skip WHERE user_id = ? AND planned_workout_id = ?
             """;
     private static final String IDS = """
             SELECT aggregate_id FROM sizylift.published_aggregate
@@ -59,7 +79,16 @@ public class DiaryReadRepository {
     public List<PlannedSummary> planned(UUID owner, LocalDate from, LocalDate to) {
         return jdbc.query(PLANNED, (row, n) -> new PlannedSummary(uuid(row, "id"), uuid(row, "program_id"), null,
                 row.getString("title"), date(row, "original_date"), date(row, "scheduled_date"),
-                instant(row, "rescheduled_at"), uuid(row, "workout_id"), date(row, "linked_workout_date")), owner, from, to);
+                instant(row, "rescheduled_at"), uuid(row, "workout_id"), date(row, "linked_workout_date"),
+                row.getBoolean("skipped")), owner, from, to);
+    }
+
+    public boolean skip(UUID owner, UUID plannedId) {
+        return jdbc.update(SKIP, owner, plannedId) > 0;
+    }
+
+    public void unskip(UUID owner, UUID plannedId) {
+        jdbc.update(UNSKIP, owner, plannedId);
     }
 
     public List<UUID> ids(UUID owner, String type) {

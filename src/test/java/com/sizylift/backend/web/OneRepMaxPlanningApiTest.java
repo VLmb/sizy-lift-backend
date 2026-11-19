@@ -102,6 +102,22 @@ class OneRepMaxPlanningApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void plannedSetWithoutRpeOrItsAutoFlagIsAccepted() throws Exception {
+        var program = fixture("program");
+        var set = firstPlannedSet(program);
+        set.remove("targetRpeAuto");
+        set.putNull("targetRpeTenths");
+        var id = UUID.randomUUID();
+        assertThat(push(owner, item("program", id, null, 0, program)).get("status").asString())
+                .isEqualTo("accepted");
+
+        var read = body(call(owner, get("/api/v2/web/programs/" + id)).andExpect(status().isOk()));
+        var saved = firstPlannedSet((ObjectNode) read.get("program"));
+        assertThat(saved.get("targetRpeAuto").asBoolean()).isFalse();
+        assertThat(saved.get("targetRpeTenths").isNull()).isTrue();
+    }
+
+    @Test
     void plannedSetPercentOutsideTheRangeIsRejected() throws Exception {
         for (var percent : List.of(0, 1501)) {
             var program = fixture("program");
