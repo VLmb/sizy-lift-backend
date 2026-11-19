@@ -127,6 +127,25 @@ class CoachingApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void registeredNamesAreVisibleInPublicInviteAndRosterWithoutSizyProfiles() throws Exception {
+        var coachClaims = jwt().jwt(token -> token.issuer(ISSUER).subject(coach).claim("name", "  Иван Тренеров  "));
+        mvc.perform(get("/api/v1/me").with(coachClaims)).andExpect(status().isOk());
+        var token = invite(coach);
+        var preview = body(mvc.perform(get("/api/v2/coaching/invites/" + token + "/public"))
+                .andExpect(status().isOk()));
+        assertThat(preview.get("coachName").asString()).isEqualTo("Иван Тренеров");
+
+        var athleteClaims = jwt().jwt(jwt -> jwt.issuer(ISSUER).subject(athlete)
+                .claim("given_name", "Анна").claim("family_name", "Спортова"));
+        mvc.perform(post("/api/v2/coaching/invites/" + token + "/accept").with(athleteClaims))
+                .andExpect(status().isOk());
+        var coachView = body(call(coach, get("/api/v2/coaching")).andExpect(status().isOk()));
+        assertThat(coachView.get("athletes").get(0).get("counterpartName").asString()).isEqualTo("Анна Спортова");
+        var roster = body(call(coach, get("/api/v2/web/athletes")).andExpect(status().isOk()));
+        assertThat(roster.get(0).get("name").asString()).isEqualTo("Анна Спортова");
+    }
+
+    @Test
     void linkedAccountsMayHaveProfilesWithoutDisplayNames() throws Exception {
         accept(athlete, invite(coach));
         var profile = fixture("athlete_profile");

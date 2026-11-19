@@ -143,3 +143,9 @@ databaseChangeLog:
   - include:
       file: changes/049-exercise-video.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/050-account-display-name.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/051-planned-workout-skip.sql
+      relativeToChangelogFile: true

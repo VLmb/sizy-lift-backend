@@ -55,9 +55,9 @@ class UserAccountServiceTest {
         var repository = mock(UserAccountRepository.class);
         var original = account(EMAIL, true);
         var updated = new UserAccount(original.id(), ISSUER, SUBJECT, email, verified,
-                original.createdAt(), original.updatedAt());
+                null, original.createdAt(), original.updatedAt());
         when(repository.findByIssuerAndSubject(ISSUER, SUBJECT)).thenReturn(Optional.of(original));
-        when(repository.updateContact(original, email, verified)).thenReturn(Optional.of(updated));
+        when(repository.updateContact(original, email, verified, null)).thenReturn(Optional.of(updated));
         var meters = new SimpleMeterRegistry();
         try {
             var service = new UserAccountService(repository, meters, mock(com.sizylift.backend.identity.deletion.AccountDeletionRepository.class));
@@ -66,7 +66,7 @@ class UserAccountServiceTest {
 
             verify(repository).findByIssuerAndSubject(ISSUER, SUBJECT);
             verify(repository).touch(original.id());
-            verify(repository).updateContact(original, email, verified);
+            verify(repository).updateContact(original, email, verified, null);
             verifyNoMoreInteractions(repository);
         } finally {
             meters.close();
@@ -80,6 +80,6 @@ class UserAccountServiceTest {
 
     private static UserAccount account(String email, boolean verified) {
         return new UserAccount(UUID.randomUUID(), ISSUER, SUBJECT, email, verified,
-                Instant.EPOCH, Instant.EPOCH);
+                null, Instant.EPOCH, Instant.EPOCH);
     }
 }

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class UserAccountRepository {
 
-    private static final String COLUMNS = "id, issuer, subject, email, email_verified, created_at, updated_at";
+    private static final String COLUMNS = "id, issuer, subject, email, email_verified, display_name, created_at, updated_at";
     private static final RowMapper<UserAccount> MAPPER = UserAccountRepository::map;
 
     private static final String TOUCH = """
@@ -33,23 +33,23 @@ public class UserAccountRepository {
     }
 
     /** Вставка без гонки: параллельные первые запросы пользователя создают ровно одну строку. */
-    public boolean insertIfAbsent(String issuer, String subject, String email, boolean emailVerified) {
+    public boolean insertIfAbsent(String issuer, String subject, String email, boolean emailVerified, String displayName) {
         return jdbc.update("""
-                INSERT INTO sizylift.user_account (issuer, subject, email, email_verified)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO sizylift.user_account (issuer, subject, email, email_verified, display_name)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (issuer, subject) DO NOTHING
-                """, issuer, subject, email, emailVerified) == 1;
+                """, issuer, subject, email, emailVerified, displayName) == 1;
     }
 
-    /** Обновляет контакты, только если они изменились; иначе возвращает пустой результат. */
-    public Optional<UserAccount> updateContact(UserAccount account, String email, boolean emailVerified) {
+    /** Обновляет данные аккаунта, только если они изменились; иначе возвращает пустой результат. */
+    public Optional<UserAccount> updateContact(UserAccount account, String email, boolean emailVerified, String displayName) {
         return jdbc.query("""
                 UPDATE sizylift.user_account
-                SET email = ?, email_verified = ?, updated_at = now()
-                WHERE id = ? AND (email IS DISTINCT FROM ? OR email_verified <> ?)
+                SET email = ?, email_verified = ?, display_name = ?, updated_at = now()
+                WHERE id = ? AND (email IS DISTINCT FROM ? OR email_verified <> ? OR display_name IS DISTINCT FROM ?)
                 RETURNING %s
                 """.formatted(COLUMNS),
-                MAPPER, email, emailVerified, account.id(), email, emailVerified).stream().findFirst();
+                MAPPER, email, emailVerified, displayName, account.id(), email, emailVerified, displayName).stream().findFirst();
     }
 
     public void touch(java.util.UUID accountId) {
@@ -63,6 +63,7 @@ public class UserAccountRepository {
                 row.getString("subject"),
                 row.getString("email"),
                 row.getBoolean("email_verified"),
+                row.getString("display_name"),
                 row.getObject("created_at", OffsetDateTime.class).toInstant(),
                 row.getObject("updated_at", OffsetDateTime.class).toInstant());
     }

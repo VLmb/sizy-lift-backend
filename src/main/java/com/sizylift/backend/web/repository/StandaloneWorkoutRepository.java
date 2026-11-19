@@ -27,11 +27,13 @@ public class StandaloneWorkoutRepository {
                 s.payload->>'title' AS title,
                 CASE WHEN r.planned_workout_id IS NOT NULL THEN r.updated_at
                      WHEN s.original_date <> s.workout_date THEN s.updated_at END AS rescheduled_at,
-                w.id AS workout_id, w.workout_date AS linked_workout_date
+                w.id AS workout_id, w.workout_date AS linked_workout_date,
+                w.id IS NULL AND sk.planned_workout_id IS NOT NULL AS skipped
             FROM sizylift.standalone_workout s
             JOIN sizylift.published_aggregate pa ON pa.user_id = s.user_id AND pa.aggregate_id = s.id
                 AND pa.type = 'standalone_workout' AND NOT pa.deleted
             LEFT JOIN sizylift.workout_reschedule r ON r.user_id = s.user_id AND r.planned_workout_id = s.id
+            LEFT JOIN sizylift.planned_workout_skip sk ON sk.user_id = s.user_id AND sk.planned_workout_id = s.id
             LEFT JOIN LATERAL (
                 SELECT id, workout_date FROM sizylift.workout WHERE user_id = s.user_id AND planned_workout_id = s.id
                 ORDER BY completed_at DESC, id LIMIT 1
@@ -65,7 +67,7 @@ public class StandaloneWorkoutRepository {
             return new PlannedSummary(row.getObject("id", UUID.class), null, row.getObject("author_user_id", UUID.class), row.getString("title"),
                     row.getObject("original_date", LocalDate.class), row.getObject("scheduled_date", LocalDate.class),
                     changed == null ? null : changed.toInstant(), row.getObject("workout_id", UUID.class),
-                    row.getObject("linked_workout_date", LocalDate.class));
+                    row.getObject("linked_workout_date", LocalDate.class), row.getBoolean("skipped"));
         }, owner, from, to);
     }
 
