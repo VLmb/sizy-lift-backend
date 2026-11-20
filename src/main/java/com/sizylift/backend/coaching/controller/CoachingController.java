@@ -121,6 +121,13 @@ public class CoachingController {
         return coaching.pendingInvites(userId(jwt));
     }
 
+    /** Новая ссылка того же приглашения; прежняя перестаёт работать (PWA-03). */
+    @PostMapping("/invites/{id}/reissue")
+    public InviteResponse reissueInvite(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        var invite = coaching.reissueInvite(userId(jwt), id);
+        return new InviteResponse(invite.token(), invite.expiresAt());
+    }
+
     @DeleteMapping("/invites/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revokeInvite(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {

@@ -105,10 +105,16 @@ cookie удаляется при закрытии браузера. Мобиль
 *SSO Session Idle Remember Me* 14 дней, *SSO Session Max Remember Me* 30 дней.
 Локально — `docker compose down --volumes`.
 
-Refresh token одноразовый (rotation): каждое обновление возвращает новый refresh
-token, повторное использование старого даёт `invalid_grant`. Клиент должен
-сериализовать обновление токена (один запрос за раз) и сохранять новый refresh token
-до использования access token.
+Refresh token ротируется: каждое обновление возвращает новый refresh token. Старый
+допускается ещё **один** раз (`refreshTokenMaxReuse: 1`), дальше — `invalid_grant`
+(«Maximum allowed refresh token reuse exceeded»). Запас нужен для обрыва связи: Keycloak
+уже выдал новый токен, а ответ до PWA или телефона не дошёл (сеть пропала, страницу
+перезагрузили). Без запаса следующая попытка со старым токеном завершала сессию и
+просила войти снова (PWA-06). Клиент по-прежнему сериализует обновление (один запрос
+за раз) и сохраняет новый refresh token до использования access token.
+
+В production: **Realm settings → Tokens → Refresh tokens** — *Revoke Refresh Token*
+включён, *Refresh Token Max Reuse* = 1. Локально — `docker compose down --volumes`.
 
 ### Что делает мобильное приложение (реализовано в `VLmb/sizy-lift-app`, `docs/authentication.md`)
 

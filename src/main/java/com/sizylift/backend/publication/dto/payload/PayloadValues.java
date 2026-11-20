@@ -29,6 +29,8 @@ final class PayloadValues {
 
     static final int MAX_SPORT_DIRECTIONS = 20;
     static final int MAX_MUSCLES = 30;
+    /** До двух основных и двух побочных групп мышц у упражнения (PWA-08). */
+    static final int MAX_MUSCLES_PER_ROLE = 2;
     static final int MAX_EQUIPMENT = 30;
     static final int MAX_CYCLES = 50;
     /** Два года по неделе. */

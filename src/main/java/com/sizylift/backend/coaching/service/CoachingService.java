@@ -132,6 +132,22 @@ public class CoachingService {
         return coaching.pendingInvites(coachId);
     }
 
+    /**
+     * Новая ссылка для ожидающего приглашения (PWA-03): токен показывается один раз и не хранится, поэтому
+     * повторно раскрыть прежнюю ссылку нельзя. Прежняя ссылка перестаёт работать сразу, срок отсчитывается
+     * заново, имя и программа приглашения сохраняются. Приглашение по-прежнему одноразовое: после принятия
+     * любая его ссылка отвечает 410.
+     */
+    public CreatedInvite reissueInvite(UUID coachId, UUID id) {
+        var token = tokens.generate();
+        var expiresAt = clock.instant().plus(INVITE_TTL);
+        if (!coaching.reissueInvite(coachId, id, tokens.hash(token), expiresAt)) {
+            throw new CoachingExceptions.NotFound();
+        }
+        metrics.count(Event.INVITE_REISSUED);
+        return new CreatedInvite(token, expiresAt);
+    }
+
     public void revokeInvite(UUID coachId, UUID id) {
         if (!coaching.revokeInvite(coachId, id)) {
             throw new CoachingExceptions.NotFound();

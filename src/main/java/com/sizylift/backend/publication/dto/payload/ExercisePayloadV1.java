@@ -2,10 +2,14 @@ package com.sizylift.backend.publication.dto.payload;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sizylift.backend.publication.entity.LiftClass;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -59,6 +63,22 @@ public record ExercisePayloadV1(
     public ExercisePayloadV1 withLiftClass(LiftClass value) {
         return stored(name, shortName, movementCategoryId, resultType, value, note, updatedAt, muscles,
                 equipmentIds);
+    }
+
+    /**
+     * Группы мышц (PWA-08): не больше {@value PayloadValues#MAX_MUSCLES_PER_ROLE} основных и столько же побочных,
+     * одна группа — в одной роли.
+     */
+    @JsonIgnore
+    @AssertTrue(message = "At most two primary and two secondary muscle groups, each group in one role.")
+    public boolean isMuscleRolesValid() {
+        if (muscles == null || muscles.stream().anyMatch(Objects::isNull)) {
+            return true;
+        }
+        var groups = muscles.stream().map(Muscle::muscleGroupId).distinct().count();
+        return groups == muscles.size() && muscles.stream()
+                .collect(Collectors.groupingBy(Muscle::role, Collectors.counting()))
+                .values().stream().allMatch(count -> count <= MAX_MUSCLES_PER_ROLE);
     }
 
     public record Muscle(@NotNull UUID muscleGroupId, @NotNull @Pattern(regexp = MUSCLE_ROLE) String role) {
