@@ -27,13 +27,20 @@ public class BetweenDataRepository {
 
     private static final String INSERT_RESCHEDULE = """
             INSERT INTO sizylift.workout_reschedule (user_id, planned_workout_id, program_id, scheduled_date,
-                updated_at)
-            VALUES (?, ?, ?, ?, ?)
+                updated_at, skipped)
+            VALUES (?, ?, ?, ?, ?, ?)
             """;
     private static final String DELETE_RESCHEDULE =
             "DELETE FROM sizylift.workout_reschedule WHERE user_id = ? AND planned_workout_id = ?";
+    /** Проекция пропуска для чтения в вебе (changeset 051) пишется вместе с переносом. */
+    private static final String INSERT_SKIP = """
+            INSERT INTO sizylift.planned_workout_skip (user_id, planned_workout_id) VALUES (?, ?)
+            ON CONFLICT (user_id, planned_workout_id) DO NOTHING
+            """;
+    private static final String DELETE_SKIP =
+            "DELETE FROM sizylift.planned_workout_skip WHERE user_id = ? AND planned_workout_id = ?";
     private static final String SELECT_RESCHEDULE = """
-            SELECT program_id, scheduled_date, updated_at FROM sizylift.workout_reschedule
+            SELECT program_id, scheduled_date, updated_at, skipped FROM sizylift.workout_reschedule
             WHERE user_id = ? AND planned_workout_id = ?
             """;
     private static final String RESCHEDULES_OF_PROGRAM = """
@@ -71,16 +78,19 @@ public class BetweenDataRepository {
 
     public void insertReschedule(UUID userId, UUID plannedWorkoutId, WorkoutReschedulePayloadV1 reschedule) {
         jdbc.update(INSERT_RESCHEDULE, userId, plannedWorkoutId, reschedule.programId(), reschedule.scheduledDate(),
-                timestamp(reschedule.updatedAt()));
+                timestamp(reschedule.updatedAt()), reschedule.isSkip());
+        jdbc.update(reschedule.isSkip() ? INSERT_SKIP : DELETE_SKIP, userId, plannedWorkoutId);
     }
 
     public void deleteReschedule(UUID userId, UUID plannedWorkoutId) {
         jdbc.update(DELETE_RESCHEDULE, userId, plannedWorkoutId);
+        jdbc.update(DELETE_SKIP, userId, plannedWorkoutId);
     }
 
     public Optional<WorkoutReschedulePayloadV1> findReschedule(UUID userId, UUID plannedWorkoutId) {
         return first(jdbc.query(SELECT_RESCHEDULE, (row, n) -> new WorkoutReschedulePayloadV1(
-                uuid(row, "program_id"), date(row, "scheduled_date"), instant(row, "updated_at")),
+                uuid(row, "program_id"), date(row, "scheduled_date"), instant(row, "updated_at"),
+                row.getBoolean("skipped")),
                 userId, plannedWorkoutId));
     }
 

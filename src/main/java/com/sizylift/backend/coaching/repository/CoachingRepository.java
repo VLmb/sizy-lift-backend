@@ -82,6 +82,15 @@ public class CoachingRepository {
             WHERE coach_user_id = ? AND id = ? AND accepted_at IS NULL
             """;
 
+    /**
+     * Новый токен того же приглашения: прежний хеш затирается, поэтому старая ссылка сразу перестаёт работать.
+     * Только ожидающее приглашение своего тренера; использованное, отозванное или истёкшее не меняется.
+     */
+    private static final String REISSUE_INVITE = """
+            UPDATE sizylift.coaching_invite SET token_hash = ?, expires_at = ?
+            WHERE coach_user_id = ? AND id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()
+            """;
+
     /** {@code name} — как тренер назвал приглашение; {@code null}, если не называл. */
     public record PendingInvite(UUID id, Instant createdAt, Instant expiresAt, String name) {
     }
@@ -89,6 +98,10 @@ public class CoachingRepository {
     public List<PendingInvite> pendingInvites(UUID coachId) {
         return jdbc.query(PENDING_INVITES, (row, n) -> new PendingInvite(row.getObject("id", UUID.class),
                 instant(row, "created_at"), instant(row, "expires_at"), row.getString("name")), coachId);
+    }
+
+    public boolean reissueInvite(UUID coachId, UUID id, byte[] tokenHash, Instant expiresAt) {
+        return jdbc.update(REISSUE_INVITE, tokenHash, expiresAt.atOffset(ZoneOffset.UTC), coachId, id) > 0;
     }
 
     public boolean revokeInvite(UUID coachId, UUID id) {

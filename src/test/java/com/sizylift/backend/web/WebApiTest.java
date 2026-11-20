@@ -602,8 +602,15 @@ class WebApiTest extends PostgresIntegrationTest {
         call(owner, put(skip)).andExpect(status().isNoContent());
         call(owner, put(skip)).andExpect(status().isNoContent());
         assertThat(body(call(owner, get(timeline))).get("planned").get(0).get("skipped").asBoolean()).isTrue();
+        assertThat(jdbc.queryForObject("SELECT r.skipped AND NOT a.deleted FROM sizylift.workout_reschedule r "
+                + "JOIN sizylift.published_aggregate a ON a.user_id = r.user_id AND a.aggregate_id = r.planned_workout_id "
+                + "AND a.type = 'workout_reschedule' WHERE r.user_id = ? AND r.planned_workout_id = ?", Boolean.class,
+                userId(owner), id)).as("отметка веба — агрегат для телефона и тренера").isTrue();
         call(owner, delete(skip)).andExpect(status().isNoContent());
         assertThat(body(call(owner, get(timeline))).get("planned").get(0).get("skipped").asBoolean()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT deleted FROM sizylift.published_aggregate WHERE user_id = ? "
+                + "AND type = 'workout_reschedule' AND aggregate_id = ?", Boolean.class, userId(owner), id))
+                .as("снятая отметка без переноса — удаление").isTrue();
         call(owner, put(skip)).andExpect(status().isNoContent());
 
         var actual = fixture("workout").put("workoutDate", day).put("plannedWorkoutId", id.toString());

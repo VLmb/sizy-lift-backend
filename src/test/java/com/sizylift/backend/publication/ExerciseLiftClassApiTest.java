@@ -114,6 +114,34 @@ class ExerciseLiftClassApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void musclesAreLimitedToTwoPrimaryAndTwoSecondaryGroups() throws Exception {
+        var groups = List.of("13000000-0000-4000-8000-000000000001", "13000000-0000-4000-8000-000000000012",
+                "13000000-0000-4000-8000-000000000013", "13000000-0000-4000-8000-000000000007",
+                "13000000-0000-4000-8000-000000000009");
+        var allowed = exercise(false, null);
+        var muscles = allowed.putArray("muscles");
+        muscles.addObject().put("muscleGroupId", groups.get(0)).put("role", "primary");
+        muscles.addObject().put("muscleGroupId", groups.get(1)).put("role", "primary");
+        muscles.addObject().put("muscleGroupId", groups.get(2)).put("role", "secondary");
+        muscles.addObject().put("muscleGroupId", groups.get(3)).put("role", "secondary");
+        assertThat(push(allowed, 0).get("status").asString()).isEqualTo("accepted");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise_muscle WHERE exercise_id = ?",
+                Integer.class, exerciseId)).isEqualTo(4);
+
+        var third = allowed.deepCopy();
+        ((ArrayNode) third.get("muscles")).addObject().put("muscleGroupId", groups.get(4)).put("role", "primary");
+        var pushed = push(third, revision());
+        assertThat(pushed.get("status").asString()).isEqualTo("rejected");
+        assertThat(pushed.get("error").asString()).isEqualTo("invalid_payload");
+
+        var twice = exercise(false, null);
+        var both = twice.putArray("muscles");
+        both.addObject().put("muscleGroupId", groups.get(0)).put("role", "primary");
+        both.addObject().put("muscleGroupId", groups.get(0)).put("role", "secondary");
+        assertThat(push(twice, revision()).get("error").asString()).isEqualTo("invalid_payload");
+    }
+
+    @Test
     void phoneIsSbdForAnotherResultTypeStaysOther() throws Exception {
         var payload = exercise(true, null).put("resultType", "duration");
 

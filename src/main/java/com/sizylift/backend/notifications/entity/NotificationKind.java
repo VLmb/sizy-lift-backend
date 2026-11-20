@@ -13,6 +13,7 @@ public enum NotificationKind {
     COMMENT_ADDED("comment_added", "Новый комментарий к тренировке"),
     WORKOUT_COMPLETED("workout_completed", "Подопечный завершил тренировку"),
     WORKOUT_RESCHEDULED("workout_rescheduled", "Подопечный перенёс тренировку"),
+    WORKOUT_SKIPPED("workout_skipped", "Подопечный пропустил тренировку"),
     INVITE_ACCEPTED("invite_accepted", "Приглашение принято");
 
     private final String code;

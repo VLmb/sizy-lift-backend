@@ -127,6 +127,51 @@ class CoachingApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void reissuedLinkReplacesThePreviousOneAndStaysSingleUse() throws Exception {
+        call(coach, put("/api/v2/coaching/coach-mode").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true}")).andExpect(status().isOk());
+        call(coach, post("/api/v2/coaching/invites").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Мария\"}")).andExpect(status().isCreated());
+        var pending = body(call(coach, get("/api/v2/coaching/invites")).andExpect(status().isOk()));
+        var id = pending.get(0).get("id").asString();
+        jdbc.update("UPDATE sizylift.coaching_invite SET expires_at = now() + interval '1 day' WHERE id = ?::uuid", id);
+        var first = jdbc.queryForObject("SELECT token_hash FROM sizylift.coaching_invite WHERE id = ?::uuid",
+                byte[].class, id);
+
+        call(stranger, post("/api/v2/coaching/invites/" + id + "/reissue")).andExpect(status().isNotFound());
+        var reissued = body(call(coach, post("/api/v2/coaching/invites/" + id + "/reissue"))
+                .andExpect(status().isOk()));
+        var token = reissued.get("token").asString();
+
+        assertThat(token).matches("[A-Za-z0-9_-]{22}");
+        assertThat(jdbc.queryForObject("SELECT token_hash FROM sizylift.coaching_invite WHERE id = ?::uuid",
+                byte[].class, id)).isNotEqualTo(first);
+        assertThat(java.time.Instant.parse(reissued.get("expiresAt").asString()))
+                .isAfter(java.time.Instant.now().plus(java.time.Duration.ofDays(6)));
+        var after = body(call(coach, get("/api/v2/coaching/invites")).andExpect(status().isOk()));
+        assertThat(after).hasSize(1);
+        assertThat(after.get(0).get("id").asString()).isEqualTo(id);
+        assertThat(after.get(0).get("name").asString()).isEqualTo("Мария");
+
+        accept(athlete, token);
+        call(stranger, get("/api/v2/coaching/invites/" + token)).andExpect(status().isGone());
+        call(stranger, post("/api/v2/coaching/invites/" + token + "/accept")).andExpect(status().isGone());
+        call(coach, post("/api/v2/coaching/invites/" + id + "/reissue")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void previousLinkStopsWorkingOnceReissued() throws Exception {
+        var old = invite(coach);
+        var id = body(call(coach, get("/api/v2/coaching/invites"))).get(0).get("id").asString();
+        call(coach, post("/api/v2/coaching/invites/" + id + "/reissue")).andExpect(status().isOk());
+
+        call(stranger, get("/api/v2/coaching/invites/" + old + "/public")).andExpect(status().isNotFound());
+        call(athlete, post("/api/v2/coaching/invites/" + old + "/accept")).andExpect(status().isNotFound());
+        call(coach, delete("/api/v2/coaching/invites/" + id)).andExpect(status().isNoContent());
+        call(coach, post("/api/v2/coaching/invites/" + id + "/reissue")).andExpect(status().isNotFound());
+    }
+
+    @Test
     void registeredNamesAreVisibleInPublicInviteAndRosterWithoutSizyProfiles() throws Exception {
         var coachClaims = jwt().jwt(token -> token.issuer(ISSUER).subject(coach).claim("name", "  Иван Тренеров  "));
         mvc.perform(get("/api/v1/me").with(coachClaims)).andExpect(status().isOk());

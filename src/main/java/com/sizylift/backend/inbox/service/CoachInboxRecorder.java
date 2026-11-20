@@ -5,6 +5,8 @@ import java.util.UUID;
 import com.sizylift.backend.inbox.config.CoachCalendar;
 import com.sizylift.backend.inbox.entity.CoachEventKind;
 import com.sizylift.backend.inbox.repository.CoachEventRepository;
+import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
+import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.service.AggregateChange;
 import com.sizylift.backend.publication.service.AggregateType;
 import org.springframework.stereotype.Service;
@@ -28,8 +30,10 @@ public class CoachInboxRecorder {
 
     private final CoachEventRepository events;
     private final CoachCalendar calendar;
+    private final BetweenDataRepository between;
 
-    CoachInboxRecorder(CoachEventRepository events, CoachCalendar calendar) {
+    CoachInboxRecorder(CoachEventRepository events, CoachCalendar calendar, BetweenDataRepository between) {
+        this.between = between;
         this.events = events;
         this.calendar = calendar;
     }
@@ -85,8 +89,14 @@ public class CoachInboxRecorder {
     private void onReschedule(AggregateChange change) {
         if (change.deleted()) {
             events.deleteBySubject(change.ownerId(), CoachEventKind.WORKOUT_RESCHEDULED, change.aggregateId());
-        } else if (change.byOwner()) {
+        } else if (change.byOwner() && !skipped(change)) {
             events.workoutRescheduled(change.ownerId(), change.aggregateId(), calendar.now());
         }
+    }
+
+    /** Отметка пропуска (PWA-09) — не перенос: тренеру приходит уведомление, событие переноса не пишется. */
+    private boolean skipped(AggregateChange change) {
+        return between.findReschedule(change.ownerId(), change.aggregateId())
+                .filter(WorkoutReschedulePayloadV1::isSkip).isPresent();
     }
 }

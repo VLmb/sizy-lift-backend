@@ -90,7 +90,7 @@ public class CoachEventRepository {
             """;
     /**
      * Плановые тренировки активных программ с датой (с учётом переноса) в {@code [from, before)}, не раньше
-     * создания связи и без завершённой тренировки по ним. Ключ включает дату: перенесённая и снова пропущенная
+     * создания связи, без завершённой тренировки по ним и без отметки пропуска (PWA-09: о ней тренер уже знает). Ключ включает дату: перенесённая и снова пропущенная
      * тренировка даёт новое событие.
      */
     private static final String INSERT_MISSED = """
@@ -105,6 +105,7 @@ public class CoachEventRepository {
             WHERE l.ended_at IS NULL
               AND d.effective_date >= ? AND d.effective_date < ?
               AND d.effective_date >= (l.created_at AT TIME ZONE ?)::date
+              AND NOT coalesce(r.skipped, false)
               AND NOT EXISTS (SELECT 1 FROM sizylift.workout w
                               WHERE w.user_id = pw.user_id AND w.planned_workout_id = pw.id)
             ON CONFLICT (link_id, dedup_key) DO NOTHING
@@ -121,6 +122,7 @@ public class CoachEventRepository {
             WHERE l.ended_at IS NULL
               AND d.effective_date >= ? AND d.effective_date < ?
               AND d.effective_date >= (l.created_at AT TIME ZONE ?)::date
+              AND NOT coalesce(r.skipped, false)
               AND NOT EXISTS (SELECT 1 FROM sizylift.workout w
                               WHERE w.user_id = s.user_id AND w.planned_workout_id = s.id)
             ON CONFLICT (link_id, dedup_key) DO NOTHING
