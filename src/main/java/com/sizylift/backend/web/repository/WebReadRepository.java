@@ -33,7 +33,9 @@ public class WebReadRepository {
 
     private static final String SELECT_CATEGORIES = "SELECT id, code, name FROM sizylift.movement_category ORDER BY name";
     private static final String SELECT_EQUIPMENT = "SELECT id, code, name FROM sizylift.equipment ORDER BY name";
-    private static final String SELECT_MUSCLES = "SELECT id, code, name FROM sizylift.muscle_group ORDER BY name";
+    private static final String SELECT_MUSCLES = """
+            SELECT id, code, name FROM sizylift.muscle_group WHERE NOT archived ORDER BY name
+            """;
     /** Системные упражнения и собственные упражнения указанных владельцев (вызывающего и, для тренера, подопечного). */
     private static final String VISIBLE_EXERCISES = "e.user_id IS NULL OR e.user_id = ? OR e.user_id = ?";
     private static final String SELECT_EXERCISES = """
@@ -47,8 +49,10 @@ public class WebReadRepository {
             """.formatted(VISIBLE_EXERCISES);
     private static final String SELECT_EXERCISE_MUSCLES = """
             SELECT m.exercise_id, m.muscle_group_id, m.role
-            FROM sizylift.exercise_muscle m JOIN sizylift.exercise e ON e.id = m.exercise_id
-            WHERE %s
+            FROM sizylift.exercise_muscle m
+            JOIN sizylift.exercise e ON e.id = m.exercise_id
+            JOIN sizylift.muscle_group g ON g.id = m.muscle_group_id
+            WHERE (%s) AND NOT g.archived
             ORDER BY m.role, m.muscle_group_id
             """.formatted(VISIBLE_EXERCISES);
     private static final String SELECT_EXERCISE_EQUIPMENT = """

@@ -115,9 +115,9 @@ class ExerciseLiftClassApiTest extends PostgresIntegrationTest {
 
     @Test
     void musclesAreLimitedToTwoPrimaryAndTwoSecondaryGroups() throws Exception {
-        var groups = List.of("13000000-0000-4000-8000-000000000001", "13000000-0000-4000-8000-000000000012",
-                "13000000-0000-4000-8000-000000000013", "13000000-0000-4000-8000-000000000007",
-                "13000000-0000-4000-8000-000000000009");
+        var groups = List.of("13000000-0000-4000-8000-000000000001", "13000000-0000-4000-8000-000000000028",
+                "13000000-0000-4000-8000-000000000013", "13000000-0000-4000-8000-000000000020",
+                "13000000-0000-4000-8000-000000000023");
         var allowed = exercise(false, null);
         var muscles = allowed.putArray("muscles");
         muscles.addObject().put("muscleGroupId", groups.get(0)).put("role", "primary");

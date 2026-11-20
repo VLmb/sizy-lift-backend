@@ -155,3 +155,6 @@ databaseChangeLog:
   - include:
       file: changes/053-reschedule-skip.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/054-exercise-catalog-2026-11-4.sql
+      relativeToChangelogFile: true
