@@ -129,7 +129,9 @@ class WebApiTest extends PostgresIntegrationTest {
         var catalog = body(call(owner, get("/api/v2/web/catalog")).andExpect(status().isOk()));
         assertThat(catalog.get("categories").size()).isPositive();
         assertThat(catalog.get("equipment").size()).isPositive();
-        assertThat(catalog.get("muscles").size()).isPositive();
+        assertThat(catalog.get("muscles").valueStream().map(group -> group.get("code").asString()))
+                .contains("brachioradialis", "latissimus_dorsi")
+                .doesNotContain("arms", "legs", "back", "shoulders");
         var squat = exercise(catalog, CATALOG_SQUAT);
         assertThat(squat.get("ownerId").isNull()).isTrue();
         assertThat(squat.get("revision").isNull()).isTrue();
@@ -137,7 +139,9 @@ class WebApiTest extends PostgresIntegrationTest {
         var own = exercise(catalog, ownExercise);
         assertThat(own.get("ownerId").asString()).isEqualTo(userId(owner).toString());
         assertThat(own.get("revision").asLong()).isPositive();
-        assertThat(own.get("muscles").get(0).get("role").asString()).isEqualTo("secondary");
+        assertThat(own.get("muscles").isEmpty()).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.exercise_muscle WHERE exercise_id = ?",
+                Integer.class, ownExercise)).isEqualTo(1);
         assertThat(own.get("equipmentIds").size()).isEqualTo(1);
 
         var strangers = body(call(stranger, get("/api/v2/web/catalog")).andExpect(status().isOk()));
