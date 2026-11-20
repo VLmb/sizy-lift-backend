@@ -46,6 +46,11 @@ public class SheetImportService {
 
     SheetImportService(HttpClient http) { this.http = http; }
 
+    /** Ссылка ведёт на Google Таблицу — проверка формы адреса без запроса в сеть. */
+    public static boolean isSheetUrl(String url) {
+        return url != null && SHEET.matcher(url.trim()).matches();
+    }
+
     public String fetch(String url) {
         var match = SHEET.matcher(url);
         if (!match.matches()) throw new InvalidSheet();

@@ -17,6 +17,11 @@ public class ImportFailure extends RuntimeException {
     public static ImportFailure invalid(String message) {
         return new ImportFailure(HttpStatus.BAD_REQUEST, "invalid_import", message);
     }
+    /** Ссылка не на Google Таблицу (сторонний сайт или документ другого типа). */
+    public static ImportFailure notSheetUrl() {
+        return new ImportFailure(HttpStatus.BAD_REQUEST, "sheet_url_invalid",
+                "Это не ссылка на Google Таблицу. Скопируйте адрес таблицы: он начинается с https://docs.google.com/spreadsheets/.");
+    }
     public static ImportFailure conflict() {
         return new ImportFailure(HttpStatus.CONFLICT, "import_conflict", "Импорт изменился. Обновите данные.");
     }
