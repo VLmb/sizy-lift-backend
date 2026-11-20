@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.sizylift.backend.access.service.AccessPolicy;
+import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.notifications.entity.NotificationKind;
 import com.sizylift.backend.notifications.service.NotificationQueue;
@@ -56,7 +57,8 @@ class ChangeNotifications {
                     notifyCoach(change, NotificationKind.WORKOUT_COMPLETED);
                 }
             }
-            case AggregateType.WORKOUT_RESCHEDULE -> notifyCoach(change, NotificationKind.WORKOUT_RESCHEDULED);
+            case AggregateType.WORKOUT_RESCHEDULE -> notifyCoach(change, skipped(change)
+                    ? NotificationKind.WORKOUT_SKIPPED : NotificationKind.WORKOUT_RESCHEDULED);
             case AggregateType.WORKOUT_COMMENT -> {
                 if (!change.created()) {
                     return;
@@ -70,6 +72,12 @@ class ChangeNotifications {
             default -> {
             }
         }
+    }
+
+    /** Перенос с отметкой пропуска (PWA-09): тренеру — «пропустил», а не «перенёс». */
+    private boolean skipped(AggregateChange change) {
+        return !change.deleted() && between.findReschedule(change.ownerId(), change.aggregateId())
+                .filter(WorkoutReschedulePayloadV1::isSkip).isPresent();
     }
 
     private boolean draft(AggregateChange change) {

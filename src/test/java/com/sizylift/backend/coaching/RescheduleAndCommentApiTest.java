@@ -92,6 +92,56 @@ class RescheduleAndCommentApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void skipOnThePlanDateStaysSyncedAndTellsTheCoach() throws Exception {
+        var program = coachProgram(PLANNED_DATE);
+        var coachCursor = cursor(coach);
+        var skipped = reschedulePayload(PLANNED_DATE, program).put("skipped", true);
+
+        var result = push(athlete, item("workout_reschedule", PLANNED_WORKOUT, null, 0, 1, skipped));
+
+        assertThat(result.get("status").asString()).isEqualTo("accepted");
+        assertThat(result.get("payloadRewritten").asBoolean()).as("пропуск на дату плана не снимается").isFalse();
+        assertThat(jdbc.queryForObject("SELECT skipped FROM sizylift.workout_reschedule WHERE user_id = ? "
+                + "AND planned_workout_id = ?", Boolean.class, athleteId, PLANNED_WORKOUT)).isTrue();
+        assertThat(skipRow()).as("проекция для веба").isTrue();
+        var seen = changes(coach, coachCursor);
+        assertThat(seen).hasSize(1);
+        assertThat(seen.get(0).get("payload").get("skipped").asBoolean()).isTrue();
+        assertThat(jdbc.queryForList("SELECT kind FROM sizylift.notification_outbox WHERE user_id = ? "
+                + "AND kind LIKE 'workout_%'", String.class, userId(coach))).containsExactly("workout_skipped");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM sizylift.coach_event WHERE link_id = ? "
+                + "AND kind = 'workout_rescheduled'", Long.class, linkId)).as("пропуск — не перенос").isZero();
+
+        var undone = push(athlete, item("workout_reschedule", PLANNED_WORKOUT, null, result.get("revision").asLong(),
+                2, reschedulePayload(PLANNED_DATE, program).put("skipped", false)));
+
+        assertThat(undone.get("payloadRewritten").asBoolean()).as("без переноса отметка снимается удалением").isTrue();
+        assertThat(rescheduleExists()).isFalse();
+        assertThat(skipRow()).isFalse();
+    }
+
+    @Test
+    void movedAndSkippedKeepsTheMoveWhenTheSkipIsTakenBack() throws Exception {
+        var program = coachProgram(PLANNED_DATE);
+        var moved = push(athlete, reschedule(1, MOVED_TO, program));
+        var skipped = push(athlete, item("workout_reschedule", PLANNED_WORKOUT, null, moved.get("revision").asLong(),
+                2, reschedulePayload(MOVED_TO, program).put("skipped", true)));
+
+        push(athlete, item("workout_reschedule", PLANNED_WORKOUT, null, skipped.get("revision").asLong(), 3,
+                reschedulePayload(MOVED_TO, program)));
+
+        assertThat(rescheduleExists()).isTrue();
+        assertThat(skipRow()).isFalse();
+        assertThat(jdbc.queryForObject("SELECT scheduled_date FROM sizylift.workout_reschedule WHERE user_id = ? "
+                + "AND planned_workout_id = ?", LocalDate.class, athleteId, PLANNED_WORKOUT)).isEqualTo(MOVED_TO);
+    }
+
+    private boolean skipRow() {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM sizylift.planned_workout_skip "
+                + "WHERE user_id = ? AND planned_workout_id = ?)", Boolean.class, athleteId, PLANNED_WORKOUT));
+    }
+
+    @Test
     void rescheduleSurvivesProgramEditsThatKeepTheDate() throws Exception {
         var program = coachProgram(PLANNED_DATE);
         push(athlete, reschedule(1, MOVED_TO, program));

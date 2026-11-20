@@ -60,6 +60,10 @@ public class DependentAggregates {
      * tombstone. Плановой тренировки нет — обычный перенос.
      */
     public boolean returnsToPlan(UUID ownerId, UUID plannedWorkoutId, WorkoutReschedulePayloadV1 reschedule) {
+        // Отметка пропуска на исходную дату — не снятие переноса: она должна остаться (PWA-09).
+        if (reschedule.isSkip()) {
+            return false;
+        }
         var planned = reschedule.programId() == null
                 ? standalone.workoutDate(ownerId, plannedWorkoutId)
                 : between.plannedWorkoutDate(ownerId, reschedule.programId(), plannedWorkoutId);

@@ -2,6 +2,7 @@ package com.sizylift.backend.web.repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.sizylift.backend.web.dto.WebDtos.PlannedSummary;
@@ -42,21 +43,32 @@ public class DiaryReadRepository {
               AND coalesce(r.scheduled_date, pw.workout_date) BETWEEN ? AND ?
             ORDER BY scheduled_date, pw.position, pw.id
             """;
-    private static final String SKIP = """
-            WITH target(user_id, id) AS (VALUES (?::uuid, ?::uuid))
-            INSERT INTO sizylift.planned_workout_skip (user_id, planned_workout_id)
-            SELECT t.user_id, t.id FROM target t
-            WHERE (EXISTS (
-                SELECT 1 FROM sizylift.planned_workout pw
-                JOIN sizylift.program p ON p.user_id = pw.user_id AND p.id = pw.program_id
-                WHERE pw.user_id = t.user_id AND pw.id = t.id AND p.status = 'active'
-            ) OR EXISTS (
-                SELECT 1 FROM sizylift.standalone_workout s WHERE s.user_id = t.user_id AND s.id = t.id
-            )) AND NOT EXISTS (
-                SELECT 1 FROM sizylift.workout w WHERE w.user_id = t.user_id AND w.planned_workout_id = t.id
-            )
-            ON CONFLICT (user_id, planned_workout_id) DO UPDATE SET planned_workout_id = excluded.planned_workout_id
+    /**
+     * Что можно отметить пропущенным (PWA-09): плановая тренировка активной программы или разовая, без
+     * выполненной тренировки по ней. Дата — текущая, с учётом переноса; ревизия — агрегата переноса.
+     */
+    private static final String SKIP_TARGET = """
+            SELECT t.program_id, t.scheduled_date, t.skipped,
+                   coalesce((SELECT a.revision FROM sizylift.published_aggregate a
+                             WHERE a.user_id = ? AND a.type = 'workout_reschedule' AND a.aggregate_id = ?), 0)
+                       AS revision
+            FROM (
+                SELECT pw.program_id, coalesce(r.scheduled_date, pw.workout_date) AS scheduled_date,
+                       coalesce(r.skipped, false) AS skipped
+                FROM sizylift.planned_workout pw
+                JOIN sizylift.program p ON p.user_id = pw.user_id AND p.id = pw.program_id AND p.status = 'active'
+                LEFT JOIN sizylift.workout_reschedule r ON r.user_id = pw.user_id AND r.planned_workout_id = pw.id
+                WHERE pw.user_id = ? AND pw.id = ?
+                UNION ALL
+                SELECT NULL::uuid, coalesce(r.scheduled_date, s.workout_date), coalesce(r.skipped, false)
+                FROM sizylift.standalone_workout s
+                LEFT JOIN sizylift.workout_reschedule r ON r.user_id = s.user_id AND r.planned_workout_id = s.id
+                WHERE s.user_id = ? AND s.id = ?
+            ) t
+            WHERE NOT EXISTS (SELECT 1 FROM sizylift.workout w WHERE w.user_id = ? AND w.planned_workout_id = ?)
+            LIMIT 1
             """;
+    /** Отметка, поставленная вебом до синхронизации пропуска: агрегата у неё нет. */
     private static final String UNSKIP = """
             DELETE FROM sizylift.planned_workout_skip WHERE user_id = ? AND planned_workout_id = ?
             """;
@@ -83,11 +95,17 @@ public class DiaryReadRepository {
                 row.getBoolean("skipped")), owner, from, to);
     }
 
-    public boolean skip(UUID owner, UUID plannedId) {
-        return jdbc.update(SKIP, owner, plannedId) > 0;
+    /** Плановая тренировка, которую можно отметить пропущенной или снять отметку. */
+    public record SkipTarget(UUID programId, LocalDate scheduledDate, boolean skipped, long revision) {
     }
 
-    public void unskip(UUID owner, UUID plannedId) {
+    public Optional<SkipTarget> skipTarget(UUID owner, UUID plannedId) {
+        return jdbc.query(SKIP_TARGET, (row, n) -> new SkipTarget(uuid(row, "program_id"),
+                        date(row, "scheduled_date"), row.getBoolean("skipped"), row.getLong("revision")),
+                owner, plannedId, owner, plannedId, owner, plannedId, owner, plannedId).stream().findFirst();
+    }
+
+    public void removeLegacySkip(UUID owner, UUID plannedId) {
         jdbc.update(UNSKIP, owner, plannedId);
     }
 
