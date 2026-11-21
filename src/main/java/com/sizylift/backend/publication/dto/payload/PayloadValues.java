@@ -18,6 +18,8 @@ final class PayloadValues {
 
     static final int SHORT_TEXT = 200;
     static final int LONG_TEXT = 4000;
+    /** План нагрузки строки (JSON клиента, docs/load-plan.md). */
+    static final int LOAD_PLAN = 8000;
 
     /** RPE хранится в десятых долях: 5.0–10.0. */
     static final int RPE_TENTHS_MIN = 50;
