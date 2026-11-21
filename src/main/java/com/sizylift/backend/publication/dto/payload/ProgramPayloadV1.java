@@ -81,7 +81,8 @@ public record ProgramPayloadV1(
             @NotNull @Pattern(regexp = RESULT_TYPE) String resultType,
             @Size(max = LONG_TEXT) String planComment,
             @NotNull @Size(max = MAX_SETS_PER_EXERCISE) List<@NotNull @Valid Set> sets,
-            UUID techniqueVideoId) {
+            UUID techniqueVideoId,
+            @Size(max = LOAD_PLAN) String loadPlan) {
 
         /**
          * Без {@code techniqueVideoId}. Само поле — необязательное видео техники тренера к упражнению
@@ -89,7 +90,16 @@ public record ProgramPayloadV1(
          */
         public Exercise(UUID id, int position, UUID exerciseId, String exerciseName, String resultType,
                         String planComment, List<Set> sets) {
-            this(id, position, exerciseId, exerciseName, resultType, planComment, sets, null);
+            this(id, position, exerciseId, exerciseName, resultType, planComment, sets, null, null);
+        }
+
+        /**
+         * Без {@code loadPlan}. Само поле — план нагрузки строки табличного редактора (docs/load-plan.md):
+         * JSON клиента, по которому рассчитаны подходы недель. Сервер его не разбирает, а хранит и отдаёт как есть.
+         */
+        public Exercise(UUID id, int position, UUID exerciseId, String exerciseName, String resultType,
+                        String planComment, List<Set> sets, UUID techniqueVideoId) {
+            this(id, position, exerciseId, exerciseName, resultType, planComment, sets, techniqueVideoId, null);
         }
     }
 

@@ -110,6 +110,24 @@ class WebApiTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void keepsTheLoadPlanOfAPlannedExerciseAsItIs() throws Exception {
+        var programId = UUID.randomUUID();
+        publish(owner, "program", programId, 1, fixture("program"));
+        var read = body(call(owner, get("/api/v2/web/programs/" + programId)).andExpect(status().isOk()));
+        var edited = (ObjectNode) read.get("program").deepCopy();
+        var plan = "{\"v\":1,\"groups\":[{\"phase\":\"working\",\"lead\":\"percent\",\"value\":75}]}";
+        ((ObjectNode) edited.get("cycles").get(0).get("weeks").get(0).get("workouts").get(0).get("blocks").get(0)
+                .get("exercises").get(0)).put("loadPlan", plan);
+
+        var result = push(owner, item("program", programId, null, read.get("revision").asLong(), 1, edited));
+
+        assertThat(result.get("status").asString()).isEqualTo("accepted");
+        var after = body(call(owner, get("/api/v2/web/programs/" + programId)).andExpect(status().isOk()));
+        assertThat(after.get("program").get("cycles").get(0).get("weeks").get(0).get("workouts").get(0)
+                .get("blocks").get(0).get("exercises").get(0).get("loadPlan").asString()).isEqualTo(plan);
+    }
+
+    @Test
     void deletedProgramsAreNotListedOrReturned() throws Exception {
         var programId = UUID.randomUUID();
         publish(owner, "program", programId, 1, fixture("program"));
