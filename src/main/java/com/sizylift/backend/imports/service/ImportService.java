@@ -130,7 +130,14 @@ public class ImportService {
         }
         var name = patch.name() == null ? session.name() : patch.name().trim();
         if (name.isBlank()) throw ImportFailure.invalid("Укажите название программы.");
-        sessions.patch(id, name, patch.startDate() == null ? session.startDate() : patch.startDate(), decisions);
+        var output = session.output();
+        if (patch.exerciseEdit() != null) {
+            if (!access.canWriteFor(user, session.ownerId(), AggregateType.PROGRAM)) throw ImportFailure.missing();
+            if (output.hasFailedWeeks()) throw ImportFailure.conflict();
+            output = ImportExerciseEdit.apply(id, output, patch.exerciseEdit(), decisions, available);
+            keys = output.exerciseResolutions().stream().map(r -> r.key()).collect(Collectors.toSet());
+        }
+        sessions.patch(id, name, patch.startDate() == null ? session.startDate() : patch.startDate(), decisions, output);
         var updated = sessions.find(id).orElseThrow();
         if (decisions.keySet().containsAll(keys)) compiler.compile(updated, clock.instant(), available);
         return view(updated);
@@ -211,7 +218,8 @@ public class ImportService {
                 session.errorCode() == null ? null : new Failure(session.errorCode(), session.errorMessage()),
                 session.inputTokens(), session.outputTokens(), session.reservedCostMicros(), receipt(session),
                 session.status().equals("processing") ? session.progress() : null,
-                session.status().equals("sheet_selection") && session.normalized() != null ? SourceSheets.list(session.normalized()) : null);
+                session.status().equals("sheet_selection") && session.normalized() != null ? SourceSheets.list(session.normalized()) : null,
+                session.status().equals("review") && output != null && !output.hasFailedWeeks());
     }
 
     public static Receipt receipt(ImportSession session) {

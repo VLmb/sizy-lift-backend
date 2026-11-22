@@ -254,6 +254,45 @@ class ImportApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
+    void editsOnlyTheSelectedSetAndKeepsTheReplacementOnCommit() throws Exception {
+        when(parser.parse(any(), any())).thenAnswer(reply(draft(matched())));
+        var id = create(owner, TEXT, null, UUID.randomUUID());
+        worker.processOne();
+        var preview = view(owner, id);
+        var dayPath = "/cycles/0/weeks/0/workouts/0";
+        var exercisePath = "/blocks/0/exercises/0";
+        var day = preview.at("/draft/programDraft" + dayPath);
+        var exercise = day.at(exercisePath);
+        var target = new java.util.HashMap<String, Object>();
+        target.put("workoutKey", day.get("key").asString());
+        target.put("exerciseKey", exercise.get("key").asString());
+        target.put("set", Map.of("key", exercise.at("/sets/0/key").asString(), "index", 1,
+                "values", Map.of("weightKg", "107,5")));
+        var edited = body(call(owner, patch(BASE + "/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("version", preview.get("version").asLong(),
+                        "exerciseEdit", target)))).andExpect(status().isOk()));
+        assertThat(edited.get("canEditExercises").asBoolean()).isTrue();
+
+        target.remove("set");
+        var bench = "14000000-0000-4000-8000-000000000002";
+        target.put("exerciseId", bench);
+        var replaced = body(call(owner, patch(BASE + "/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("version", edited.get("version").asLong(),
+                        "exerciseEdit", target)))).andExpect(status().isOk()));
+        var receipt = body(postJson(owner, BASE + "/" + id + "/commit",
+                Map.of("version", replaced.get("version").asLong())).andExpect(status().isOk()));
+        var program = body(call(owner, get("/api/v2/web/programs/" + receipt.get("programId").asString()))
+                .andExpect(status().isOk()));
+        var saved = program.at("/program" + dayPath + exercisePath);
+        assertThat(saved.get("exerciseId").asString()).isEqualTo(bench);
+        var sets = saved.get("sets");
+        assertThat(sets.size()).isEqualTo(3);
+        assertThat(sets.get(0).get("targetWeightGrams").asInt()).isEqualTo(100000);
+        assertThat(sets.get(1).get("targetWeightGrams").asInt()).isEqualTo(107500);
+        assertThat(sets.get(2).get("targetWeightGrams").asInt()).isEqualTo(100000);
+    }
+
+    @Test
     void ambiguousExerciseCanBeChosenWithoutCallingTheModelAgain() throws Exception {
         when(parser.parse(any(), any())).thenAnswer(reply(draft(ambiguous())));
         var id = create(owner, TEXT, null, UUID.randomUUID());
