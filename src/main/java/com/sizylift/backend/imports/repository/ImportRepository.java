@@ -136,7 +136,7 @@ public class ImportRepository {
                 history=?::jsonb,error_code=NULL,error_message=NULL,repair_hint=NULL,outline=NULL,progress=NULL,next_attempt_at=? WHERE id=?
             """;
     private static final String PATCH = """
-            UPDATE sizylift.import_session SET version=version+1,name=?,start_date=?,decisions=?::jsonb WHERE id=?
+            UPDATE sizylift.import_session SET version=version+1,name=?,start_date=?,decisions=?::jsonb,model_output=?::jsonb WHERE id=?
             """;
     private static final String COMMIT = """
             UPDATE sizylift.import_session SET status='committed',version=version+1,program_revision=?,
@@ -262,8 +262,8 @@ public class ImportRepository {
     public void answer(UUID id, List<Clarification> history, Instant now) {
         jdbc.update(ANSWER, json.writeValueAsString(history), stamp(now), id);
     }
-    public void patch(UUID id, String name, java.time.LocalDate startDate, Map<String, Decision> decisions) {
-        jdbc.update(PATCH, name, startDate, json.writeValueAsString(decisions), id);
+    public void patch(UUID id, String name, java.time.LocalDate startDate, Map<String, Decision> decisions, ImportDraftV1 output) {
+        jdbc.update(PATCH, name, startDate, json.writeValueAsString(decisions), json.writeValueAsString(output), id);
     }
     public void committed(UUID id, long revision) { jdbc.update(COMMIT, revision, id); }
     public void cancel(UUID id) { jdbc.update(CANCEL, id); }

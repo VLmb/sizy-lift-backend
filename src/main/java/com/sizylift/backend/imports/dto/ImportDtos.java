@@ -29,7 +29,13 @@ public final class ImportDtos {
     public record Answer(@NotNull UUID requestId, @Min(1) long version, @Min(0) int round,
                          @NotBlank @Size(max = NOTE_CHARS) String answer) { }
     public record Patch(@Min(1) long version, @Size(max = NAME_CHARS) String name, LocalDate startDate,
-                        @Size(max = RESOLUTIONS) List<@NotNull @Valid Decision> decisions) { }
+                        @Size(max = RESOLUTIONS) List<@NotNull @Valid Decision> decisions,
+                        @Valid ExerciseEdit exerciseEdit) { }
+    public record ExerciseEdit(@NotBlank @Size(max = 150) String workoutKey,
+                               @NotBlank @Size(max = 150) String exerciseKey,
+                               UUID exerciseId, @Valid SetEdit set) { }
+    public record SetEdit(@NotBlank @Size(max = 150) String key, @Min(0) int index,
+                          @NotEmpty @Size(max = 9) Map<@NotBlank String, @NotNull @Size(max = 32) String> values) { }
     public record Decision(@NotBlank @Size(max = 100) String key, @NotBlank String kind, UUID exerciseId,
                            @Size(max = NAME_CHARS) String name, String resultType, LiftClass liftClass) { }
     public record Commit(@Min(1) long version) { }
@@ -59,5 +65,5 @@ public final class ImportDtos {
                        Map<String, Decision> decisions,
                        boolean canCommit, ProgramPayloadV1 program, List<String> warnings,
                        Failure error, long inputTokens, long outputTokens, long reservedCostMicros,
-                       Receipt receipt, Progress progress, List<Sheet> sheets) { }
+                       Receipt receipt, Progress progress, List<Sheet> sheets, boolean canEditExercises) { }
 }
