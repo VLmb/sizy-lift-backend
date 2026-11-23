@@ -186,6 +186,9 @@ class CoachReworkStage2ApiTest extends CoachWorkspaceApiSupport {
         var active = withFreshIds("program");
         active.put("status", "active");
         push(coach, item("program", activeId, athleteId, 0, 1, active));
+        push(athlete, item("program_decision", activeId, null, 1, 2,
+                json.createObjectNode().put("decision", "accepted")
+                        .put("updatedAt", active.get("updatedAt").asString())));
 
         call(athlete, org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
                 "/api/v2/coaching/links/" + linkId)).andExpect(status().isNoContent());

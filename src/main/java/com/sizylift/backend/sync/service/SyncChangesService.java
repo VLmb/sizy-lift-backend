@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.UUID;
 
 import com.sizylift.backend.access.service.AccessPolicy;
+import com.sizylift.backend.publication.repository.ProgramDecisionRepository;
+import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.publication.service.PayloadReader;
 import com.sizylift.backend.sync.dto.SyncChangesResponse;
 import com.sizylift.backend.sync.dto.SyncChangesResponse.Change;
@@ -18,6 +20,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Чтение персональной ленты изменений с актуальным payload агрегатов (ADR-0007, раздел 4). Каждая запись
@@ -37,15 +40,18 @@ public class SyncChangesService {
     private final ObjectMapper json;
     private final SyncMetrics metrics;
     private final AccessPolicy access;
+    private final ProgramDecisionRepository decisions;
     private final TransactionTemplate snapshot;
 
     SyncChangesService(SyncFeedRepository feed, PayloadReader payloads, ObjectMapper json, SyncMetrics metrics,
-                       AccessPolicy access, PlatformTransactionManager transactionManager) {
+                       AccessPolicy access, ProgramDecisionRepository decisions,
+                       PlatformTransactionManager transactionManager) {
         this.feed = feed;
         this.access = access;
         this.payloads = payloads;
         this.json = json;
         this.metrics = metrics;
+        this.decisions = decisions;
         this.snapshot = new TransactionTemplate(transactionManager);
         snapshot.setReadOnly(true);
         // Лента и payload читаются из одного снимка: ревизия записи ленты совпадает с отданными данными.
@@ -95,8 +101,14 @@ public class SyncChangesService {
     }
 
     private Change change(FeedEntry entry, FeedKind kind, Object payload) {
+        var data = payload == null ? null : json.valueToTree(payload);
+        // Решение может оказаться на следующей странице ленты. Программа уже ждёт его.
+        if (data instanceof ObjectNode program && AggregateType.PROGRAM.equals(entry.type())
+                && entry.authorId() != null && decisions.find(entry.ownerId(), entry.aggregateId()).isPresent()) {
+            program.put("programDecisionRequired", true);
+        }
         return new Change(entry.seq(), entry.ownerId(), entry.type(), entry.aggregateId(), entry.revision(), kind,
                 entry.changedAt(), entry.authorId(), payload == null ? null : SyncPushService.SCHEMA_VERSION,
-                payload == null ? null : json.valueToTree(payload));
+                data);
     }
 }

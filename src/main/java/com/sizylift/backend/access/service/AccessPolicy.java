@@ -27,7 +27,8 @@ public class AccessPolicy {
      */
     public static final Set<String> COACH_VISIBLE = Set.of(AggregateType.WORKOUT, AggregateType.PROGRAM,
             AggregateType.EXERCISE, AggregateType.ATHLETE_PROFILE, AggregateType.ONE_REP_MAX,
-            AggregateType.WORKOUT_RESCHEDULE, AggregateType.WORKOUT_COMMENT, AggregateType.STANDALONE_WORKOUT);
+            AggregateType.WORKOUT_RESCHEDULE, AggregateType.WORKOUT_COMMENT, AggregateType.STANDALONE_WORKOUT,
+            AggregateType.PROGRAM_DECISION);
     /** Травмы и противопоказания — только с разрешения подопечного. */
     public static final Set<String> HEALTH = Set.of(AggregateType.INJURY, AggregateType.CONTRAINDICATION);
     /**

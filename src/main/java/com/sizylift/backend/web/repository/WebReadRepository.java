@@ -64,6 +64,8 @@ public class WebReadRepository {
     private static final String SELECT_PROGRAMS = """
             SELECT p.id, p.name, p.description, p.start_date, p.status, p.updated_at, p.source_program_id,
                    a.revision, a.author_user_id, a.changed_at,
+                   CASE WHEN a.author_user_id IS NOT NULL AND p.status = 'active'
+                     THEN d.decision END AS decision,
                    (SELECT max(w.end_date) FROM sizylift.training_week w
                     WHERE w.user_id = p.user_id AND w.program_id = p.id) AS end_date,
                    (SELECT count(*) FROM sizylift.training_week w
@@ -73,6 +75,7 @@ public class WebReadRepository {
             FROM sizylift.program p
             JOIN sizylift.published_aggregate a
                 ON a.user_id = p.user_id AND a.type = ? AND a.aggregate_id = p.id AND NOT a.deleted
+            LEFT JOIN sizylift.coach_program_decision d ON d.user_id = p.user_id AND d.program_id = p.id
             WHERE p.user_id = ?
             ORDER BY p.updated_at DESC, p.id
             """;
@@ -246,7 +249,7 @@ public class WebReadRepository {
                 row.getObject("start_date", LocalDate.class), row.getObject("end_date", LocalDate.class),
                 row.getString("status"), row.getInt("weeks"), row.getInt("workouts"), instant(row, "updated_at"),
                 row.getLong("revision"), uuid(row, "author_user_id"), instant(row, "changed_at"),
-                uuid(row, "source_program_id"));
+                uuid(row, "source_program_id"), row.getString("decision"));
     }
 
     private static HistorySet historySet(ResultSet row) throws SQLException {

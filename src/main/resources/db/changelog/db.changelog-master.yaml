@@ -161,3 +161,6 @@ databaseChangeLog:
   - include:
       file: changes/055-planned-exercise-load-plan.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/056-coach-program-decision.sql
+      relativeToChangelogFile: true

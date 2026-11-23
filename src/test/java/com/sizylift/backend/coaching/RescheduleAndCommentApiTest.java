@@ -349,7 +349,8 @@ class RescheduleAndCommentApiTest extends PostgresIntegrationTest {
     /** Текущая ревизия агрегата владельца; {@code 0}, если его нет. */
     private long revision(UUID ownerId, UUID aggregateId) {
         return jdbc.query("SELECT revision FROM sizylift.published_aggregate WHERE user_id = ? "
-                        + "AND aggregate_id = ?", (row, n) -> row.getLong(1), ownerId, aggregateId)
+                        + "AND type <> 'program_decision' AND aggregate_id = ?", (row, n) -> row.getLong(1),
+                ownerId, aggregateId)
                 .stream().findFirst().orElse(0L);
     }
 

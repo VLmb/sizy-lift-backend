@@ -99,10 +99,13 @@ public class CoachEventRepository {
                    'workout_missed' || ? || pw.id || ? || d.effective_date
             FROM sizylift.coaching_link l
             JOIN sizylift.program p ON p.user_id = l.athlete_user_id AND p.status = 'active'
+            LEFT JOIN sizylift.coach_program_decision response
+                  ON response.user_id = p.user_id AND response.program_id = p.id
             JOIN sizylift.planned_workout pw ON pw.user_id = p.user_id AND pw.program_id = p.id
             LEFT JOIN sizylift.workout_reschedule r ON r.user_id = pw.user_id AND r.planned_workout_id = pw.id
             CROSS JOIN LATERAL (SELECT coalesce(r.scheduled_date, pw.workout_date) AS effective_date) d
             WHERE l.ended_at IS NULL
+              AND (response.decision IS NULL OR response.decision = 'accepted')
               AND d.effective_date >= ? AND d.effective_date < ?
               AND d.effective_date >= (l.created_at AT TIME ZONE ?)::date
               AND NOT coalesce(r.skipped, false)
@@ -133,9 +136,12 @@ public class CoachEventRepository {
             SELECT l.id, 'program_ending', p.id, e.end_date, ?, 'program_ending' || ? || p.id || ? || e.end_date
             FROM sizylift.coaching_link l
             JOIN sizylift.program p ON p.user_id = l.athlete_user_id AND p.status = 'active'
+            LEFT JOIN sizylift.coach_program_decision response
+                  ON response.user_id = p.user_id AND response.program_id = p.id
             CROSS JOIN LATERAL (SELECT max(w.end_date) AS end_date FROM sizylift.training_week w
                                 WHERE w.user_id = p.user_id AND w.program_id = p.id) e
             WHERE l.ended_at IS NULL AND e.end_date BETWEEN ? AND ?
+              AND (response.decision IS NULL OR response.decision = 'accepted')
             ON CONFLICT (link_id, dedup_key) DO NOTHING
             """;
     private static final String TRY_LOCK_DAILY = "SELECT pg_try_advisory_xact_lock(hashtextextended(?, 0))";
