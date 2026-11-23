@@ -5,6 +5,7 @@ import com.sizylift.backend.publication.dto.payload.ContraindicationPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.InjuryPayloadV1;
 import com.sizylift.backend.publication.dto.payload.OneRepMaxPayloadV1;
+import com.sizylift.backend.publication.dto.payload.ProgramDecisionPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.dto.payload.StandaloneWorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutCommentPayloadV1;
@@ -13,6 +14,7 @@ import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.AthleteDataRepository;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
+import com.sizylift.backend.publication.repository.ProgramDecisionRepository;
 import com.sizylift.backend.publication.repository.StandaloneDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.springframework.context.annotation.Bean;
@@ -21,6 +23,11 @@ import org.springframework.context.annotation.Configuration;
 /** По одному reader на тип агрегата, те же типы, что у {@link AggregatePublishers}. */
 @Configuration(proxyBeanMethods = false)
 class AggregateReaders {
+
+    @Bean
+    AggregateReader<ProgramDecisionPayloadV1> programDecisionReader(ProgramDecisionRepository decisions) {
+        return new AggregateReader<>(AggregateType.PROGRAM_DECISION, decisions::find);
+    }
 
     @Bean
     AggregateReader<WorkoutPayloadV1> workoutReader(WorkoutDataRepository workouts) {

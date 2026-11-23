@@ -19,6 +19,7 @@ import com.sizylift.backend.inbox.service.CoachInboxRecorder;
 import com.sizylift.backend.notifications.entity.NotificationKind;
 import com.sizylift.backend.notifications.service.NotificationQueue;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
+import com.sizylift.backend.publication.repository.ProgramDecisionRepository;
 import com.sizylift.backend.publication.service.AggregateType;
 import com.sizylift.backend.sync.service.FeedMaintenance;
 import com.sizylift.backend.sync.service.FeedMaintenance.Operation;
@@ -48,11 +49,13 @@ public class CoachingService {
     private final ProgramArchiveRepository archives;
     private final CoachInboxRecorder inbox;
     private final CoachProgramCopies programs;
+    private final ProgramDecisionRepository decisions;
 
     CoachingService(CoachingRepository coaching, PublishedAggregateRepository aggregates, FeedMaintenance feeds,
                     InviteTokens tokens, TransactionTemplate transactions, CoachingMetrics metrics,
                     NotificationQueue notifications, Clock clock,
-                    ProgramArchiveRepository archives, CoachInboxRecorder inbox, CoachProgramCopies programs) {
+                    ProgramArchiveRepository archives, CoachInboxRecorder inbox, CoachProgramCopies programs,
+                    ProgramDecisionRepository decisions) {
         this.coaching = coaching;
         this.aggregates = aggregates;
         this.feeds = feeds;
@@ -64,6 +67,7 @@ public class CoachingService {
         this.archives = archives;
         this.inbox = inbox;
         this.programs = programs;
+        this.decisions = decisions;
     }
 
     public Overview overview(UUID userId) {
@@ -242,6 +246,14 @@ public class CoachingService {
             var operations = new ArrayList<Operation>();
             var archived = archives.heads(link.athleteId());
             for (var program : aggregates.transferToOwner(link.athleteId(), AggregateType.PROGRAM, link.coachId())) {
+                var athlete = link.athleteId();
+                var id = program.aggregateId();
+                decisions.keepUnacceptedAsDraft(athlete, id);
+                if (decisions.delete(athlete, id)) {
+                    var rev = aggregates.retire(athlete, AggregateType.PROGRAM_DECISION, id);
+                    operations.add(new FeedMaintenance.Upsert(athlete, athlete, AggregateType.PROGRAM_DECISION,
+                            id, rev, true));
+                }
                 if (program.deleted() && archived.containsKey(program.aggregateId())) {
                     archives.transfer(link.athleteId(), program.aggregateId(), archived.get(program.aggregateId()),
                             program.revision());

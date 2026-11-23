@@ -1,5 +1,6 @@
 package com.sizylift.backend.sync.service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -11,10 +12,13 @@ import com.sizylift.backend.access.service.AccessPolicy;
 import com.sizylift.backend.publication.dto.ItemStatus;
 import com.sizylift.backend.publication.dto.RejectionReason;
 import com.sizylift.backend.publication.dto.payload.PayloadV1;
+import com.sizylift.backend.publication.dto.payload.ProgramDecisionPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.dto.payload.StandaloneWorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutReschedulePayloadV1;
 import com.sizylift.backend.publication.repository.PublishedAggregateRepository;
+import com.sizylift.backend.publication.repository.BetweenDataRepository;
+import com.sizylift.backend.publication.repository.ProgramDecisionRepository;
 import com.sizylift.backend.publication.service.AggregateArbiter;
 import com.sizylift.backend.publication.service.AggregateChange;
 import com.sizylift.backend.publication.service.AggregateChangeListener;
@@ -40,6 +44,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class SyncPushService {
 
     static final int SCHEMA_VERSION = 1;
+    private static final String ACTIVE_PROGRAM = "active";
+    private static final String ASSIGNMENT_CLIENT = "server:program-assignment";
+    private static final long ASSIGNMENT_CLIENT_VERSION = 1;
     /** Агрегаты, которых у пользователя не больше одного, хотя id выбирает клиент (одна строка на сервере). */
     private static final java.util.Set<String> SINGLE_PER_USER = java.util.Set.of(AggregateType.ATHLETE_PROFILE);
     private static final Logger log = LoggerFactory.getLogger(SyncPushService.class);
@@ -54,11 +61,14 @@ public class SyncPushService {
     private final CoachExerciseAdoption coachExercises;
     private final DependentAggregates dependents;
     private final SyncMetrics metrics;
+    private final BetweenDataRepository between;
+    private final ProgramDecisionRepository decisions;
 
     SyncPushService(List<AggregatePublisher<?>> publishers, PublishedAggregateRepository aggregates,
                     TransactionTemplate transactions, PayloadParser parser, AggregateArbiter arbiter,
                     AggregateChangeListener feed, AccessPolicy access, CoachExerciseAdoption coachExercises,
-                    DependentAggregates dependents, SyncMetrics metrics) {
+                    DependentAggregates dependents, SyncMetrics metrics, BetweenDataRepository between,
+                    ProgramDecisionRepository decisions) {
         this.publishers = publishers.stream()
                 .collect(Collectors.toUnmodifiableMap(AggregatePublisher::type, Function.identity()));
         this.aggregates = aggregates;
@@ -70,6 +80,8 @@ public class SyncPushService {
         this.coachExercises = coachExercises;
         this.dependents = dependents;
         this.metrics = metrics;
+        this.between = between;
+        this.decisions = decisions;
     }
 
     public SyncPushResponse push(UUID userId, List<Item> items) {
@@ -147,6 +159,9 @@ public class SyncPushService {
             return ItemResult.rejected(item, RejectionReason.UNSUPPORTED_SCHEMA);
         }
         var write = new Write(callerId, item.ownerId() == null ? callerId : item.ownerId(), item, generated);
+        if (AggregateType.PROGRAM_DECISION.equals(item.type()) && (!write.byOwner() || item.deleted())) {
+            return ItemResult.rejected(item, RejectionReason.FORBIDDEN);
+        }
         try {
             return item.deleted() ? delete(write, publisher) : replace(write, publisher);
         } catch (PayloadParser.InvalidPayloadException | DataIntegrityViolationException e) {
@@ -159,6 +174,10 @@ public class SyncPushService {
 
     private <P extends PayloadV1> ItemResult replace(Write write, AggregatePublisher<P> publisher) {
         var payload = parser.parse(write.item().payload(), publisher.payloadType());
+        if (payload instanceof ProgramDecisionPayloadV1 decision
+                && ProgramDecisionPayloadV1.PENDING.equals(decision.decision())) {
+            return ItemResult.rejected(write.item(), RejectionReason.INVALID_PAYLOAD);
+        }
         if (payload instanceof ProgramPayloadV1 program && !write.byOwner()) {
             return store(write, () -> replaceCoachProgram(write, publisher, program));
         }
@@ -221,6 +240,10 @@ public class SyncPushService {
             if (!access.canWriteFor(write.callerId(), ownerId, item.type())) {
                 return ItemResult.rejected(item, RejectionReason.FORBIDDEN);
             }
+            if (AggregateType.PROGRAM_DECISION.equals(item.type()) && !canAnswer(ownerId, item.id())) {
+                status.setRollbackOnly();
+                return ItemResult.rejected(item, RejectionReason.FORBIDDEN);
+            }
             var state = aggregates.lock(ownerId, item.type(), item.id());
             if (!access.canWrite(write.callerId(), ownerId, item.type(), state.authorUserId(), state.exists())) {
                 status.setRollbackOnly();
@@ -252,6 +275,8 @@ public class SyncPushService {
             var lost = conflict && state.exists() ? arbiter.captureStored(ownerId, item.type(), item.id(), state)
                     : null;
             var before = dependents.capture(ownerId, item.type(), item.id());
+            var wasActive = AggregateType.PROGRAM.equals(item.type()) && !write.byOwner()
+                    && isProgramActive(ownerId, item.id());
             var effects = data.get();
             var deleted = item.deleted() || effects.removed();
             var revision = aggregates.storeSynced(ownerId, item.type(), item.id(), deleted, changedAt,
@@ -275,10 +300,36 @@ public class SyncPushService {
                 feed.changed(AggregateChange.byServer(ownerId, removed.type(), removed.id(), removed.revision(),
                         true));
             }
+            if (!deleted && !wasActive && AggregateType.PROGRAM.equals(item.type())
+                    && !write.byOwner() && isProgramActive(ownerId, item.id())) {
+                offerProgram(ownerId, item.id(), changedAt);
+            }
             feed.changed(new AggregateChange(ownerId, write.generated() ? null : write.callerId(), item.type(), item.id(), revision,
                     deleted, !state.exists() || state.deleted()));
             return ItemResult.accepted(item, revision, effects.payloadRewritten());
         });
+    }
+
+    private boolean canAnswer(UUID owner, UUID programId) {
+        var program = aggregates.lock(owner, AggregateType.PROGRAM, programId);
+        return program.exists() && !program.deleted() && program.authorUserId() != null
+                && access.activeCoach(owner).filter(program.authorUserId()::equals).isPresent()
+                && isProgramActive(owner, programId);
+    }
+
+    private boolean isProgramActive(UUID owner, UUID programId) {
+        return between.programStatus(owner, programId).filter(ACTIVE_PROGRAM::equals).isPresent();
+    }
+
+    private void offerProgram(UUID owner, UUID programId, Instant at) {
+        var decision = aggregates.lock(owner, AggregateType.PROGRAM_DECISION, programId);
+        if (decision.exists() && !decision.deleted()) {
+            return;
+        }
+        decisions.insert(owner, programId, new ProgramDecisionPayloadV1(ProgramDecisionPayloadV1.PENDING, at));
+        var revision = aggregates.storeSynced(owner, AggregateType.PROGRAM_DECISION, programId,
+                false, at, ASSIGNMENT_CLIENT, ASSIGNMENT_CLIENT_VERSION);
+        feed.changed(AggregateChange.byServer(owner, AggregateType.PROGRAM_DECISION, programId, revision, false));
     }
 
     /**

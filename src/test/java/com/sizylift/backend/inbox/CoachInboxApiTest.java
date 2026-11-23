@@ -94,7 +94,7 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
     @Test
     void newRescheduleOfTheSameWorkoutUpdatesTheEventAndMakesItUnseen() throws Exception {
         var program = UUID.randomUUID();
-        push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        acceptedProgram(program, fixture("program"));
         var first = push(athlete, item("workout_reschedule", PLANNED_WORKOUT, null, 0, 1,
                 reschedule(program, "2026-10-15")));
         var event = only(events(inbox(coach, ""), "workout_rescheduled"));
@@ -117,7 +117,7 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
     @Test
     void dailyJobFindsMissedWorkoutsOnceAndSkipsCompletedOnes() throws Exception {
         linkedSince(LINKED_ON);
-        push(coach, item("program", UUID.randomUUID(), athleteId, 0, 1, fixture("program")));
+        acceptedProgram(UUID.randomUUID(), fixture("program"));
 
         dailyJob.run(LocalDate.parse("2026-10-15"));
         assertThat(events(inbox(coach, ""), "workout_missed")).as("вчерашняя ещё не пропущена").isEmpty();
@@ -138,7 +138,7 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
     void dailyJobUsesTheRescheduledDateAndIgnoresOldOrPreLinkDates() throws Exception {
         linkedSince(LINKED_ON);
         var program = UUID.randomUUID();
-        push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        acceptedProgram(program, fixture("program"));
         push(athlete, item("workout_reschedule", PLANNED_WORKOUT, null, 0, 1, reschedule(program, "2026-10-20")));
 
         dailyJob.run(LocalDate.parse("2026-10-17"));
@@ -159,7 +159,7 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
     @Test
     void dailyJobWarnsAboutTheProgramEndingWithinAWeekOnce() throws Exception {
         var program = UUID.randomUUID();
-        push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        acceptedProgram(program, fixture("program"));
 
         dailyJob.run(LocalDate.parse("2026-10-10"));
         assertThat(events(inbox(coach, ""), "program_ending")).as("до конца 8 дней").isEmpty();
@@ -176,7 +176,7 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
     void removingAPlannedWorkoutFromTheProgramRemovesItsMissedEvent() throws Exception {
         linkedSince(LINKED_ON);
         var program = UUID.randomUUID();
-        var created = push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        var created = acceptedProgram(program, fixture("program"));
         dailyJob.run(LocalDate.parse("2026-10-16"));
         markSeen(Map.of("all", true));
         assertThat(events(inbox(coach, ""), "workout_missed")).hasSize(1);
@@ -195,13 +195,13 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
     void deletingTheProgramRemovesItsMissedAndEndingEvents() throws Exception {
         linkedSince(LINKED_ON);
         var program = UUID.randomUUID();
-        var created = push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        var created = acceptedProgram(program, fixture("program"));
         var other = UUID.randomUUID();
         var otherProgram = withFreshIds("program");
         otherProgram.put("name", "Другая");
         ((ArrayNode) otherProgram.get("cycles").get(0).get("weeks").get(0)
                 .get("workouts")).removeAll();
-        push(coach, item("program", other, athleteId, 0, 1, otherProgram));
+        acceptedProgram(other, otherProgram);
         dailyJob.run(LocalDate.parse("2026-10-16"));
         assertThat(events(inbox(coach, ""), "workout_missed")).hasSize(1);
         assertThat(events(inbox(coach, ""), "program_ending")).hasSize(2);
@@ -216,7 +216,7 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
     @Test
     void dailyJobCountsCreatedEventsByKindAndTimesTheRun() throws Exception {
         linkedSince(LINKED_ON);
-        push(coach, item("program", UUID.randomUUID(), athleteId, 0, 1, fixture("program")));
+        acceptedProgram(UUID.randomUUID(), fixture("program"));
         var missedBefore = created("workout_missed");
         var endingBefore = created("program_ending");
         var runsBefore = runs("completed");
@@ -435,7 +435,7 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
         assertThat(row.get("workoutFacts").isNull()).isTrue();
 
         var program = UUID.randomUUID();
-        push(coach, item("program", program, athleteId, 0, 1, fixture("program")));
+        acceptedProgram(program, fixture("program"));
         var workout = UUID.randomUUID();
         push(athlete, item("workout", workout, null, 0, 1, workout()));
         push(athlete, item("workout_comment", UUID.randomUUID(), null, 0, 1, comment(workout, "Тяжело")));
@@ -448,6 +448,14 @@ class CoachInboxApiTest extends CoachWorkspaceApiSupport {
 
         push(athlete, item("workout_reschedule", PLANNED_WORKOUT, null, 0, 1, reschedule(program, "2026-10-17")));
         assertThat(roster().get(0).get("planUntil").asString()).as("с учётом переноса").isEqualTo("2026-10-17");
+    }
+
+    private JsonNode acceptedProgram(UUID id, JsonNode program) throws Exception {
+        var created = push(coach, item("program", id, athleteId, 0, 1, program));
+        push(athlete, item("program_decision", id, null, 1, 2,
+                json.createObjectNode().put("decision", "accepted")
+                        .put("updatedAt", program.get("updatedAt").asString())));
+        return created;
     }
 
     private double created(String kind) {

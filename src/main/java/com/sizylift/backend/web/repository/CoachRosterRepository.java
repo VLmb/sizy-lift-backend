@@ -48,9 +48,10 @@ public class CoachRosterRepository {
                     FROM sizylift.planned_workout pw
                     JOIN sizylift.program pr ON pr.user_id = pw.user_id AND pr.id = pw.program_id
                         AND pr.status = 'active'
+                    LEFT JOIN sizylift.coach_program_decision d ON d.user_id = pr.user_id AND d.program_id = pr.id
                     LEFT JOIN sizylift.workout_reschedule r
                         ON r.user_id = pw.user_id AND r.planned_workout_id = pw.id
-                    WHERE pw.user_id = l.athlete_user_id
+                    WHERE pw.user_id = l.athlete_user_id AND (d.decision IS NULL OR d.decision = 'accepted')
                     UNION ALL
                     SELECT coalesce(r.scheduled_date, s.workout_date)
                     FROM sizylift.standalone_workout s

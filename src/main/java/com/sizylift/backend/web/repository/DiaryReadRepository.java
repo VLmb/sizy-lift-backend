@@ -33,6 +33,7 @@ public class DiaryReadRepository {
                    actual.id IS NULL AND sk.planned_workout_id IS NOT NULL AS skipped
             FROM sizylift.planned_workout pw
             JOIN sizylift.program p ON p.user_id = pw.user_id AND p.id = pw.program_id
+            LEFT JOIN sizylift.coach_program_decision d ON d.user_id = p.user_id AND d.program_id = p.id
             LEFT JOIN sizylift.workout_reschedule r ON r.user_id = pw.user_id AND r.planned_workout_id = pw.id
             LEFT JOIN sizylift.planned_workout_skip sk ON sk.user_id = pw.user_id AND sk.planned_workout_id = pw.id
             LEFT JOIN LATERAL (
@@ -40,6 +41,7 @@ public class DiaryReadRepository {
                   AND w.planned_workout_id = pw.id ORDER BY w.completed_at DESC, w.id LIMIT 1
             ) actual ON true
             WHERE pw.user_id = ? AND p.status = 'active'
+              AND (d.decision IS NULL OR d.decision = 'accepted')
               AND coalesce(r.scheduled_date, pw.workout_date) BETWEEN ? AND ?
             ORDER BY scheduled_date, pw.position, pw.id
             """;
@@ -57,8 +59,9 @@ public class DiaryReadRepository {
                        coalesce(r.skipped, false) AS skipped
                 FROM sizylift.planned_workout pw
                 JOIN sizylift.program p ON p.user_id = pw.user_id AND p.id = pw.program_id AND p.status = 'active'
+                LEFT JOIN sizylift.coach_program_decision d ON d.user_id = p.user_id AND d.program_id = p.id
                 LEFT JOIN sizylift.workout_reschedule r ON r.user_id = pw.user_id AND r.planned_workout_id = pw.id
-                WHERE pw.user_id = ? AND pw.id = ?
+                WHERE pw.user_id = ? AND pw.id = ? AND (d.decision IS NULL OR d.decision = 'accepted')
                 UNION ALL
                 SELECT NULL::uuid, coalesce(r.scheduled_date, s.workout_date), coalesce(r.skipped, false)
                 FROM sizylift.standalone_workout s

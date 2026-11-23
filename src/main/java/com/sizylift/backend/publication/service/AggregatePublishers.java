@@ -7,6 +7,7 @@ import com.sizylift.backend.publication.dto.payload.ContraindicationPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ExercisePayloadV1;
 import com.sizylift.backend.publication.dto.payload.InjuryPayloadV1;
 import com.sizylift.backend.publication.dto.payload.OneRepMaxPayloadV1;
+import com.sizylift.backend.publication.dto.payload.ProgramDecisionPayloadV1;
 import com.sizylift.backend.publication.dto.payload.ProgramPayloadV1;
 import com.sizylift.backend.publication.dto.payload.StandaloneWorkoutPayloadV1;
 import com.sizylift.backend.publication.dto.payload.WorkoutCommentPayloadV1;
@@ -16,6 +17,7 @@ import com.sizylift.backend.publication.repository.AthleteDataRepository;
 import com.sizylift.backend.publication.repository.BetweenDataRepository;
 import com.sizylift.backend.publication.repository.OneRepMaxHistoryRepository;
 import com.sizylift.backend.publication.repository.ProgramDataRepository;
+import com.sizylift.backend.publication.repository.ProgramDecisionRepository;
 import com.sizylift.backend.publication.repository.StandaloneDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +26,12 @@ import org.springframework.context.annotation.Configuration;
 /** По одному publisher на тип агрегата. */
 @Configuration(proxyBeanMethods = false)
 class AggregatePublishers {
+
+    @Bean
+    AggregatePublisher<ProgramDecisionPayloadV1> programDecisionPublisher(ProgramDecisionRepository decisions) {
+        return new AggregatePublisher<>(AggregateType.PROGRAM_DECISION, ProgramDecisionPayloadV1.class,
+                decisions::insert, decisions::delete);
+    }
 
     @Bean
     AggregatePublisher<WorkoutPayloadV1> workoutPublisher(WorkoutDataRepository workouts) {

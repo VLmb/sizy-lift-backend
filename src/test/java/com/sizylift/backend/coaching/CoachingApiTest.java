@@ -105,7 +105,8 @@ class CoachingApiTest extends PostgresIntegrationTest {
 
         assertThat(preview.get("coachName").asString()).isEqualTo("Тренер Иван");
         assertThat(texts(preview.get("coachSees"))).containsExactlyInAnyOrder("workout", "program", "exercise",
-                "athlete_profile", "one_rep_max", "workout_reschedule", "workout_comment", "standalone_workout");
+                "athlete_profile", "one_rep_max", "workout_reschedule", "workout_comment", "standalone_workout",
+                "program_decision");
         assertThat(texts(preview.get("coachSeesWithHealthAccess"))).contains("injury", "contraindication");
     }
 
@@ -280,11 +281,11 @@ class CoachingApiTest extends PostgresIntegrationTest {
 
         assertThat(created.get("status").asString()).isEqualTo("accepted");
         assertThat(jdbc.queryForObject("SELECT author_user_id FROM sizylift.published_aggregate "
-                + "WHERE user_id = ? AND aggregate_id = ?", UUID.class, athleteId, program)).isEqualTo(userId(coach));
+                + "WHERE user_id = ? AND type = 'program' AND aggregate_id = ?", UUID.class, athleteId, program)).isEqualTo(userId(coach));
         assertThat(jdbc.queryForObject("SELECT name FROM sizylift.program WHERE user_id = ? AND id = ?",
                 String.class, athleteId, program)).isEqualTo("Программа тренера");
         var athleteFeed = changes(athlete, 0);
-        assertThat(athleteFeed.get(0).get("payload").get("name").asString()).isEqualTo("Программа тренера");
+        assertThat(athleteFeed.get(1).get("payload").get("name").asString()).isEqualTo("Программа тренера");
         assertThat(changes(coach, 0).get(0).get("id").asString()).isEqualTo(program.toString());
 
         var revision = created.get("revision").asLong();
@@ -296,8 +297,60 @@ class CoachingApiTest extends PostgresIntegrationTest {
         assertThat(outcome(push(coach, programItem(program, athleteId, revision, 2, "Правка тренера"))))
                 .isEqualTo("accepted");
         assertThat(jdbc.queryForObject("SELECT author_user_id FROM sizylift.published_aggregate "
-                + "WHERE user_id = ? AND aggregate_id = ?", UUID.class, athleteId, program))
+                + "WHERE user_id = ? AND type = 'program' AND aggregate_id = ?", UUID.class, athleteId, program))
                 .as("правка не сбрасывает автора").isEqualTo(userId(coach));
+    }
+
+
+    @Test
+    void onlyTheAthleteCanAnswerAndBothAccountsReceiveTheLatestDecision() throws Exception {
+        var linkId = accept(athlete, invite(coach));
+        var athleteId = userId(athlete);
+        var programId = UUID.randomUUID();
+        assertThat(outcome(push(coach, programItem(programId, athleteId, 0, 1, "Новый план"))))
+                .isEqualTo("accepted");
+        var offer = changes(athlete, 0);
+        assertThat(types(offer)).containsExactly("program_decision", "program");
+        assertThat(offer.getFirst().get("payload").get("decision").asString()).isEqualTo("pending");
+        assertThat(offer.getLast().get("payload").get("programDecisionRequired").asBoolean()).isTrue();
+        assertThat(plannedWorkouts(athlete)).isEmpty();
+        var base = offer.getFirst().get("revision").asLong();
+        var athleteCursor = cursor(athlete);
+        var coachCursor = cursor(coach);
+        var accepted = json.createObjectNode().put("decision", "accepted").put("updatedAt", T10.toString());
+        assertThat(outcome(push(coach, item("program_decision", programId, athleteId, base, 2, accepted))))
+                .isEqualTo("rejected");
+        assertThat(outcome(push(stranger, item("program_decision", programId, athleteId, base, 2, accepted))))
+                .isEqualTo("rejected");
+
+        var response = push(athlete, item("program_decision", programId, null, base, 2, accepted)).get(0);
+        assertThat(response.get("status").asString()).isEqualTo("accepted");
+        assertThat(changes(athlete, athleteCursor).getFirst().get("payload").get("decision").asString())
+                .isEqualTo("accepted");
+        assertThat(changes(coach, coachCursor).getFirst().get("payload").get("decision").asString())
+                .isEqualTo("accepted");
+        assertThat(plannedWorkouts(athlete)).hasSize(1);
+
+        var declined = accepted.deepCopy().put("decision", "declined");
+        var latest = push(athlete, item("program_decision", programId, null,
+                response.get("revision").asLong(), 3, declined)).get(0);
+        assertThat(latest.get("status").asString()).isEqualTo("accepted");
+        var coachPrograms = body(call(coach, get("/api/v2/web/programs").param("ownerId", athleteId.toString()))
+                .andExpect(status().isOk())).get("programs");
+        assertThat(coachPrograms.get(0).get("decision").asString()).isEqualTo("declined");
+        assertThat(plannedWorkouts(athlete)).isEmpty();
+        assertThat(changes(athlete, 0).stream().filter(change -> change.get("type").asString().equals("program_decision"))
+                .findFirst().orElseThrow().get("payload").get("decision").asString()).isEqualTo("declined");
+
+        call(athlete, delete("/api/v2/coaching/links/" + linkId)).andExpect(status().isNoContent());
+        assertThat(outcome(push(athlete, item("program_decision", programId, null,
+                latest.get("revision").asLong(), 4, accepted)))).isEqualTo("rejected");
+    }
+
+    private JsonNode plannedWorkouts(String subject) throws Exception {
+        return body(call(subject, get("/api/v2/web/timeline")
+                .param("from", "2026-10-12").param("to", "2026-10-18"))
+                .andExpect(status().isOk())).get("planned");
     }
 
     @Test
@@ -323,9 +376,9 @@ class CoachingApiTest extends PostgresIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT author_user_id FROM sizylift.published_aggregate "
                 + "WHERE user_id = ? AND aggregate_id = ?", UUID.class, athleteId, copy)).isNull();
         var athleteFeed = changes(athlete, athleteCursor);
-        assertThat(types(athleteFeed)).containsExactly("exercise", "program");
+        assertThat(types(athleteFeed)).containsExactly("exercise", "program_decision", "program");
         assertThat(athleteFeed.get(0).get("id").asString()).isEqualTo(copy.toString());
-        assertThat(athleteFeed.get(1).get("payload").toString()).contains(copy.toString())
+        assertThat(athleteFeed.get(2).get("payload").toString()).contains(copy.toString())
                 .doesNotContain(coachExercise.toString());
         assertThat(push(coach, programItem(UUID.randomUUID(), athleteId, 0, 1, "Без своих упражнений")).get(0)
                 .get("payloadRewritten").asBoolean()).isFalse();
@@ -428,17 +481,18 @@ class CoachingApiTest extends PostgresIntegrationTest {
         call(athlete, delete("/api/v2/coaching/links/" + linkId)).andExpect(status().isNoContent());
 
         var revoked = changes(coach, coachCursor);
-        assertThat(revoked).hasSize(3);
+        assertThat(revoked).hasSize(4);
         assertThat(revoked).allMatch(change -> change.get("kind").asString().equals("revoke")
                 && change.get("payload").isNull());
         assertThat(changes(coach, 0)).allMatch(change -> change.get("kind").asString().equals("revoke"));
         assertThat(jdbc.queryForObject("SELECT author_user_id FROM sizylift.published_aggregate "
-                + "WHERE user_id = ? AND aggregate_id = ?", UUID.class, athleteId, program)).isNull();
+                + "WHERE user_id = ? AND type = 'program' AND aggregate_id = ?", UUID.class, athleteId, program)).isNull();
         var handedOver = changes(athlete, athleteCursor);
-        assertThat(handedOver).hasSize(1);
-        var newRevision = handedOver.get(0).get("revision").asLong();
+        assertThat(types(handedOver)).containsExactly("program_decision", "program");
+        var newRevision = handedOver.get(1).get("revision").asLong();
         assertThat(newRevision).isGreaterThan(coachRevision);
-        assertThat(handedOver.get(0).get("payload").get("name").asString()).isEqualTo("От тренера");
+        assertThat(handedOver.get(1).get("payload").get("name").asString()).isEqualTo("От тренера");
+        assertThat(handedOver.get(1).get("payload").get("status").asString()).isEqualTo("draft");
 
         assertThat(outcome(push(athlete, programItem(program, null, newRevision, 1, "Теперь моя"))))
                 .isEqualTo("accepted");

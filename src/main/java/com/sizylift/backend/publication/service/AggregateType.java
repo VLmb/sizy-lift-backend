@@ -7,6 +7,7 @@ public final class AggregateType {
 
     public static final String WORKOUT = "workout";
     public static final String PROGRAM = "program";
+    public static final String PROGRAM_DECISION = "program_decision";
     public static final String EXERCISE = "exercise";
     public static final String ATHLETE_PROFILE = "athlete_profile";
     public static final String ONE_REP_MAX = "one_rep_max";

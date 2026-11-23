@@ -44,7 +44,7 @@ public final class WebDtos {
     /** Строка списка программ; {@code authorId} — тренер, если программу пишет он, иначе {@code null}. */
     public record ProgramSummary(UUID id, String name, String description, LocalDate startDate, LocalDate endDate,
                                  String status, int weeks, int workouts, Instant updatedAt, long revision,
-                                 UUID authorId, Instant changedAt, UUID sourceProgramId) {
+                                 UUID authorId, Instant changedAt, UUID sourceProgramId, String decision) {
     }
 
     public record ProgramListResponse(UUID ownerId, List<ProgramSummary> programs) {
