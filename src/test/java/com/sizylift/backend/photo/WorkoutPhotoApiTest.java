@@ -16,8 +16,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -44,37 +47,37 @@ class WorkoutPhotoApiTest extends CoachWorkspaceApiSupport {
         var jpeg = jpeg(12);
         var path = PHOTOS + "/" + workoutId;
         mvc.perform(get(PHOTOS)).andExpect(status().isUnauthorized());
-        call(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content(jpeg))
+        callMobile(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content(jpeg))
                 .andExpect(status().isNotFound());
 
         var workout = workout();
         legacy(athlete, "workout", workoutId, 1, workout);
-        call(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content("not a jpeg"))
+        callMobile(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content("not a jpeg"))
                 .andExpect(status().isUnsupportedMediaType());
-        call(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content(jpeg))
+        callMobile(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content(jpeg))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(true));
 
-        var first = body(call(athlete, get(path)).andExpect(status().isOk())
+        var first = body(callMobile(athlete, get(path)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.photo.width").value(12))).get("url").asString();
         var signed = read(first);
         assertThat(signed.statusCode()).isEqualTo(200);
         assertThat(signed.body()).isEqualTo(jpeg);
         assertThat(read(first.substring(0, first.indexOf('?'))).statusCode()).isEqualTo(403);
-        call(coach, get(path)).andExpect(status().isNotFound());
-        call(coach, get(PHOTOS)).andExpect(status().isOk()).andExpect(jsonPath("$.items").isEmpty());
-        call(coach, delete(path + "/" + UUID.randomUUID()).param("base", version.toString()))
+        callMobile(coach, get(path)).andExpect(status().isNotFound());
+        callMobile(coach, get(PHOTOS)).andExpect(status().isOk()).andExpect(jsonPath("$.items").isEmpty());
+        callMobile(coach, delete(path + "/" + UUID.randomUUID()).param("base", version.toString()))
                 .andExpect(status().isNotFound());
 
         legacy(athlete, "workout", workoutId, 2, workout.put("title", "Updated workout"));
-        call(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content(jpeg))
+        callMobile(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content(jpeg))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(true));
-        var repeated = body(call(athlete, get(path)).andExpect(status().isOk())).get("url").asString();
+        var repeated = body(callMobile(athlete, get(path)).andExpect(status().isOk())).get("url").asString();
         assertThat(URI.create(repeated).getPath()).isEqualTo(URI.create(first).getPath());
-        call(athlete, get(PHOTOS)).andExpect(status().isOk())
+        callMobile(athlete, get(PHOTOS)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].version").value(version.toString()));
 
         legacy(athlete, "workout", workoutId, 3, null);
-        call(athlete, get(path)).andExpect(status().isNotFound());
+        callMobile(athlete, get(path)).andExpect(status().isNotFound());
         photos.removeObjects();
         assertThat(read(first).statusCode()).isEqualTo(404);
     }
@@ -88,21 +91,49 @@ class WorkoutPhotoApiTest extends CoachWorkspaceApiSupport {
         var path = PHOTOS + "/" + workoutId;
         var jpeg = jpeg(20);
         legacy(athlete, "workout", workoutId, 1, workout());
-        call(athlete, put(path + "/" + uploaded).contentType(MediaType.IMAGE_JPEG).content(jpeg))
+        callMobile(athlete, put(path + "/" + uploaded).contentType(MediaType.IMAGE_JPEG).content(jpeg))
                 .andExpect(status().isOk());
-        var url = body(call(athlete, get(path)).andExpect(status().isOk())).get("url").asString();
-        call(athlete, delete(path + "/" + removed)).andExpect(status().isOk())
+        var url = body(callMobile(athlete, get(path)).andExpect(status().isOk())).get("url").asString();
+        callMobile(athlete, delete(path + "/" + removed)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.accepted").value(false));
-        call(athlete, delete(path + "/" + removed).param("base", uploaded.toString())).andExpect(status().isOk())
+        callMobile(athlete, delete(path + "/" + removed).param("base", uploaded.toString())).andExpect(status().isOk())
                 .andExpect(jsonPath("$.accepted").value(true));
-        call(athlete, put(path + "/" + uploaded).contentType(MediaType.IMAGE_JPEG).content(jpeg))
+        callMobile(athlete, put(path + "/" + uploaded).contentType(MediaType.IMAGE_JPEG).content(jpeg))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.accepted").value(true))
                 .andExpect(jsonPath("$.version").value(removed.toString()));
-        call(athlete, get(path)).andExpect(status().isNotFound());
-        call(athlete, get(PHOTOS)).andExpect(status().isOk())
+        callMobile(athlete, get(path)).andExpect(status().isNotFound());
+        callMobile(athlete, get(PHOTOS)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].deleted").value(true));
         photos.removeObjects();
         assertThat(read(url).statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void rejectsWebAndPwaTokensEvenWhenTheyBelongToTheWorkoutOwner() throws Exception {
+        var athlete = newSubject();
+        var workoutId = UUID.randomUUID();
+        var path = PHOTOS + "/" + workoutId;
+        var version = UUID.randomUUID();
+        var jpeg = jpeg(12);
+        legacy(athlete, "workout", workoutId, 1, workout());
+        callMobile(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content(jpeg))
+                .andExpect(status().isOk());
+
+        for (var client : new String[]{"sizylift-web", "sizylift-pwa"}) {
+            var token = jwt().jwt(builder -> builder.issuer(ISSUER).subject(athlete).claim("azp", client));
+            mvc.perform(get(PHOTOS).with(token)).andExpect(status().isForbidden());
+            mvc.perform(get(path).with(token)).andExpect(status().isForbidden());
+            mvc.perform(put(path + "/" + UUID.randomUUID()).contentType(MediaType.IMAGE_JPEG).content(jpeg)
+                    .with(token)).andExpect(status().isForbidden());
+            mvc.perform(delete(path + "/" + UUID.randomUUID()).with(token)).andExpect(status().isForbidden());
+        }
+        call(athlete, get(PHOTOS)).andExpect(status().isForbidden());
+        callMobile(athlete, get(path)).andExpect(status().isOk());
+    }
+
+    private ResultActions callMobile(String subject, MockHttpServletRequestBuilder request) throws Exception {
+        return mvc.perform(request.with(jwt().jwt(builder -> builder.issuer(ISSUER).subject(subject)
+                .claim("azp", "sizylift-mobile"))));
     }
 
     private static byte[] jpeg(int width) throws Exception {

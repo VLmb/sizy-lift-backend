@@ -2,6 +2,7 @@ package com.sizylift.backend.security;
 
 import com.sizylift.backend.admin.service.AdminAccess;
 import com.sizylift.backend.feedback.controller.FeedbackController;
+import com.sizylift.backend.photo.controller.WorkoutPhotoController;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,6 +10,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.http.HttpMethod;
 import jakarta.servlet.DispatcherType;
@@ -25,6 +27,9 @@ public class SecurityConfiguration {
     /** Страница приглашения до входа (docs/coaching.md, «Приглашение до входа»). */
     private static final String PUBLIC_INVITE = "/api/v2/coaching/invites/*/public";
 
+    private static final String MOBILE_CLIENT = "sizylift-mobile";
+    private static final String AUTHORIZED_PARTY = "azp";
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
@@ -36,6 +41,10 @@ public class SecurityConfiguration {
                         .requestMatchers("/actuator/**").denyAll()
                         .requestMatchers("/api/v2/admin", "/api/v2/admin/**").access((authentication, context) ->
                                 new AuthorizationDecision(AdminAccess.allowed(authentication.get())))
+                        .requestMatchers(WorkoutPhotoController.PATH, WorkoutPhotoController.PATH + "/**")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                authentication.get() instanceof JwtAuthenticationToken token
+                                        && MOBILE_CLIENT.equals(token.getToken().getClaimAsString(AUTHORIZED_PARTY))))
                         .anyRequest().authenticated())
                 // Источники — CorsConfigurationSource из web.config; пустой — CORS выключен.
                 .cors(Customizer.withDefaults())
