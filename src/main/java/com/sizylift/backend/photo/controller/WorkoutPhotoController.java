@@ -23,8 +23,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v2/workout-photos")
+@RequestMapping(WorkoutPhotoController.PATH)
 public class WorkoutPhotoController {
+    public static final String PATH = "/api/v2/workout-photos";
+
     private final AuthenticatedAccount accounts;
     private final WorkoutPhotoService photos;
 
