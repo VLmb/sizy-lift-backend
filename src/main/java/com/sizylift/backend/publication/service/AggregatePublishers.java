@@ -20,6 +20,7 @@ import com.sizylift.backend.publication.repository.ProgramDataRepository;
 import com.sizylift.backend.publication.repository.ProgramDecisionRepository;
 import com.sizylift.backend.publication.repository.StandaloneDataRepository;
 import com.sizylift.backend.publication.repository.WorkoutDataRepository;
+import com.sizylift.backend.photo.repository.WorkoutPhotoRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -34,9 +35,10 @@ class AggregatePublishers {
     }
 
     @Bean
-    AggregatePublisher<WorkoutPayloadV1> workoutPublisher(WorkoutDataRepository workouts) {
+    AggregatePublisher<WorkoutPayloadV1> workoutPublisher(WorkoutDataRepository workouts,
+                                                         WorkoutPhotoRepository photos) {
         return new AggregatePublisher<>(AggregateType.WORKOUT, WorkoutPayloadV1.class,
-                workouts::insert, workouts::delete);
+                workouts::insert, workouts::delete, photos::removeWithWorkout);
     }
 
     @Bean

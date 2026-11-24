@@ -6,7 +6,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.OptionalLong;
 
-/** Хранилище файлов видео: только подписанные ссылки и служебные операции, содержимое через сервер не идёт. */
+/** Закрытое хранилище файлов видео и фото тренировок. */
 public interface VideoStorage {
 
     /** Ссылка PUT; в подпись входят тип содержимого и точный размер. */
@@ -27,6 +27,9 @@ public interface VideoStorage {
 
     /** Кладёт файл, сделанный сервером: перекодированный ролик и превью. */
     void upload(String key, String contentType, Path source);
+
+    /** Сохраняет фото по ключу, выделенному сервером. */
+    void uploadPhoto(String key, String contentType, byte[] bytes);
 
     /** Разрешает браузерам с этих адресов класть файлы по подписанным ссылкам (CORS бакета). */
     void allowBrowsers(List<String> origins);

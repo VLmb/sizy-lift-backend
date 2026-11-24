@@ -13,7 +13,7 @@ import org.keycloak.util.JsonSerialization;
 final class TermsAgreement {
     static final String FIELD = "sizyTermsAccepted";
     static final String URL = "https://sizylab.ru/legal/2026-11-16/terms.html";
-    static final String PRIVACY_URL = "https://sizylab.ru/legal/2026-11-16/privacy.html";
+    static final String PRIVACY_URL = "https://sizylab.ru/legal/2026-11-24/privacy.html";
     static final String VERSION = "2026-11-16";
     private static final String RECEIPT = "sizy_terms_acceptance";
     private static final String DISPLAYED = "sizy.terms.displayed";
