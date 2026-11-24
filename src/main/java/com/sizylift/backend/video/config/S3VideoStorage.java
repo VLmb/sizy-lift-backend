@@ -21,6 +21,7 @@ class S3VideoStorage implements VideoStorage {
     private static final String ANY_HEADER = "*";
     private static final List<String> EXPOSED_HEADERS = List.of("ETag", "Content-Length", "Content-Range");
     private static final int PREFLIGHT_CACHE_SECONDS = 3600;
+    private static final Duration PHOTO_UPLOAD_TIMEOUT = Duration.ofSeconds(45);
 
     private final S3Client client;
     private final S3Presigner presigner;
@@ -75,6 +76,13 @@ class S3VideoStorage implements VideoStorage {
     @Override
     public void upload(String key, String contentType, Path source) {
         client.putObject(put -> put.bucket(bucket).key(key).contentType(contentType), RequestBody.fromFile(source));
+    }
+
+    @Override
+    public void uploadPhoto(String key, String contentType, byte[] bytes) {
+        client.putObject(put -> put.bucket(bucket).key(key).contentType(contentType).cacheControl("no-store")
+                        .overrideConfiguration(config -> config.apiCallTimeout(PHOTO_UPLOAD_TIMEOUT)),
+                RequestBody.fromBytes(bytes));
     }
 
     @Override

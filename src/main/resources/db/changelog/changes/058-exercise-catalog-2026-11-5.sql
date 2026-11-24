@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset sizylift:057-exercise-catalog-2026-11-5
+--changeset sizylift:058-exercise-catalog-2026-11-5
 -- Каталог 2026.11.5: грудь — верх, середина и низ; трапеция — верх и середина с низом; ягодичные — одна группа;
 -- до двух основных и трёх второстепенных групп у упражнения. Своих упражнений не трогаем: архивные группы на них остаются.
 INSERT INTO sizylift.muscle_group (id, code, name) VALUES
