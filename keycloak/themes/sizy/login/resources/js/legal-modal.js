@@ -5,7 +5,7 @@
   const imageUrl = new URL('../img/brand-mark.png', scriptUrl);
   const documents = {
     terms: { label: 'Соглашение', file: 'terms.html', path: '/legal/2026-11-16/terms.html' },
-    privacy: { label: 'Обработка данных', file: 'privacy.html', path: '/legal/2026-11-16/privacy.html' },
+    privacy: { label: 'Обработка данных', file: 'privacy.html', path: '/legal/2026-11-24/privacy.html' },
   };
 
   document.addEventListener('DOMContentLoaded', () => {
