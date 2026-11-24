@@ -126,8 +126,14 @@ public class WebReadRepository {
             WHERE s.user_id = ? AND s.workout_id = ? AND we.exercise_id = ?
             ORDER BY b.position, we.position, s.position
             """;
+    /**
+     * Тренировки с упражнением по дням и рабочие подходы в них: всё, кроме разминки, у упражнений на повторы и время.
+     * Кардио на дистанцию и «свободные» подходов для объёма не дают.
+     */
     private static final String SELECT_EXERCISE_USAGE = """
-            SELECT we.exercise_id, w.workout_date, count(DISTINCT w.id) AS workout_count
+            SELECT we.exercise_id, w.workout_date, count(DISTINCT w.id) AS workout_count,
+                   count(*) FILTER (WHERE s.set_type <> 'warmup'
+                       AND s.result_type IN ('weight_reps', 'added_weight_reps', 'reps', 'duration')) AS working_set_count
             FROM sizylift.workout w
             JOIN sizylift.workout_exercise we ON we.user_id = w.user_id AND we.workout_id = w.id
             JOIN sizylift.workout_set s ON s.user_id = we.user_id AND s.workout_exercise_id = we.id
@@ -160,7 +166,7 @@ public class WebReadRepository {
     public List<ExerciseUsageDay> exerciseUsage(UUID owner) {
         return jdbc.query(SELECT_EXERCISE_USAGE, (row, n) -> new ExerciseUsageDay(
                 uuid(row, "exercise_id"), row.getObject("workout_date", LocalDate.class),
-                row.getLong("workout_count")), owner, COMPLETED);
+                row.getLong("workout_count"), row.getLong("working_set_count")), owner, COMPLETED);
     }
 
     public List<Reference> equipment() {

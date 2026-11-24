@@ -148,8 +148,8 @@ class WebApiTest extends PostgresIntegrationTest {
         assertThat(catalog.get("categories").size()).isPositive();
         assertThat(catalog.get("equipment").size()).isPositive();
         assertThat(catalog.get("muscles").valueStream().map(group -> group.get("code").asString()))
-                .contains("brachioradialis", "latissimus_dorsi")
-                .doesNotContain("arms", "legs", "back", "shoulders");
+                .contains("brachioradialis", "latissimus_dorsi", "pec_upper", "pec_middle", "pec_lower", "teres_major")
+                .doesNotContain("arms", "legs", "back", "shoulders", "chest", "traps", "gluteus_medius");
         var squat = exercise(catalog, CATALOG_SQUAT);
         assertThat(squat.get("ownerId").isNull()).isTrue();
         assertThat(squat.get("revision").isNull()).isTrue();
@@ -242,7 +242,16 @@ class WebApiTest extends PostgresIntegrationTest {
         for (var day : usage) {
             assertThat(day.get("workoutCount").asLong()).isEqualTo(1);
             assertThat(day.get("date").asString()).isEqualTo("2026-10-14");
+            var working = jdbc.queryForObject("""
+                    SELECT count(*) FROM sizylift.workout_set s
+                    JOIN sizylift.workout_exercise we ON we.user_id = s.user_id AND we.id = s.workout_exercise_id
+                    WHERE s.user_id = ? AND s.workout_id = ? AND we.exercise_id = ?
+                      AND s.completion_status = 'completed' AND s.set_type <> 'warmup'
+                      AND s.result_type IN ('weight_reps', 'added_weight_reps', 'reps', 'duration')
+                    """, Long.class, userId(owner), workoutId, UUID.fromString(day.get("exerciseId").asString()));
+            assertThat(day.get("workingSetCount").asLong()).isEqualTo(working);
         }
+        assertThat(usage.valueStream().mapToLong(day -> day.get("workingSetCount").asLong()).sum()).isPositive();
         assertThat(body(call(stranger, get("/api/v2/web/catalog")).andExpect(status().isOk()))
                 .get("exerciseUsage").size()).isZero();
         jdbc.update("""

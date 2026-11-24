@@ -38,7 +38,8 @@ public final class WebDtos {
                                   List<CatalogExercise> exercises, List<ExerciseUsageDay> exerciseUsage) {
     }
 
-    public record ExerciseUsageDay(UUID exerciseId, LocalDate date, long workoutCount) {
+    /** {@code workingSetCount} — выполненные рабочие подходы упражнения за день: всё, кроме разминки. */
+    public record ExerciseUsageDay(UUID exerciseId, LocalDate date, long workoutCount, long workingSetCount) {
     }
 
     /** Строка списка программ; {@code authorId} — тренер, если программу пишет он, иначе {@code null}. */

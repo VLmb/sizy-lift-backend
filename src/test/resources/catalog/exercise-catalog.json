@@ -272,17 +272,57 @@
     {
       "id": "13000000-0000-4000-8000-000000000029",
       "code": "brachialis",
-      "name": "Плечевая мышца"
+      "name": "Брахиалис"
     },
     {
       "id": "13000000-0000-4000-8000-000000000030",
       "code": "finger_flexors",
-      "name": "Сгибатели пальцев кисти"
+      "name": "Сгибатели запястья и пальцев"
     },
     {
       "id": "13000000-0000-4000-8000-000000000031",
       "code": "gluteus_medius",
       "name": "Средняя ягодичная мышца"
+    },
+    {
+      "id": "13000000-0000-4000-8000-000000000032",
+      "code": "pec_upper",
+      "name": "Верх груди"
+    },
+    {
+      "id": "13000000-0000-4000-8000-000000000033",
+      "code": "pec_middle",
+      "name": "Середина груди"
+    },
+    {
+      "id": "13000000-0000-4000-8000-000000000034",
+      "code": "pec_lower",
+      "name": "Низ груди"
+    },
+    {
+      "id": "13000000-0000-4000-8000-000000000035",
+      "code": "teres_major",
+      "name": "Большая круглая мышца"
+    },
+    {
+      "id": "13000000-0000-4000-8000-000000000036",
+      "code": "upper_traps",
+      "name": "Верх трапеции"
+    },
+    {
+      "id": "13000000-0000-4000-8000-000000000037",
+      "code": "middle_lower_traps",
+      "name": "Середина и низ трапеции"
+    },
+    {
+      "id": "13000000-0000-4000-8000-000000000038",
+      "code": "external_rotators",
+      "name": "Подостная и малая круглая мышцы"
+    },
+    {
+      "id": "13000000-0000-4000-8000-000000000039",
+      "code": "wrist_extensors",
+      "name": "Разгибатели запястья и пальцев"
     }
   ],
   "exercises": [
@@ -328,15 +368,23 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000013",
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000034",
           "role": "secondary"
         }
       ],
@@ -369,6 +417,10 @@
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000019",
           "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000030",
+          "role": "secondary"
         }
       ],
       "equipmentIds": [
@@ -386,19 +438,23 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000012",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000017",
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000017",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
           "role": "primary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000012",
+          "role": "secondary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000029",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000030",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -501,11 +557,11 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "secondary"
         }
       ],
@@ -524,19 +580,23 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000012",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000017",
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000017",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
           "role": "primary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000012",
+          "role": "secondary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000029",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000030",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -596,10 +656,6 @@
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000016",
           "role": "secondary"
-        },
-        {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000031",
-          "role": "secondary"
         }
       ],
       "equipmentIds": [
@@ -652,7 +708,7 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "secondary"
         }
       ],
@@ -675,11 +731,19 @@
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000012",
           "role": "secondary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000029",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -710,7 +774,11 @@
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000019",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000022",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -729,11 +797,11 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000017",
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000017",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000018",
           "role": "primary"
         },
         {
@@ -741,7 +809,11 @@
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000018",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000022",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -848,7 +920,7 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "primary"
         },
         {
@@ -857,6 +929,10 @@
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
           "role": "secondary"
         }
       ],
@@ -875,15 +951,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000013",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "secondary"
         }
       ],
@@ -902,15 +982,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000013",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "secondary"
         }
       ],
@@ -929,7 +1013,7 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "primary"
         },
         {
@@ -938,6 +1022,10 @@
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
           "role": "secondary"
         }
       ],
@@ -956,7 +1044,7 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "primary"
         },
         {
@@ -965,6 +1053,10 @@
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
           "role": "secondary"
         }
       ],
@@ -983,11 +1075,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "primary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000034",
           "role": "secondary"
         }
       ],
@@ -1006,11 +1106,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "primary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000034",
           "role": "secondary"
         }
       ],
@@ -1029,11 +1137,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
+          "role": "primary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000034",
           "role": "primary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
           "role": "secondary"
         }
       ],
@@ -1052,15 +1168,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000013",
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000034",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "secondary"
         }
       ],
@@ -1079,11 +1199,11 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000013",
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000013",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "primary"
         },
         {
@@ -1118,7 +1238,11 @@
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000022",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000018",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
           "role": "secondary"
         }
       ],
@@ -1145,11 +1269,15 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000012",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000012",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000022",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -1182,6 +1310,10 @@
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000022",
           "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
+          "role": "secondary"
         }
       ],
       "equipmentIds": [
@@ -1203,11 +1335,19 @@
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000012",
           "role": "secondary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000029",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -1238,7 +1378,11 @@
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000030",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -1258,6 +1402,10 @@
       "muscles": [
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000017",
+          "role": "primary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
           "role": "primary"
         },
         {
@@ -1307,7 +1455,7 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "primary"
         },
         {
@@ -1336,6 +1484,10 @@
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000005",
           "role": "primary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000006",
+          "role": "secondary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000016",
@@ -1367,6 +1519,10 @@
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000005",
           "role": "primary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000016",
+          "role": "secondary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000019",
@@ -1420,6 +1576,10 @@
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000005",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000016",
           "role": "secondary"
         }
       ],
@@ -1478,10 +1638,6 @@
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000016",
-          "role": "secondary"
-        },
-        {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000031",
           "role": "secondary"
         }
       ],
@@ -1565,7 +1721,7 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000031",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000005",
           "role": "primary"
         }
       ],
@@ -1615,11 +1771,11 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000016",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000019",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000019",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000030",
           "role": "secondary"
         }
       ],
@@ -1646,11 +1802,11 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "secondary"
         }
       ],
@@ -1677,11 +1833,11 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "secondary"
         }
       ],
@@ -1708,11 +1864,11 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "secondary"
         }
       ],
@@ -1735,11 +1891,15 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000018",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000018",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000038",
           "role": "secondary"
         }
       ],
@@ -1762,11 +1922,15 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
-          "role": "secondary"
+          "muscleGroupId": "13000000-0000-4000-8000-000000000038",
+          "role": "primary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000018",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -1785,11 +1949,11 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "primary"
         },
         {
@@ -1797,7 +1961,7 @@
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000029",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000020",
           "role": "secondary"
         }
       ],
@@ -1970,15 +2134,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000013",
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
           "role": "secondary"
         }
       ],
@@ -2078,11 +2246,11 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000023",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000005",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000031",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000023",
           "role": "secondary"
         }
       ],
@@ -2272,11 +2440,15 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000018",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000018",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000038",
           "role": "secondary"
         }
       ],
@@ -2295,11 +2467,15 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
           "role": "primary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "secondary"
         }
       ],
@@ -2349,7 +2525,7 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "primary"
         },
         {
@@ -2372,15 +2548,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000017",
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000013",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
           "role": "secondary"
         }
       ],
@@ -2463,10 +2643,6 @@
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000016",
           "role": "secondary"
-        },
-        {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000031",
-          "role": "secondary"
         }
       ],
       "equipmentIds": [
@@ -2484,7 +2660,7 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "primary"
         },
         {
@@ -2493,6 +2669,10 @@
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
           "role": "secondary"
         }
       ],
@@ -2511,19 +2691,23 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000012",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000017",
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000017",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000035",
           "role": "primary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000012",
+          "role": "secondary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000029",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000030",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -2542,15 +2726,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000013",
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000034",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "secondary"
         }
       ],
@@ -2569,19 +2757,23 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000004",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000005",
           "role": "primary"
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000006",
+          "role": "primary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000004",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000021",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "secondary"
         }
       ],
@@ -2639,11 +2831,11 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000013",
           "role": "secondary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000013",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "secondary"
         }
       ],
@@ -2697,7 +2889,7 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "secondary"
         }
       ],
@@ -2720,7 +2912,7 @@
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
           "role": "secondary"
         }
       ],
@@ -2739,11 +2931,11 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000010",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000030",
           "role": "primary"
         },
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000030",
+          "muscleGroupId": "13000000-0000-4000-8000-000000000036",
           "role": "primary"
         },
         {
@@ -2831,15 +3023,19 @@
       "note": null,
       "muscles": [
         {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000001",
-          "role": "primary"
-        },
-        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000020",
           "role": "primary"
         },
         {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000032",
+          "role": "primary"
+        },
+        {
           "muscleGroupId": "13000000-0000-4000-8000-000000000013",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000033",
           "role": "secondary"
         }
       ],
@@ -2871,6 +3067,10 @@
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000022",
+          "role": "secondary"
+        },
+        {
+          "muscleGroupId": "13000000-0000-4000-8000-000000000037",
           "role": "secondary"
         }
       ],
@@ -2912,10 +3112,6 @@
         },
         {
           "muscleGroupId": "13000000-0000-4000-8000-000000000016",
-          "role": "secondary"
-        },
-        {
-          "muscleGroupId": "13000000-0000-4000-8000-000000000031",
           "role": "secondary"
         }
       ],
