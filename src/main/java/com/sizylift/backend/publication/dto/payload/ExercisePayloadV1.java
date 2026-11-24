@@ -66,11 +66,11 @@ public record ExercisePayloadV1(
     }
 
     /**
-     * Группы мышц (PWA-08): не больше {@value PayloadValues#MAX_MUSCLES_PER_ROLE} основных и столько же побочных,
-     * одна группа — в одной роли.
+     * Группы мышц: не больше {@value PayloadValues#MAX_PRIMARY_MUSCLES} основных и
+     * {@value PayloadValues#MAX_SECONDARY_MUSCLES} побочных, одна группа — в одной роли.
      */
     @JsonIgnore
-    @AssertTrue(message = "At most two primary and two secondary muscle groups, each group in one role.")
+    @AssertTrue(message = "At most two primary and three secondary muscle groups, each group in one role.")
     public boolean isMuscleRolesValid() {
         if (muscles == null || muscles.stream().anyMatch(Objects::isNull)) {
             return true;
@@ -78,7 +78,8 @@ public record ExercisePayloadV1(
         var groups = muscles.stream().map(Muscle::muscleGroupId).distinct().count();
         return groups == muscles.size() && muscles.stream()
                 .collect(Collectors.groupingBy(Muscle::role, Collectors.counting()))
-                .values().stream().allMatch(count -> count <= MAX_MUSCLES_PER_ROLE);
+                .entrySet().stream().allMatch(role -> role.getValue() <= (PRIMARY_ROLE.equals(role.getKey())
+                        ? MAX_PRIMARY_MUSCLES : MAX_SECONDARY_MUSCLES));
     }
 
     public record Muscle(@NotNull UUID muscleGroupId, @NotNull @Pattern(regexp = MUSCLE_ROLE) String role) {
