@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.http.HttpMethod;
 import jakarta.servlet.DispatcherType;
+import java.util.Set;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 /**
@@ -27,8 +28,14 @@ public class SecurityConfiguration {
     /** Страница приглашения до входа (docs/coaching.md, «Приглашение до входа»). */
     private static final String PUBLIC_INVITE = "/api/v2/coaching/invites/*/public";
 
-    private static final String MOBILE_CLIENT = "sizylift-mobile";
+    /** Фото тренировок — только у дневника на устройстве: приложение и PWA; сайт их не показывает. */
+    private static final Set<String> PHOTO_CLIENTS = Set.of("sizylift-mobile", "sizylift-pwa");
     private static final String AUTHORIZED_PARTY = "azp";
+
+    /** Токен без {@code azp} — не клиент дневника; {@code Set.of} не принимает {@code null} в {@code contains}. */
+    private static boolean photoClient(String authorizedParty) {
+        return authorizedParty != null && PHOTO_CLIENTS.contains(authorizedParty);
+    }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -44,7 +51,7 @@ public class SecurityConfiguration {
                         .requestMatchers(WorkoutPhotoController.PATH, WorkoutPhotoController.PATH + "/**")
                         .access((authentication, context) -> new AuthorizationDecision(
                                 authentication.get() instanceof JwtAuthenticationToken token
-                                        && MOBILE_CLIENT.equals(token.getToken().getClaimAsString(AUTHORIZED_PARTY))))
+                                        && photoClient(token.getToken().getClaimAsString(AUTHORIZED_PARTY))))
                         .anyRequest().authenticated())
                 // Источники — CorsConfigurationSource из web.config; пустой — CORS выключен.
                 .cors(Customizer.withDefaults())
