@@ -109,7 +109,7 @@ class WorkoutPhotoApiTest extends CoachWorkspaceApiSupport {
     }
 
     @Test
-    void rejectsWebAndPwaTokensEvenWhenTheyBelongToTheWorkoutOwner() throws Exception {
+    void rejectsWebTokensEvenWhenTheyBelongToTheWorkoutOwner() throws Exception {
         var athlete = newSubject();
         var workoutId = UUID.randomUUID();
         var path = PHOTOS + "/" + workoutId;
@@ -119,16 +119,43 @@ class WorkoutPhotoApiTest extends CoachWorkspaceApiSupport {
         callMobile(athlete, put(path + "/" + version).contentType(MediaType.IMAGE_JPEG).content(jpeg))
                 .andExpect(status().isOk());
 
-        for (var client : new String[]{"sizylift-web", "sizylift-pwa"}) {
-            var token = jwt().jwt(builder -> builder.issuer(ISSUER).subject(athlete).claim("azp", client));
-            mvc.perform(get(PHOTOS).with(token)).andExpect(status().isForbidden());
-            mvc.perform(get(path).with(token)).andExpect(status().isForbidden());
-            mvc.perform(put(path + "/" + UUID.randomUUID()).contentType(MediaType.IMAGE_JPEG).content(jpeg)
-                    .with(token)).andExpect(status().isForbidden());
-            mvc.perform(delete(path + "/" + UUID.randomUUID()).with(token)).andExpect(status().isForbidden());
-        }
+        var token = jwt().jwt(builder -> builder.issuer(ISSUER).subject(athlete).claim("azp", "sizylift-web"));
+        mvc.perform(get(PHOTOS).with(token)).andExpect(status().isForbidden());
+        mvc.perform(get(path).with(token)).andExpect(status().isForbidden());
+        mvc.perform(put(path + "/" + UUID.randomUUID()).contentType(MediaType.IMAGE_JPEG).content(jpeg)
+                .with(token)).andExpect(status().isForbidden());
+        mvc.perform(delete(path + "/" + UUID.randomUUID()).with(token)).andExpect(status().isForbidden());
         call(athlete, get(PHOTOS)).andExpect(status().isForbidden());
         callMobile(athlete, get(path)).andExpect(status().isOk());
+    }
+
+    @Test
+    void pwaSharesPhotosWithTheMobileApp() throws Exception {
+        var athlete = newSubject();
+        var workoutId = UUID.randomUUID();
+        var path = PHOTOS + "/" + workoutId;
+        var fromPwa = UUID.randomUUID();
+        legacy(athlete, "workout", workoutId, 1, workout());
+        callPwa(athlete, put(path + "/" + fromPwa).contentType(MediaType.IMAGE_JPEG).content(jpeg(12)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(fromPwa.toString()))
+                .andExpect(jsonPath("$.accepted").value(true));
+        // The phone sees the photo added in the PWA, and the PWA sees the phone's replacement.
+        callMobile(athlete, get(PHOTOS)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].version").value(fromPwa.toString()));
+        var fromPhone = UUID.randomUUID();
+        callMobile(athlete, put(path + "/" + fromPhone + "?base=" + fromPwa).contentType(MediaType.IMAGE_JPEG)
+                .content(jpeg(16))).andExpect(status().isOk());
+        callPwa(athlete, get(path)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.photo.version").value(fromPhone.toString()))
+                .andExpect(jsonPath("$.url").isNotEmpty());
+        callPwa(athlete, delete(path + "/" + UUID.randomUUID() + "?base=" + fromPhone)).andExpect(status().isOk());
+        callMobile(athlete, get(PHOTOS)).andExpect(jsonPath("$.items[0].deleted").value(true));
+    }
+
+    private ResultActions callPwa(String subject, MockHttpServletRequestBuilder request) throws Exception {
+        return mvc.perform(request.with(jwt().jwt(builder -> builder.issuer(ISSUER).subject(subject)
+                .claim("azp", "sizylift-pwa"))));
     }
 
     private ResultActions callMobile(String subject, MockHttpServletRequestBuilder request) throws Exception {
